@@ -66,7 +66,6 @@ interface FluidSettingsPanelProps {
 
 const STYLE_OPTIONS: { id: FluidPresetId | "auto"; label: { zh: string; en: string } }[] = [
   { id: "auto", label: { zh: "自动", en: "Auto" } },
-  { id: "cover", label: { zh: "封面颜色", en: "Cover Color" } },
   { id: "aurora", label: { zh: "极光", en: "Aurora" } },
   { id: "ocean", label: { zh: "深海", en: "Ocean" } },
   { id: "nebula", label: { zh: "星云", en: "Nebula" } },
@@ -116,26 +115,42 @@ const separatorStyle: React.CSSProperties = {
 
 const t: Record<Language, Record<string, string>> = {
   zh: {
-    title: "流体背景设置",
-    enable: "开启背景",
-    speed: "速度",
-    colorMode: "颜色模式",
-    frameRate: "帧率",
-    intensity: "强度",
-    blur: "模糊",
-    style: "风格",
+    title: "流体背景设置",
+
+    enable: "开启背景",
+
+    speed: "速度",
+
+    colorMode: "颜色模式",
+
+    frameRate: "帧率",
+
+    intensity: "强度",
+
+    blur: "模糊",
+
+    style: "风格",
+
     reset: "恢复默认",
     resetTitle: "恢复默认设置",
   },
   en: {
-    title: "Fluid Background",
-    enable: "Enable Background",
-    speed: "Speed",
-    colorMode: "Color Mode",
-    frameRate: "Frame Rate",
-    intensity: "Intensity",
-    blur: "Blur",
-    style: "Style",
+    title: "Fluid Background",
+
+    enable: "Enable Background",
+
+    speed: "Speed",
+
+    colorMode: "Color Mode",
+
+    frameRate: "Frame Rate",
+
+    intensity: "Intensity",
+
+    blur: "Blur",
+
+    style: "Style",
+
     reset: "Reset Defaults",
     resetTitle: "Reset to default settings",
   },

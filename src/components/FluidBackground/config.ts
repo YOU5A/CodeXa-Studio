@@ -22,6 +22,7 @@ export type FluidPresetId =
   | "plasma"
   | "forest"
   | "cover"
+  | "fluid"
   | "custom";
 
 export const DEFAULT_CONFIG: FluidConfig = {

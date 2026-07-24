@@ -171,6 +171,26 @@ export const PRESETS: Record<FluidPresetId, FluidPreset> = {
     driftInterval: 4000,
     jitter: 0.3,
   },
+  fluid: {
+    id: "fluid",
+    name: { zh: "流体", en: "Fluid" },
+    palette: {
+      colors: [
+        [140, 120, 220],
+        [200, 140, 180],
+        [120, 160, 220],
+        [180, 120, 200],
+        [160, 140, 210],
+      ],
+      background: [10, 8, 22],
+    },
+    blobCount: 14,
+    blobRadius: [0.22, 0.48],
+    blobOpacity: [0.35, 0.65],
+    flowSpeed: 0.5,
+    driftInterval: 4000,
+    jitter: 0.3,
+  },
   custom: {
     id: "custom",
     name: { zh: "自定义", en: "Custom" },

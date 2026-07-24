@@ -867,20 +867,24 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                   pointerEvents: lyricsBtnHover ? "auto" : "none",
                 }}
               >
+                <GlassTooltip text={lang === "zh" ? "歌词设置" : "Lyrics Settings"}>
+                <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <GlassButton
                   variant="ghost"
                   size="sm"
+                  noAnimation
                   onClick={() => setLyricsSettingsOpen(true)}
                   style={{
                     width: 34, height: 34, minWidth: 34, padding: 0,
                     borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "var(--text-tertiary)",
+                    color: "var(--text-secondary)",
                     transition: "color 0.2s ease",
                   }}
-                  title={lang === "zh" ? "歌词设置" : "Lyrics Settings"}
                 >
                   <Settings size={14} />
                 </GlassButton>
+                </span>
+                </GlassTooltip>
               </span>
 
               {/* Lyrics Toggle */}
@@ -889,12 +893,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 <GlassButton
                   variant="ghost"
                   size="sm"
+                  noAnimation
                   onClick={() => setLyricsVisible(v => !v)}
                   style={{
                     width: 34, height: 34, minWidth: 34, padding: 0,
                     borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, fontWeight: 600,
-                    color: lyricsVisible ? "var(--accent)" : "var(--text-tertiary)",
+                    color: "var(--text-secondary)",
                     transition: "color 0.2s ease",
                   }}
                 >
@@ -930,7 +935,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
               <motion.button
                 whileTap={{ scale: 0.95 }}
                 whileHover={{ scale: 1.1 }}
-                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                transition={{ duration: 0.15, ease: EASE_OUT }}
                 onClick={toggle}
                 onMouseMove={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
@@ -943,9 +948,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 onMouseLeave={() => setPlayBtnGlow(prev => ({ ...prev, visible: false }))}
                 style={{
                   background: "rgba(255,255,255,0.08)",
-                  backdropFilter: "blur(12px) saturate(1.4)",
-                  WebkitBackdropFilter: "blur(12px) saturate(1.4)",
-                  border: "1px solid rgba(255,255,255,0.12)",
                   borderRadius: "50%",
                   width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
                   cursor: "pointer", color: "var(--text-primary)",
@@ -953,7 +955,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 }}
               >
                 <span style={{
-                    position: "absolute", inset: 0, borderRadius: "50%", pointerEvents: "none",
+                    position: "absolute", inset: 0, borderRadius: "50%", pointerEvents: "none", zIndex: 0,
                     background: `radial-gradient(circle at ${playBtnGlow.x * 100}% ${playBtnGlow.y * 100}%, rgba(255,255,255,0.18) 0%, transparent 60%)`,
                     opacity: playBtnGlow.visible ? 1 : 0,
                     transition: "opacity 0.25s ease",
@@ -991,6 +993,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
               <GlassButton
                 variant="ghost"
                 size="sm"
+                noAnimation
                 onClick={() => {
                   const modes: PlayMode[] = ["loop-all", "shuffle", "stop-after"];
                   const idx = modes.indexOf(playMode);
@@ -999,7 +1002,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 style={{
                   width: 34, height: 34, minWidth: 34, padding: 0,
                   borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--text-tertiary)",
+                  color: "var(--text-secondary)",
                   transition: "color 0.2s ease",
                 }}
               >

@@ -1,13 +1,15 @@
 /**
  * FluidBackground React 组件
- * 挂载 Canvas, 管理 FluidRenderer 生命周期
+ * 双模式: SVG 流体滤镜 (有封面时) / Canvas 2D blob (回退)
  * 不依赖任何 Context 或全局状态
  */
 
-import { useEffect, useRef, useCallback, type FC } from "react";
+import { useEffect, useRef, useCallback, lazy, Suspense, type FC } from "react";
 import { FluidRenderer } from "./renderer";
 import type { FluidConfig, FluidPresetId } from "./config";
 import { DEFAULT_CONFIG, loadConfig } from "./config";
+
+const SvgFluidRenderer = lazy(() => import("./SvgFluidRenderer"));
 
 export interface FluidBackgroundProps {
   /** 预设, 默认 "auto" (主题自适应) */
@@ -28,8 +30,12 @@ export interface FluidBackgroundProps {
   colorMode?: "auto" | "cover" | "dynamic";
   /** 封面颜色 RGB, 仅在 colorMode="cover" */
   coverColor?: [number, number, number] | null;
+  /** 封面图片 URL (base64), 用于 SVG 流体模式 */
+  coverImageUrl?: string | null;
   /** 目标帧率 (30/60), 默认 60 */
   targetFps?: number;
+  /** 播放状态, 用于 SVG 流体模式暂停同步 */
+  playing?: boolean;
   /** 额外 CSS 类名 */
   className?: string;
 }
@@ -44,7 +50,9 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
   blurAmount,
   colorMode,
   coverColor,
+  coverImageUrl,
   targetFps,
+  playing,
   className,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,9 +72,17 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
     ...(colorMode !== undefined ? { colorMode } : {}),
   };
 
-  // ---------- 初始化 / 销毁 ----------
+  // 判断是否使用 SVG 流体模式: 有封面图片 且 颜色模式为 "cover"
+  const useSvgFluid = !!(coverImageUrl && (mergedConfig.colorMode === "cover" || mergedConfig.colorMode === "auto") && mergedConfig.enabled);
 
+  // ---------- SVG 流体模式 (封面图片可用时) ----------
+  // 此模式下不挂载 Canvas 渲染器
+
+  // ---------- Canvas 模式: 初始化 / 销毁 ----------
   useEffect(() => {
+    // 如果使用 SVG 模式, 不初始化 Canvas 渲染器
+    if (useSvgFluid) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -109,11 +125,11 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
     };
     // 仅在挂载/卸载时运行
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [useSvgFluid]);
 
   // ---------- Props change ----------
-
   useEffect(() => {
+    if (useSvgFluid) return;
     const r = rendererRef.current;
     if (!r) return;
     r.updateConfig({
@@ -126,52 +142,69 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
       blurAmount,
       colorMode,
     });
-    // Explicitly start/stop based on enabled flag
     if (enabled === false) {
       r.stop();
     } else if (enabled === true) {
       r.start();
     }
-  }, [preset, intensity, quality, interactive, enabled, speedMultiplier, blurAmount, colorMode]);
+  }, [preset, intensity, quality, interactive, enabled, speedMultiplier, blurAmount, colorMode, useSvgFluid]);
 
   // 封面颜色
   useEffect(() => {
+    if (useSvgFluid) return;
     rendererRef.current?.setCoverColor(coverColor ?? null);
-  }, [coverColor]);
+  }, [coverColor, useSvgFluid]);
 
   // FPS 设置
   useEffect(() => {
+    if (useSvgFluid) return;
     if (targetFps) {
       rendererRef.current?.setTargetFps(targetFps);
     }
-  }, [targetFps]);
+  }, [targetFps, useSvgFluid]);
 
-  // ---------- 鼠标交互 ----------
-
+  // ---------- 鼠标交互 (仅 Canvas 模式) ----------
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!mergedConfig.interactive) return;
+      if (!mergedConfig.interactive || useSvgFluid) return;
       const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
       const nx = (e.clientX - rect.left) / rect.width;
       const ny = (e.clientY - rect.top) / rect.height;
       rendererRef.current?.splat(nx, ny, 0.3);
     },
-    [mergedConfig.interactive],
+    [mergedConfig.interactive, useSvgFluid],
   );
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!mergedConfig.interactive) return;
+      if (!mergedConfig.interactive || useSvgFluid) return;
       const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
       const nx = (e.clientX - rect.left) / rect.width;
       const ny = (e.clientY - rect.top) / rect.height;
       rendererRef.current?.splat(nx, ny, 1.2);
     },
-    [mergedConfig.interactive],
+    [mergedConfig.interactive, useSvgFluid],
   );
 
   // ---------- 渲染 ----------
+  // SVG 流体模式
+  if (useSvgFluid && coverImageUrl) {
+    return (
+      <Suspense fallback={null}>
+        <SvgFluidRenderer
+          imageUrl={coverImageUrl}
+          enabled={mergedConfig.enabled}
+          static={false}
+          speedMultiplier={mergedConfig.speedMultiplier}
+          targetFps={targetFps}
+          paused={playing === false}
+          className={className}
+        />
+      </Suspense>
+    );
+  }
 
+  // Canvas blob 模式
   return (
     <canvas
       ref={canvasRef}
@@ -180,7 +213,7 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
         position: "fixed",
         inset: 0,
         zIndex: 0,
-        pointerEvents: mergedConfig.interactive ? "auto" : "none",
+        pointerEvents: mergedConfig.interactive && !useSvgFluid ? "auto" : "none",
         opacity: mergedConfig.intensity,
         display: mergedConfig.enabled ? undefined : "none",
       }}

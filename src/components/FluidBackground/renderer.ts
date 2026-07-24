@@ -139,7 +139,7 @@ export class FluidRenderer {
     this.blobs = [];
 
     // When cover/auto mode and cover palette is available, use cover colors
-    const isCoverLike = this.config.colorMode === "cover" || this.config.colorMode === "auto";
+    const isCoverLike = this.config.colorMode === "cover";
     const colorSource = (isCoverLike && this.coverPalette)
       ? this.coverPalette.colors
       : p.palette.colors;
@@ -185,7 +185,7 @@ export class FluidRenderer {
     }
     // Switch to/from cover/auto mode: reassign blob colors
     if (config.colorMode !== undefined && config.colorMode !== prevColorMode) {
-      const isCoverLike = (mode: string) => mode === "cover" || mode === "auto";
+      const isCoverLike = (mode: string) => mode === "cover";
       if (isCoverLike(config.colorMode) && this.coverPalette) {
         const paletteColors = this.coverPalette.colors;
         for (let i = 0; i < this.blobs.length; i++) {
@@ -377,7 +377,7 @@ export class FluidRenderer {
     // 2. 填充背景底色
     // Auto mode: use cover palette when available, otherwise preset
     // Cover mode: force cover palette (fallback to preset if unavailable)
-    const useCoverPalette = (this.config.colorMode === "cover" || this.config.colorMode === "auto") && this.coverPalette;
+    const useCoverPalette = this.config.colorMode === "cover" && this.coverPalette;
     const palette = useCoverPalette
       ? this.coverPalette!
       : this.currentPreset.palette;

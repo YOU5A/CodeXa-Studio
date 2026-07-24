@@ -4,7 +4,7 @@ import { useTheme, ThemeProvider } from "./hooks/useTheme";
 import { getAnimDuration, EASE_OUT } from "./utils/animations";
 import { ToastProvider } from "./contexts/ToastContext";
 import { ConfirmProvider } from "./contexts/ConfirmContext";
-import { MusicPlayerProvider } from "./contexts/MusicPlayerContext";
+import { MusicPlayerProvider, useMusicPlayer } from "./contexts/MusicPlayerContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import ToastContainer from "./components/Toast";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -47,8 +47,10 @@ function AppContent() {
   });
   const [isMaximized, setIsMaximized] = useState(false);
   const animDuration = getAnimDuration(settings.animationSpeed);
+  const { playingFile, audioState } = useMusicPlayer();
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     window.electronAPI?.window.onMaximizeChange(setIsMaximized);
@@ -76,6 +78,27 @@ function AppContent() {
     window.addEventListener("fluidCoverColorChanged", handler as EventListener);
     return () => window.removeEventListener("fluidCoverColorChanged", handler as EventListener);
   }, []);
+
+  // Fetch cover image for SVG fluid background when playing file changes
+  useEffect(() => {
+    if (!playingFile) {
+      setCoverImageUrl(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchCover = async () => {
+      try {
+        const result = await window.electronAPI?.python.call("music.extract_cover", { filepath: playingFile });
+        if (!cancelled && result?.cover) {
+          setCoverImageUrl("data:image/jpeg;base64," + result.cover);
+        }
+      } catch {
+        if (!cancelled) setCoverImageUrl(null);
+      }
+    };
+    fetchCover();
+    return () => { cancelled = true; };
+  }, [playingFile]);
 
   // Save current page
   const handleNavigate = (page: Page) => {
@@ -105,6 +128,8 @@ function AppContent() {
         targetFps={fluidSettings.fps}
         colorMode={fluidSettings.colorMode}
         coverColor={coverColor}
+        coverImageUrl={coverImageUrl}
+        playing={audioState.playing}
         interactive={false}
       />
       {/* Title Bar — sits above the body grid */}
