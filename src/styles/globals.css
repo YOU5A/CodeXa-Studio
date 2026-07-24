@@ -434,3 +434,27 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15)}
   box-shadow: 0 0 20px rgba(255,255,255,0.15);
   background: rgba(255,255,255,0.12);
 }
+
+/* ── Interlude Dots Breathing ── */
+@keyframes interludeBreath {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+@keyframes interludeDotBreath {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+.interlude-dot {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.interlude-breathing {
+  animation: interludeBreath 2.2s ease-in-out infinite;
+}
+.interlude-breathing .interlude-dot {
+  animation: interludeDotBreath 2s ease-in-out infinite;
+}
+.interlude-breathing .interlude-dot:nth-child(1) { animation-delay: 0s; }
+.interlude-breathing .interlude-dot:nth-child(2) { animation-delay: 0.35s; }
+.interlude-breathing .interlude-dot:nth-child(3) { animation-delay: 0.7s; }

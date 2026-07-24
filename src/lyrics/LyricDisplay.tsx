@@ -13,11 +13,11 @@
  * @module lyrics/LyricDisplay
  */
 
-import { useRef, useMemo, useLayoutEffect, useState, useCallback } from "react";
+import { useRef, useMemo, useLayoutEffect, useState, useCallback, useEffect } from "react";
 import type { LyricData, LyricLine } from "./types";
 import type { LyricsSettingsValues } from "./LyricsSettingsPanel";
 import { DEFAULT_LYRICS_SETTINGS } from "./LyricsSettingsPanel";
-import LyricsLine from "./LyricsLine";
+import LyricsLine, { estimateCharUnits } from "./LyricsLine";
 
 const ROW_HEIGHT_BASE = 28;
 const CURRENT_ROW_HEIGHT = 36;
@@ -59,7 +59,7 @@ export default function LyricDisplay({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [lyricData]);
 
   // ── 当前行索引 ──
   const { currentIndex, allLines } = useMemo(() => {
@@ -98,6 +98,13 @@ export default function LyricDisplay({
     const alignPct = alignMap[settings.alignment] ?? 0.5;
     const lineSpacing = settings.lineSpacing ?? 24;
     const gap = Math.max(12, Math.min(48, lineSpacing));
+
+    // 当前行折行时，下方额外加 5px 间距
+    const FONT_PX = { small: 13, medium: 15, large: 17 } as Record<string, number>;
+    const currentFontPx = FONT_PX[settings.fontSize] ?? 15;
+    const currentLineWraps =
+      focus >= 0 && focus < allLines.length &&
+      estimateCharUnits(allLines[focus].text) > 140 / currentFontPx;
     const centerY = containerHeight * alignPct;
     positions[focus] = centerY - CURRENT_ROW_HEIGHT / 2;
 
@@ -117,12 +124,14 @@ export default function LyricDisplay({
       const rowH = allLines[i].isInterlude ? ROW_HEIGHT_BASE * 0.6 : ROW_HEIGHT_BASE;
       const scale = 1 - (i - focus) * 0.18;
       const scaledH = rowH * Math.max(scale, 0.7);
-      positions[i] = nextTop + gap;
+      positions[i] = nextTop + gap + (i === focus + 1 && currentLineWraps ? 15 : 0);
       nextTop = positions[i] + scaledH;
     }
 
     return positions;
   }, [allLines, focusLine, containerHeight, settings.alignment, settings.lineSpacing]);
+
+
 
   // ── cleanup ──
   useLayoutEffect(() => {
@@ -130,6 +139,25 @@ export default function LyricDisplay({
       if (manualTimer.current) clearTimeout(manualTimer.current);
     };
   }, []);
+
+  // ── 滚轮事件（需 passive:false 才能 preventDefault）──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? 1 : -1;
+      let next = focusLine + dir;
+      while (next >= 0 && next < allLines.length && allLines[next]?.isInterlude) {
+        next += dir;
+      }
+      if (next >= 0 && next < allLines.length) {
+        enterManual(next);
+      }
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [focusLine, allLines, enterManual]);
 
   // ── 空 / 加载状态 ──
   const cs = {
@@ -154,17 +182,6 @@ export default function LyricDisplay({
   return (
     <div
       ref={containerRef}
-      onWheel={(e) => {
-        e.preventDefault();
-        const dir = e.deltaY > 0 ? 1 : -1;
-        let next = focusLine + dir;
-        while (next >= 0 && next < allLines.length && allLines[next]?.isInterlude) {
-          next += dir;
-        }
-        if (next >= 0 && next < allLines.length) {
-          enterManual(next);
-        }
-      }}
       style={{
         height: "100%",
         overflow: "hidden",

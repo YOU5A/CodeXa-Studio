@@ -206,6 +206,7 @@ function setupIPC() {
   ipcMain.handle("window:getSize", () => mainWindow?.getSize());
   ipcMain.handle("window:setPosition", (_e, x, y) => { mainWindow?.setPosition(x, y); });
 
+
   // Electron settings (autoStart, minimizeToTray, closeToTray)
   ipcMain.handle("settings:get", (_e, key) => {
     return electronSettings[key];

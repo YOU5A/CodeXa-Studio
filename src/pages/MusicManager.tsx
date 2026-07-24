@@ -241,10 +241,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     init();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll selected file into center of list
-  useEffect(() => {
-    if (!selectedFile || !listRef.current) return;
-    const el = listRef.current.querySelector(`[data-filepath="${CSS.escape(selectedFile)}"]`) as HTMLElement | null;
+  // Scroll selected file into center of list (called explicitly, not on every click)
+  const scrollToFile = (fp: string) => {
+    if (!fp || !listRef.current) return;
+    const el = listRef.current.querySelector(`[data-filepath="${CSS.escape(fp)}"]`) as HTMLElement | null;
     if (el && listRef.current) {
       const container = listRef.current;
       const elTop = el.offsetTop;
@@ -255,7 +255,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         behavior: "smooth",
       });
     }
-  }, [selectedFile]);
+  };
+  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── File ──
 
@@ -293,6 +294,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     setNewCoverPath(""); setCoverPreviewB64(null);
     const fname = fp.split("\\").pop() || fp;
     setRenameName(fname.replace(/\.[^.]+$/, ""));
+    scrollToFile(fp);
   };
 
   useEffect(() => {
@@ -322,6 +324,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   // Sync selectedFile and metadata when playingFile changes (e.g., next/prev/auto-advance)
   useEffect(() => {
     if (playingFile && playingFile !== selectedFile) {
+      if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
       selectFile(playingFile);
     }
   }, [playingFile]);
@@ -338,6 +341,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Cleanup revert timer on unmount
+  useEffect(() => {
+    return () => {
+      if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+    };
   }, []);
 
   const playFile = (fp: string) => {
@@ -357,6 +367,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       setRenameName(fname.replace(/\.[^.]+$/, ""));
     })();
     contextPlayFile(fp);
+    if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
+    scrollToFile(fp);
   };
 
   const toggle = () => {
@@ -672,13 +684,26 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 >
                   {files.map((fp: string) => {
                     const name = fp.split("\\").pop() || fp;
-                    const active = fp === selectedFile;
+                    const isSelected = fp === selectedFile;
+                    const isPlaying = fp === playingFile;
                     return (
                       <div
                         key={fp}
                         data-filepath={fp}
-                        onClick={() => { setSelectedFile(fp); }}
-                        onDoubleClick={() => { playFile(fp); }}
+                        onClick={() => {
+                          setSelectedFile(fp);
+                          if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
+                          if (fp !== playingFile && playingFile) {
+                            revertTimerRef.current = setTimeout(() => {
+                              setSelectedFile(playingFile);
+                              revertTimerRef.current = null;
+                            }, 1500);
+                          }
+                        }}
+                        onDoubleClick={() => {
+                          if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
+                          playFile(fp);
+                        }}
                         onMouseMove={(e) => {
                           const el = e.currentTarget;
                           const r = el.getBoundingClientRect();
@@ -693,16 +718,16 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                           padding: space[2] + "px " + space[4] + "px",
                           cursor: "pointer",
                           fontSize: fontSizes.sm,
-                          color: active ? "var(--accent)" : "var(--text-secondary)",
-                          background: active
+                          color: isSelected ? "var(--accent)" : "var(--text-secondary)",
+                          background: isSelected
                             ? "rgba(var(--accent-rgb, 99,102,241), 0.12)"
                             : "rgba(255,255,255,0.03)",
                           backdropFilter: "blur(8px) saturate(1.2)",
                           WebkitBackdropFilter: "blur(8px) saturate(1.2)",
-                          borderLeft: active ? "3px solid var(--accent)" : "3px solid transparent",
+                          borderLeft: isPlaying ? "3px solid var(--accent)" : "3px solid transparent",
                           display: "flex", alignItems: "center", gap: space[2],
                           position: "relative", overflow: "hidden",
-                          transition: "background var(--transition-fast), border-color var(--transition-fast)",
+                          transition: "background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast)",
                         }}
                       >
                         <span style={{

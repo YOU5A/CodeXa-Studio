@@ -616,7 +616,6 @@ def handle_config_set(params):
         _get_app().set_language(params["language"], save=False)
         _get_fm().set_language(params["language"], save=False)
     return {"success": True}
-
 METHODS = {
     # System Info
     "system.info": handle_system_info,
