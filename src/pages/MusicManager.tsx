@@ -1048,6 +1048,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         <LyricDisplay
           lyricData={lyricData}
           currentTime={currentTime}
+          currentLineIndex={currentLineIndex}
           loading={lyricsLoading}
           error={lyricsError}
           loadingText={tx.lyricsLoading}

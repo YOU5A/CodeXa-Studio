@@ -136,15 +136,31 @@ export function useLyricManager() {
     }
   }, [playingFile, fetchLyrics]);
 
-  /** timeupdate 同步 */
+  /** rAF ???? ? ????????? React ?? */
+  const currentTimeRef = useRef(0);
+  const rafRef = useRef(0);
+  const lastIndexRef = useRef(-1);
+
   useEffect(() => {
-    const t = audioState.pos ?? 0;
-    setCurrentTime(t);
-    if (lyricData?.lines?.length) {
-      setCurrentLineIndex(computeLineIndex(t, lyricData.lines));
-    }
+    const tick = () => {
+      const t = audioState.pos ?? 0;
+      currentTimeRef.current = t;
+      if (lyricData?.lines?.length) {
+        const idx = computeLineIndex(t, lyricData.lines);
+        if (idx !== lastIndexRef.current) {
+          lastIndexRef.current = idx;
+          setCurrentTime(t);
+          setCurrentLineIndex(idx);
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
   }, [audioState.pos, lyricData, computeLineIndex]);
 
+  /** ?? currentTime ref?? InterludeDots ????? */
+  const getCurrentTime = useCallback(() => currentTimeRef.current, []);
   /** 清除缓存（用于手动刷新） */
   const clearCache = useCallback(() => {
     lyricCache.clear();
@@ -156,7 +172,14 @@ export function useLyricManager() {
     error,
     currentLineIndex,
     currentTime,
+    currentTimeRef,
+    getCurrentTime,
     fetchLyrics,
     clearCache,
-  } as LyricManagerState & { fetchLyrics: (fp: string) => Promise<void>; clearCache: () => void };
+  } as LyricManagerState & {
+    fetchLyrics: (fp: string) => Promise<void>;
+    clearCache: () => void;
+    currentTimeRef: React.RefObject<number>;
+    getCurrentTime: () => number;
+  };
 }

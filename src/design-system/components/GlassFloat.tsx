@@ -1,9 +1,13 @@
-/**
+﻿/**
  * GlassFloat — Draggable floating glass window.
  *
  * Reusable floating window primitive with backdrop-filter blur,
  * macOS traffic-light close button, optional title, drag-to-move,
  * and position persistence.
+ *
+ * Performance notes:
+ * - Reduces backdrop-filter blur during active drag to avoid repaint storms.
+ * - Position updates via React state + rAF throttle (no transform layering).
  *
  * backdrop-filter lives on the outer container (not inside GlassSurface)
  * to avoid stacking-context clipping by will-change:transform.
@@ -82,7 +86,7 @@ export function GlassFloat({
       } catch {}
     }
     if (defaultPosition) return defaultPosition;
-    return { x: 24, y: window.innerHeight - height - 20 };
+    return { x: 24, y: Math.max(20, window.innerHeight - height - 20) };
   }, [positionKey, defaultPosition, height]);
 
   const savePos = useCallback((x: number, y: number) => {
@@ -94,6 +98,8 @@ export function GlassFloat({
   const dragging = useRef(false);
   const offset = useRef({ x: 0, y: 0 });
   const rafRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     const onResize = () => {
@@ -109,6 +115,15 @@ export function GlassFloat({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button")) return;
     dragging.current = true;
+    setIsDragging(true);
+    // Lighten blur during drag to reduce repaint cost
+    const el = containerRef.current;
+    if (el) {
+      el.style.transition = "none";
+      el.style.backdropFilter = "blur(8px) saturate(1.0)";
+      (el.style as any).WebkitBackdropFilter = "blur(8px) saturate(1.0)";
+      el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.15)";
+    }
     offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
     e.preventDefault();
   }, [pos]);
@@ -127,14 +142,22 @@ export function GlassFloat({
       });
     };
     const onUp = () => {
-      if (dragging.current) {
-        dragging.current = false;
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = 0;
-        }
-        setPos(p => { savePos(p.x, p.y); return p; });
+      if (!dragging.current) return;
+      const el = containerRef.current;
+      dragging.current = false;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
       }
+      // Restore full blur
+      if (el) {
+        el.style.transition = "";
+        el.style.backdropFilter = "";
+        (el.style as any).WebkitBackdropFilter = "";
+        el.style.boxShadow = "";
+      }
+      setPos(p => { savePos(p.x, p.y); return p; });
+      setIsDragging(false);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -148,11 +171,17 @@ export function GlassFloat({
     <AnimatePresence>
       {open && (
         <motion.div
+          ref={containerRef}
           variants={glassPopIn}
           initial="hidden"
           animate="visible"
           exit="exit"
-          transition={{ type: "spring", stiffness: 200, damping: 24, mass: 0.8 }}
+          transition={{
+            type: "spring",
+            stiffness: 280,
+            damping: 30,
+            mass: 0.7,
+          }}
           style={{
             position: "fixed",
             left: pos.x, top: pos.y,
@@ -160,9 +189,12 @@ export function GlassFloat({
             width, height,
             borderRadius: settings.borderRadius,
             overflow: "hidden",
-            backdropFilter: "blur(45px) saturate(2.0)",
-            WebkitBackdropFilter: "blur(45px) saturate(2.0)",
-            willChange: "transform",
+            backdropFilter: "blur(32px) saturate(1.8)",
+            WebkitBackdropFilter: "blur(32px) saturate(1.8)",
+            border: "0.5px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+            transition: "box-shadow 0.35s ease, backdrop-filter 0.35s ease",
+            willChange: isDragging ? "left, top" : "auto",
           }}
         >
           <GlassSurface

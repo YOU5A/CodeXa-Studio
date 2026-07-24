@@ -1,9 +1,14 @@
-/**
+﻿/**
  * LyricDisplay — 歌词显示组件（重构版）
  *
  * 使用 position:absolute 布局替代 flex+spacer 方案。
  * 当前行居中，上下行按缩放公式层叠排布。
  * 动画由 CSS transition 驱动。
+ *
+ * Performance:
+ * - Only sets willChange on ±3 surrounding lines (not all lines).
+ * - Uses contain:layout style on container for independent compositing.
+ * - Visibility window skips rendering lines far outside viewport.
  *
  * @module lyrics/LyricDisplay
  */
@@ -16,10 +21,13 @@ import LyricsLine from "./LyricsLine";
 
 const ROW_HEIGHT_BASE = 28;
 const CURRENT_ROW_HEIGHT = 36;
+/** Only render lines within this many positions of focus (rest are too far offscreen) */
+const VISIBILITY_WINDOW = 12;
 
 interface LyricDisplayProps {
   lyricData: LyricData | null;
   currentTime: number;
+  currentLineIndex: number;
   loading?: boolean;
   error?: string | null;
   loadingText?: string;
@@ -31,7 +39,7 @@ interface LyricDisplayProps {
 }
 
 export default function LyricDisplay({
-  lyricData, currentTime, loading, error,
+  lyricData, currentTime, currentLineIndex, loading, error,
   loadingText, noLyricsText, instrumentalText,
   onLineClick,
   settings = DEFAULT_LYRICS_SETTINGS,
@@ -77,11 +85,11 @@ export default function LyricDisplay({
     }, 3000);
   }, []);
 
-  const focusLine = isManual ? manualLine.current : currentIndex;
+  const focusLine = isManual ? manualLine.current : currentLineIndex;
 
   // ── 计算每行 top ──
   const linePositions = useMemo(() => {
-    if (allLines.length === 0 || containerHeight === 0) return [];
+    if (allLines.length === 0 || containerHeight === 0) return [] as number[];
     const positions: number[] = new Array(allLines.length).fill(0);
     const focus = Math.max(0, Math.min(focusLine, allLines.length - 1));
 
@@ -123,11 +131,6 @@ export default function LyricDisplay({
     };
   }, []);
 
-  // ── CSS 变量：根据设置注入 easing ──
-  const rootStyle = {
-    "--lyric-easing": "ease",
-  } as React.CSSProperties;
-
   // ── 空 / 加载状态 ──
   const cs = {
     height: "100%", display: "flex", alignItems: "center",
@@ -135,16 +138,16 @@ export default function LyricDisplay({
   } as React.CSSProperties;
 
   if (loading) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{loadingText || "\u52A0\u8F7D\u4E2D..."}</span></div>;
+    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{loadingText || "加载中..."}</span></div>;
   }
   if (error) {
     return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{error}</span></div>;
   }
   if (!lyricData || !allLines.length) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{noLyricsText || "\u6682\u65E0\u6B4C\u8BCD"}</span></div>;
+    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{noLyricsText || "暂无歌词"}</span></div>;
   }
   if (!allLines.some(l => l.text.trim())) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{instrumentalText || "\u7EAF\u97F3\u4E50\uFF0C\u8BF7\u6B23\u8D4F"}</span></div>;
+    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{instrumentalText || "纯音乐，请欣赏"}</span></div>;
   }
 
   // ── 渲染 ──
@@ -163,17 +166,24 @@ export default function LyricDisplay({
         }
       }}
       style={{
-        ...rootStyle,
         height: "100%",
         overflow: "hidden",
         position: "relative",
         maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
         WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+        // Independent compositing — prevents repaints from bubbling up
+        contain: "layout style",
       }}
     >
       {allLines.map((line, i) => {
+        // Visibility window: skip lines too far from focus (entirely offscreen)
+        const dist = Math.abs(i - focusLine);
+        if (dist > VISIBILITY_WINDOW) return null;
+
         const offset = i - focusLine;
         const isCurrent = i === focusLine;
+        // Only hint GPU layer for lines that will actually animate (near focus)
+        const nearFocus = dist <= 3;
 
         return (
           <div
@@ -184,7 +194,7 @@ export default function LyricDisplay({
               right: 0,
               top: linePositions[i] ?? 0,
               transition: "top 0.5s var(--lyric-easing, ease)",
-              willChange: "top",
+              willChange: nearFocus ? "top" : "auto",
             }}
           >
             <LyricsLine

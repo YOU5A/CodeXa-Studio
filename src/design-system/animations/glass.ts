@@ -1,8 +1,11 @@
-/**
+﻿/**
  * Liquid Glass Motion Presets
  *
  * Apple-style glass animations for entrance, hover, press, and transitions.
  * All presets use Framer Motion spring physics for natural, fluid motion.
+ *
+ * Performance: Filter blur() animation is omitted — it forces expensive GPU
+ * repaints on every frame. Blur is handled by static backdrop-filter layers.
  *
  * @module design-system/animations/glass
  */
@@ -35,7 +38,7 @@ const springPress: Transition = {
 /* ─── Glass Entrance Variants ─── */
 
 /**
- * Standard glass surface entrance — blur-in + fade + slight scale.
+ * Standard glass surface entrance — fade + slight scale + subtle Y slide.
  * For cards, panels, and general content surfaces.
  * Uses staggered children for nested content reveal.
  */
@@ -43,13 +46,11 @@ export const glassEntrance: Variants = {
   hidden: {
     opacity: 0,
     scale: 0.97,
-    filter: "blur(4px)",
-    y: 6,
+    y: 8,
   },
   visible: {
     opacity: 1,
     scale: 1,
-    filter: "blur(0px)",
     y: 0,
     transition: {
       ...springEntrance,
@@ -59,7 +60,6 @@ export const glassEntrance: Variants = {
   exit: {
     opacity: 0,
     scale: 0.98,
-    filter: "blur(3px)",
     y: -4,
     transition: { duration: 0.15, ease: "easeIn" as const } satisfies Transition,
   },
@@ -67,19 +67,17 @@ export const glassEntrance: Variants = {
 
 /**
  * Gentle glass reveal — slower, more dramatic entrance for hero surfaces.
- * Higher scale range, longer blur dissolve.
+ * Higher scale range, longer duration.
  */
 export const glassReveal: Variants = {
   hidden: {
     opacity: 0,
     scale: 0.94,
-    filter: "blur(8px)",
-    y: 12,
+    y: 14,
   },
   visible: {
     opacity: 1,
     scale: 1,
-    filter: "blur(0px)",
     y: 0,
     transition: {
       type: "spring",
@@ -92,25 +90,24 @@ export const glassReveal: Variants = {
   exit: {
     opacity: 0,
     scale: 0.96,
-    filter: "blur(4px)",
     transition: { duration: 0.2, ease: "easeIn" as const } satisfies Transition,
   },
 };
 
 /**
  * Pop-in entrance for modals, dialogs, and overlays.
- * Quick scale bounce with blur-in.
+ * Quick scale bounce — no blur for performance.
  */
 export const glassPopIn: Variants = {
   hidden: {
     opacity: 0,
     scale: 0.88,
-    filter: "blur(6px)",
+    y: 6,
   },
   visible: {
     opacity: 1,
     scale: 1,
-    filter: "blur(0px)",
+    y: 0,
     transition: {
       type: "spring",
       stiffness: 320,
@@ -121,7 +118,6 @@ export const glassPopIn: Variants = {
   exit: {
     opacity: 0,
     scale: 0.93,
-    filter: "blur(4px)",
     transition: { duration: 0.15, ease: "easeIn" as const } satisfies Transition,
   },
 };
@@ -226,19 +222,17 @@ export const glassPressDeep: {
 /* ─── Page Transition Variants ─── */
 
 /**
- * Smooth page transition — crossfade with subtle slide and blur.
+ * Smooth page transition — crossfade with subtle slide.
  * For route-level page switching as seen in App.tsx.
  */
 export const pageTransition: Variants = {
   initial: {
     opacity: 0,
     y: 8,
-    filter: "blur(2px)",
   },
   animate: {
     opacity: 1,
     y: 0,
-    filter: "blur(0px)",
     transition: {
       duration: 0.25,
       ease: [0.16, 1, 0.3, 1],
@@ -247,7 +241,6 @@ export const pageTransition: Variants = {
   exit: {
     opacity: 0,
     y: -6,
-    filter: "blur(2px)",
     transition: {
       duration: 0.18,
       ease: "easeIn",
@@ -262,11 +255,9 @@ export const pageTransition: Variants = {
 export const contentTransition: Variants = {
   initial: {
     opacity: 0,
-    filter: "blur(1px)",
   },
   animate: {
     opacity: 1,
-    filter: "blur(0px)",
     transition: {
       duration: 0.2,
       ease: [0.16, 1, 0.3, 1],

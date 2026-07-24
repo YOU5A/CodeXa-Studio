@@ -7,7 +7,7 @@
  * @module lyrics/InterludeDots
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { LyricLine } from "./types";
 
 /** 间奏行在滚动容器中的行高 */

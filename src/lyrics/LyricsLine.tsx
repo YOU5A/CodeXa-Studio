@@ -43,8 +43,8 @@ function opacityByOffset(offset: number): number {
   return Math.max(1 - 0.4 * (a - 1), 0);
 }
 
-const FONT_MAP = { small: 12, medium: 14, large: 16 };
-const CURRENT_FONT_MAP = { small: 15, medium: 18, large: 21 };
+const FONT_MAP = { small: 10, medium: 12, large: 14 };
+const CURRENT_FONT_MAP = { small: 13, medium: 15, large: 17 };
 
 const LyricsLine = memo(function LyricsLine({
   line,
