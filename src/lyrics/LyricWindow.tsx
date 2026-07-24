@@ -1,5 +1,5 @@
 /**
- * LyricWindow — Draggable lyrics overlay.
+ * LyricWindow — 可拖拽歌词悬浮窗口
  *
  * Uses GlassFloat (reusable floating glass window primitive).
  */
@@ -11,12 +11,13 @@ interface LyricWindowProps {
   open: boolean;
   onClose: () => void;
   children?: ReactNode;
+  defaultPosition?: { x: number; y: number };
 }
 
 const WIN_WIDTH = 280;
 const WIN_HEIGHT = 340;
 
-export default function LyricWindow({ open, onClose, children }: LyricWindowProps) {
+export default function LyricWindow({ open, onClose, children, defaultPosition }: LyricWindowProps) {
   return (
     <GlassFloat
       open={open}
@@ -25,6 +26,7 @@ export default function LyricWindow({ open, onClose, children }: LyricWindowProp
       width={WIN_WIDTH}
       height={WIN_HEIGHT}
       positionKey="lyrics-window-position"
+      defaultPosition={defaultPosition}
     >
       {children}
     </GlassFloat>

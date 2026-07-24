@@ -105,6 +105,10 @@ export default function LyricDisplay({
     const currentLineWraps =
       focus >= 0 && focus < allLines.length &&
       estimateCharUnits(allLines[focus].text) > 140 / currentFontPx;
+    // 上一行折行检测：当上一行文本较长时，与当前行之间额外加间距
+    const prevLineWraps =
+      focus > 0 && focus < allLines.length &&
+      estimateCharUnits(allLines[focus - 1].text) > 140 / currentFontPx;
     const centerY = containerHeight * alignPct;
     positions[focus] = centerY - CURRENT_ROW_HEIGHT / 2;
 
@@ -114,7 +118,7 @@ export default function LyricDisplay({
       const rowH = allLines[i].isInterlude ? ROW_HEIGHT_BASE * 0.6 : ROW_HEIGHT_BASE;
       const scale = 1 - (focus - i) * 0.18;
       const scaledH = rowH * Math.max(scale, 0.7);
-      positions[i] = prevTop - scaledH - gap;
+      positions[i] = prevTop - scaledH - gap - (i === focus - 1 && prevLineWraps ? 15 : 0);
       prevTop = positions[i];
     }
 

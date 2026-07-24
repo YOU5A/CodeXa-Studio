@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react";
 import { useToast, type ToastType } from "@/contexts/ToastContext";
 import { GlassSurface, glassEntrance } from "@/design-system";
@@ -28,11 +28,13 @@ export default function ToastContainer() {
   return (
     <AnimatePresence>
       {toasts.map((toast, i) => (
-        <motion.div
+        <GlassSurface
           key={toast.id}
+          tier="thick"
           variants={glassEntrance}
           initial="hidden"
           animate={toast.exiting ? "exit" : "visible"}
+          styleOverrides={{ radius: settings.borderRadius }}
           style={{
             position: "fixed",
             top: 56 + i * (H + GAP),
@@ -40,26 +42,19 @@ export default function ToastContainer() {
             zIndex: 9999,
             minWidth: 240,
             maxWidth: 400,
-          }}
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 16px",
+            fontSize: 13,
+            color: "var(--text-primary)",
+          } as React.CSSProperties}
         >
-          <GlassSurface
-            tier="thick"
-            styleOverrides={{ radius: settings.borderRadius }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 16px",
-              fontSize: 13,
-              color: "var(--text-primary)",
-            } as React.CSSProperties}
-          >
-            <span style={{ color: colorMap[toast.type], flexShrink: 0, display: "flex" }}>
-              {iconMap[toast.type]}
-            </span>
-            <span style={{ flex: 1, lineHeight: 1.4 }}>{toast.message}</span>
-          </GlassSurface>
-        </motion.div>
+          <span style={{ color: colorMap[toast.type], flexShrink: 0, display: "flex" }}>
+            {iconMap[toast.type]}
+          </span>
+          <span style={{ flex: 1, lineHeight: 1.4 }}>{toast.message}</span>
+        </GlassSurface>
       ))}
     </AnimatePresence>
   );

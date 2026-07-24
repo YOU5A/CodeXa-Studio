@@ -45,7 +45,7 @@ function opacityByOffset(offset: number): number {
   return Math.max(1 - 0.4 * (a - 1), 0);
 }
 
-const FONT_MAP = { small: 10, medium: 12, large: 14 };
+const FONT_MAP = { small: 11, medium: 14, large: 17 };
 const CURRENT_FONT_MAP = { small: 13, medium: 15, large: 17 };
 
 /** 估算文本字符宽度单位（CJK=1, ASCII≈0.55, 其他≈0.65） */
@@ -146,7 +146,7 @@ const LyricsLine = memo(function LyricsLine({
         ].join(", "),
         transitionDelay: `${staggerDelay}ms`,
         textShadow: enableGlow && isCurrent
-          ? "0 0 14px rgba(var(--accent-rgb), 0.40), 0 0 28px rgba(var(--accent-rgb), 0.15)"
+          ? "0 0 14px rgba(var(--fluid-glow-rgb, 255, 255, 255), 0.40), 0 0 28px rgba(var(--fluid-glow-rgb, 255, 255, 255), 0.15)"
           : "none",
       }}
     >

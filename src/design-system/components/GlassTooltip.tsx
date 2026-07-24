@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { radii } from "../tokens";
 
 interface GlassTooltipProps {
   text: string;
@@ -72,7 +73,7 @@ export function GlassTooltip({ text, children }: GlassTooltipProps) {
             WebkitBackdropFilter: "blur(32px) saturate(2.2)",
             background: "rgba(18,18,28,0.40)",
             border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: 8,
+            borderRadius: radii.lg,
             padding: "3px 10px",
             fontSize: 12,
             fontWeight: 500,

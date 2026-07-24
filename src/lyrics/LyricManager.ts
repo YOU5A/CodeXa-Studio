@@ -136,7 +136,7 @@ export function useLyricManager() {
     }
   }, [playingFile, fetchLyrics]);
 
-  /** rAF ???? ? ????????? React ?? */
+  /** rAF 驱动时间同步，避免 React 批量更新延迟 */
   const currentTimeRef = useRef(0);
   const rafRef = useRef(0);
   const lastIndexRef = useRef(-1);
@@ -159,7 +159,7 @@ export function useLyricManager() {
     return () => cancelAnimationFrame(rafRef.current);
   }, [audioState.pos, lyricData, computeLineIndex]);
 
-  /** ?? currentTime ref?? InterludeDots ????? */
+  /** 暴露 currentTime ref 供 InterludeDots 读取 */
   const getCurrentTime = useCallback(() => currentTimeRef.current, []);
   /** 清除缓存（用于手动刷新） */
   const clearCache = useCallback(() => {

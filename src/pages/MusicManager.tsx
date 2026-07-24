@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
   SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
-  Volume2, Trash2, Music, Edit3
+  Volume2, Trash2, Music, Edit3, ChevronUp
 } from "lucide-react";
 import {
   GlassCard,
@@ -151,6 +151,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [coverB64, setCoverB64] = useState<string | null>(null);
   const [newCoverPath, setNewCoverPath] = useState("");
   const [coverPreviewB64, setCoverPreviewB64] = useState<string | null>(null);
+  const [coverMenuOpen, setCoverMenuOpen] = useState(false);
+  const [coverMenuHover, setCoverMenuHover] = useState(false);
 
   const [tagTitle, setTagTitle] = useState("");
   const [tagArtist, setTagArtist] = useState("");
@@ -180,7 +182,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => externalSettings ?? loadFluidSettings());
   const [lyricsSettings, setLyricsSettings] = useState<LyricsSettingsValues>(() => loadLyricsSettings());
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
-  // ?????????
+  // 重命名输入框参考
   useEffect(() => {
     saveFluidSettings(fluidSettings);
   }, [fluidSettings]);
@@ -496,7 +498,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   // ── Rename ──
   const renameOne = async () => {
     if (!selectedFile) { showToast(tx.noFileSelected, "warning"); return; }
-    if (!renameName.trim()) { showToast(lang === "zh" ? "?????????" : "Enter a file name", "warning"); return; }
+    if (!renameName.trim()) { showToast(lang === "zh" ? "请输入文件名" : "Enter a file name", "warning"); return; }
     const ok = await confirm({ title: tx.renameOneConfirm });
     if (!ok) return;
     const r = await window.electronAPI?.python.call("music.rename", { filepath: selectedFile, new_name: renameName.trim() });
@@ -568,7 +570,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
           <div style={{ flex: 1, minHeight: 0, display: "flex", gap: space[4] }}>
             {/* Left: Cover */}
             <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: space[3] }}>
-              <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+              <GlassCard style={{ padding: 0, overflow: "hidden", position: "relative" }}>
                 <div style={{
                   width: "100%", aspectRatio: "1",
                   background: "var(--bg-tertiary)",
@@ -581,26 +583,76 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                     <Music size={48} style={{ color: "var(--text-tertiary)", opacity: 0.25 }} />
                   )}
                 </div>
+                {/* Cover menu toggle ? glass glow pill at bottom of cover */}
+                <button
+                  onClick={() => setCoverMenuOpen(v => !v)}
+                  onMouseEnter={() => setCoverMenuHover(true)}
+                  onMouseLeave={() => setCoverMenuHover(false)}
+                  style={{
+                    position: "absolute",
+                    bottom: 8,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: 34,
+                    height: 22,
+                    borderRadius: 11,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: coverMenuHover ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.35)",
+                    backdropFilter: "blur(14px) saturate(1.6)",
+                    WebkitBackdropFilter: "blur(14px) saturate(1.6)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    boxShadow: coverMenuHover
+                      ? "0 0 22px rgba(255,255,255,0.22), 0 0 44px rgba(255,255,255,0.08)"
+                      : coverMenuOpen
+                        ? "0 0 18px rgba(255,255,255,0.14), 0 0 36px rgba(255,255,255,0.05)"
+                        : "0 0 12px rgba(255,255,255,0.06), 0 0 24px rgba(255,255,255,0.02)",
+                    transition: "background 0.2s ease, box-shadow 0.3s ease",
+                    padding: 0,
+                    outline: "none",
+                    zIndex: 1,
+                  }}
+                >
+                  <motion.div
+                    animate={{ rotate: coverMenuOpen ? 180 : 0 }}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <ChevronUp size={14} style={{ color: "rgba(255,255,255,0.75)" }} />
+                  </motion.div>
+                </button>
               </GlassCard>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
-                <GlassButton variant="secondary" size="sm" inline={false} onClick={pickCover}
-                  style={{ justifyContent: "center" }}>
-                  <Image size={12} /> {tx.selectCover}
-                </GlassButton>
-                <GlassButton variant="secondary" size="sm" inline={false} onClick={applyCover}
-                  style={{ justifyContent: "center" }}>
-                  {tx.applyCover}
-                </GlassButton>
-                <GlassButton variant="secondary" size="sm" inline={false} onClick={saveCover}
-                  style={{ justifyContent: "center" }}>
-                  <Save size={12} /> {tx.saveCover}
-                </GlassButton>
-                <GlassButton variant="secondary" size="sm" inline={false} onClick={removeCover}
-                  style={{ justifyContent: "center" }}>
-                  <Trash2 size={12} /> {tx.removeCover}
-                </GlassButton>
-              </div>
+              <AnimatePresence>
+                {coverMenuOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: space[1] }}
+                  >
+                    <GlassButton variant="secondary" size="sm" inline={false} onClick={pickCover}
+                      style={{ justifyContent: "center" }}>
+                      <Image size={12} /> {tx.selectCover}
+                    </GlassButton>
+                    <GlassButton variant="secondary" size="sm" inline={false} onClick={applyCover}
+                      style={{ justifyContent: "center" }}>
+                      {tx.applyCover}
+                    </GlassButton>
+                    <GlassButton variant="secondary" size="sm" inline={false} onClick={saveCover}
+                      style={{ justifyContent: "center" }}>
+                      <Save size={12} /> {tx.saveCover}
+                    </GlassButton>
+                    <GlassButton variant="secondary" size="sm" inline={false} onClick={removeCover}
+                      style={{ justifyContent: "center" }}>
+                      <Trash2 size={12} /> {tx.removeCover}
+                    </GlassButton>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {coverPreviewB64 && (
                 <GlassCard style={{ padding: 0, overflow: "hidden" }}>
@@ -899,7 +951,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                     width: 34, height: 34, minWidth: 34, padding: 0,
                     borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, fontWeight: 600,
-                    color: "var(--text-secondary)",
+                    color: lyricsVisible ? "var(--accent)" : "var(--text-secondary)",
                     transition: "color 0.2s ease",
                   }}
                 >
@@ -1072,7 +1124,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     </motion.div>
 
       {/* Lyrics Window */}
-      <LyricWindow open={lyricsVisible} onClose={() => setLyricsVisible(false)}>
+      <LyricWindow open={lyricsVisible} onClose={() => setLyricsVisible(false)} defaultPosition={{ x: 84, y: 300 }}>
         <LyricDisplay
           lyricData={lyricData}
           currentTime={currentTime}

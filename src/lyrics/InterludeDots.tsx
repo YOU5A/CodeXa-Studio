@@ -46,7 +46,7 @@ export default function InterludeDots({
           0,
           Math.min(1, (elapsed - perDotTime * i) / Math.max(perDotTime, 0.1))
         );
-        const dotOpacity = 0.2 + 0.7 * dotProgress;
+        const dotOpacity = 0.25 + 0.65 * dotProgress;
         const dotScale = 0.85 + 0.15 * dotProgress;
 
         return (
@@ -59,7 +59,7 @@ export default function InterludeDots({
               height: 10,
               borderRadius: "50%",
               background: "var(--text-primary)",
-              opacity: isCurrent ? undefined : 0.25,
+              opacity: 0.25,
               transform: `scale(${dotScale})`,
               transition: isCurrent
                 ? "none"

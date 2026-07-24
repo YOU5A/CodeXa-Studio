@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { RefreshCw, Save, RotateCcw, Trash2, FolderOpen } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import {
@@ -47,6 +48,7 @@ const t = {
     backupCreated: "备份已创建",
     restoreConfirm: "确定要恢复此备份吗？",
     deleteConfirm: "确定要删除此备份吗？",
+    presetFilled: "已填入",
   },
   en: {
     title: "Win32 PrioritySeparation",
@@ -74,6 +76,7 @@ const t = {
     backupCreated: "Backup created",
     restoreConfirm: "Restore this backup?",
     deleteConfirm: "Delete this backup?",
+    presetFilled: "Filled",
   },
 };
 
@@ -146,6 +149,8 @@ export default function Win32Priority(_props: Props) {
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
+  const [presetTooltip, setPresetTooltip] = useState<string | null>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -163,6 +168,7 @@ export default function Win32Priority(_props: Props) {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { return () => { if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current); }; }, []);
 
   const applyValue = async () => {
     const ok = await confirm({ title: tx.confirmSet, danger: false });
@@ -227,6 +233,11 @@ export default function Win32Priority(_props: Props) {
     fetchData();
   };
 
+  const showPresetTooltip = useCallback((hex: string) => {
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    setPresetTooltip(hex);
+    tooltipTimerRef.current = setTimeout(() => setPresetTooltip(null), 2000);
+  }, []);
   // 光标跟随白色光晕（匹配 GlassButton）
   const setPillGlow = useCallback((el: HTMLElement, cx: number, cy: number) => {
     const r = el.getBoundingClientRect();
@@ -297,7 +308,7 @@ export default function Win32Priority(_props: Props) {
               <motion.button
                 key={p.hex}
                 className="theme-pill"
-                onClick={() => setCustomValue(p.hex)}
+                onClick={() => { setCustomValue(p.hex); showPresetTooltip(p.hex); }}
                 onMouseMove={handlePillMove}
                 onMouseEnter={handlePillMove}
                 onMouseLeave={handlePillLeave}
@@ -310,7 +321,7 @@ export default function Win32Priority(_props: Props) {
                         background: "var(--bg-elevated)",
                       }
                 }
-                whileTap={isActive ? undefined : { scale: 0.98 }}
+                whileTap={{ scale: 0.96 }}
                 animate={
                   isActive
                     ? {
@@ -440,6 +451,46 @@ export default function Win32Priority(_props: Props) {
           </div>
         )}
       </GlassCard>
+
+      {/* ─── Preset Tooltip ─── */}
+      {presetTooltip && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30, mass: 0.8 }}
+            style={{
+              position: "fixed",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 99999,
+              pointerEvents: "none",
+              backdropFilter: "blur(32px) saturate(2.2)",
+              WebkitBackdropFilter: "blur(32px) saturate(2.2)",
+              background: "rgba(18,18,28,0.40)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 20,
+              padding: "8px 20px",
+              fontSize: 14,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.92)",
+              whiteSpace: "nowrap",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span style={{ color: "var(--accent)", fontFamily: "monospace", fontWeight: 600 }}>
+              0x{presetTooltip}
+            </span>
+            <span>{tx.presetFilled}</span>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   );
 }

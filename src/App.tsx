@@ -69,15 +69,29 @@ function AppContent() {
     return () => window.removeEventListener("fluidSettingsChanged", handler);
   }, []);
 
+
   // Listen for cover color changes from MusicManager
   // (MusicManager handles localStorage persistence; App only consumes the event)
   useEffect(() => {
     const handler = (e: Event) => {
-      setCoverColor((e as CustomEvent<RGB | null>).detail);
+      const color = (e as CustomEvent<RGB | null>).detail;
+      setCoverColor(color);
     };
     window.addEventListener("fluidCoverColorChanged", handler as EventListener);
     return () => window.removeEventListener("fluidCoverColorChanged", handler as EventListener);
   }, []);
+
+  // Sync cover color to --fluid-glow-rgb for lyrics glow effect
+  useEffect(() => {
+    if (coverColor) {
+      const [r, g, b] = coverColor;
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      const rgb = luminance < 40 ? "255, 255, 255" : `${r}, ${g}, ${b}`;
+      document.documentElement.style.setProperty("--fluid-glow-rgb", rgb);
+    } else {
+      document.documentElement.style.removeProperty("--fluid-glow-rgb");
+    }
+  }, [coverColor]);
 
   // Fetch cover image for SVG fluid background when playing file changes
   useEffect(() => {

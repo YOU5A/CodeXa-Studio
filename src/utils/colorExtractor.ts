@@ -1,14 +1,14 @@
 /**
- * ???????????????
- * ???????????
+ * 专辑封面主色提取器
+ * 基于加权采样算法
  */
 
-// --- ?? ---
+// --- 类型 ---
 
 export type RGB = [number, number, number];
 export type HSL = [number, number, number];
 
-// --- HSL ?? ---
+// --- HSL 转换 ---
 
 export function rgbToHsl([r, g, b]: RGB): HSL {
   const nr = r / 255;
@@ -51,7 +51,7 @@ export function hslToRgb([h, s, l]: HSL): RGB {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-// --- ?????? ---
+// --- 同步提取 ---
 
 export function extractDominantColor(base64: string): RGB | null {
   try {
@@ -63,13 +63,13 @@ export function extractDominantColor(base64: string): RGB | null {
 }
 
 /**
- * ? base64 ???????????
+ * 从 base64 图片异步提取主色
  *
- * ?????
- * 1. ?????? ? ??????????/??
- * 2. ???? ? ?????????????????
- * 3. ????? ? ????????????
- * 4. ???? ? ????/?????????????
+ * 算法：
+ * 1. 裁剪居中 → 取最大内接正方形
+ * 2. 降采样 → 缩放到固定采样尺寸
+ * 3. 加权投票 → 饱和度+空间距离加权
+ * 4. 过滤 → 极亮/极暗/透明像素排除
  */
 export async function extractDominantColorAsync(base64: string): Promise<RGB | null> {
   return new Promise((resolve) => {
@@ -81,29 +81,29 @@ export async function extractDominantColorAsync(base64: string): Promise<RGB | n
         if (naturalW === 0 || naturalH === 0) { resolve(null); return; }
 
         const canvas = document.createElement("canvas");
-        const sampleSize = 80; // 80x80 ?????? 50x50 ???
+        const sampleSize = 80; // 80x80 采样，大于 50x50 足够
         canvas.width = sampleSize;
         canvas.height = sampleSize;
         const ctx = canvas.getContext("2d");
         if (!ctx) { resolve(null); return; }
 
-        // ?????????????????????
+        // 取图片最大内接正方形区域
         const squareSize = Math.min(naturalW, naturalH);
         const sx = Math.floor((naturalW - squareSize) / 2);
         const sy = Math.floor((naturalH - squareSize) / 2);
 
         ctx.drawImage(
           img,
-          sx, sy, squareSize, squareSize,  // ?????????
-          0, 0, sampleSize, sampleSize,     // ????
+          sx, sy, squareSize, squareSize,  // 源区域（正方形）
+          0, 0, sampleSize, sampleSize,     // 目标区域
         );
 
         const data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
         const half = sampleSize / 2;
 
-        // ?????key -> weighted count
+        // 颜色key -> weighted count
         const colorWeight = new Map<string, number>();
-        const quantize = 6; // ?????6 ??? 4 ??????????
+        const quantize = 6; // 量化到 6 级，比 4 级更精细
 
         for (let py = 0; py < sampleSize; py++) {
           for (let px = 0; px < sampleSize; px++) {
@@ -113,30 +113,30 @@ export async function extractDominantColorAsync(base64: string): Promise<RGB | n
             const b = data[idx + 2];
             const a = data[idx + 3];
 
-            // ????
+            // 透明跳过
             if (a < 128) continue;
 
-            // ????/???????????
+            // 极暗/极亮过滤，减少黑白干扰
             const brightness = (r + g + b) / 3;
             if (brightness < 20 || brightness > 235) continue;
 
-            // ?????????????????
+            // 饱和度计算用于加权
             const maxC = Math.max(r, g, b);
             const minC = Math.min(r, g, b);
             const saturation = maxC === 0 ? 0 : (maxC - minC) / maxC;
-            // ??????0.2 ? + 0.8????????????
+            // 基础权重 0.2 + 饱和度 0.8，使鲜艳颜色更优先
             const satWeight = 0.2 + saturation * 0.8;
 
-            // ????????????????
+            // 空间距离权重：中心区域优先
             const dx = (px - half) / half;
             const dy = (py - half) / half;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            // sigma=0.6: ?????1.0????0.25
+            // sigma=0.6: 中心权重 1.0，边缘约 0.25
             const spatialWeight = Math.exp(-(dist * dist) / (2 * 0.6 * 0.6));
 
             const weight = satWeight * spatialWeight;
 
-            // ????
+            // 量化
             const qr = Math.floor(r / quantize) * quantize;
             const qg = Math.floor(g / quantize) * quantize;
             const qb = Math.floor(b / quantize) * quantize;
@@ -148,7 +148,7 @@ export async function extractDominantColorAsync(base64: string): Promise<RGB | n
 
         if (colorWeight.size === 0) { resolve(null); return; }
 
-        // ?????????
+        // 取权重最高的颜色
         let bestKey = "";
         let bestWeight = 0;
         for (const [key, w] of colorWeight) {
@@ -173,10 +173,10 @@ export async function extractDominantColorAsync(base64: string): Promise<RGB | n
   });
 }
 
-// --- ????? ---
+// --- 调色板 ---
 
 /**
- * ????? 5 ???? + ????
+ * 生成 5 色封面调色板 + 背景色
  */
 export function generateCoverPalette(dominant: RGB): {
   colors: RGB[];

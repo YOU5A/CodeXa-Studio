@@ -66,9 +66,20 @@ const INTERLUDE_THRESHOLD = 10;
  * 插入 isInterlude 行用于渲染等待点动画。
  */
 function generateInterludes(lines: LyricLine[]): LyricLine[] {
-  if (lines.length < 2) return lines;
+  if (lines.length === 0) return lines;
 
   const result: LyricLine[] = [];
+
+  // Intro 间奏: 歌曲开始到第一句歌词之间的空白
+  if (lines[0].time >= INTERLUDE_THRESHOLD) {
+    result.push({
+      time: 0,
+      text: "",
+      isInterlude: true,
+      duration: lines[0].time,
+    });
+  }
+
   for (let i = 0; i < lines.length; i++) {
     result.push(lines[i]);
 

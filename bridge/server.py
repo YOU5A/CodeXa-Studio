@@ -8,6 +8,12 @@ import os
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 # Suppress pygame welcome message that would pollute JSON-RPC stdout
 
+# Force UTF-8 on Windows stdin/stdout to prevent garbled Chinese characters in JSON-RPC
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stdin, "reconfigure"):
+    sys.stdin.reconfigure(encoding="utf-8")
+
 import json
 import importlib.util
 import traceback
@@ -545,16 +551,21 @@ def handle_music_get_lyrics(params):
         lrc_path = base + ext
         if os.path.isfile(lrc_path):
             try:
-                with open(lrc_path, "r", encoding="utf-8") as f:
+                with open(lrc_path, "r", encoding="utf-8-sig") as f:
                     lyrics_text = f.read()
                 break
             except UnicodeDecodeError:
-                try:
-                    with open(lrc_path, "r", encoding="gbk") as f:
-                        lyrics_text = f.read()
-                    break
-                except Exception:
-                    pass
+                pass
+            except Exception:
+                pass
+
+    # Try fallback encodings for LRC if not yet found
+    if not lyrics_text and os.path.isfile(base + ".lrc"):
+        for enc in ["gbk", "gb2312", "shift-jis", "euc-kr", "latin-1"]:
+            try:
+                with open(base + ".lrc", "r", encoding=enc) as f:
+                    lyrics_text = f.read()
+                break
             except Exception:
                 pass
 
