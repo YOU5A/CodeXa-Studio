@@ -9,7 +9,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { useToast } from "@/contexts/ToastContext";
 import { APP_VERSION } from "@/version";
-import { GlassButton, GlassModal, GlassToggle, GlassPillButton } from "@/design-system";
+import { GlassButton, GlassModal, GlassPanel, GlassToggle, GlassPillButton } from "@/design-system";
 import { getAnimDuration, EASE_OUT } from "@/utils/animations";
 import type { Theme, Language } from "@/types";
 
@@ -149,21 +149,6 @@ const animSpeedOptions = [
   { value: "off", key: "animOff" },
 ] as const;
 
-// ── 样式常量 ──
-
-const panelStyle: React.CSSProperties = {
-  padding: "20px 20px",
-  display: "flex",
-  flexDirection: "column",
-  gap: 12,
-  background: "var(--surface-card)",
-  borderRadius: 20,
-  border: "1px solid var(--border-color)",
-  backdropFilter: "blur(24px) saturate(1.8)",
-  WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-  overflow: "hidden",
-};
-
 const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 500,
@@ -290,7 +275,7 @@ export default function Settings() {
       </div>
 
       {/* ── Settings Panel ── */}
-      <div style={panelStyle}>
+      <GlassPanel tier="thick" padding={20} style={{ gap: 12 }}>
 
         {/* ── Appearance ── */}
         <div style={sectionLabelStyle}>{tx.appearance}</div>
@@ -576,7 +561,7 @@ export default function Settings() {
           </GlassButton>
         </div>
 
-      </div>
+      </GlassPanel>
 
       {/* ── Theme Picker Modal ── */}
       <GlassModal open={themePickerOpen} onClose={() => setThemePickerOpen(false)} maxWidth={400}>

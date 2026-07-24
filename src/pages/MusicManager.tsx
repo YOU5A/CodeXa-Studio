@@ -22,7 +22,8 @@ import { useToast } from "@/contexts/ToastContext";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import type { PlayMode } from "@/contexts/MusicPlayerContext";
 import { useMusicPlayer } from "@/contexts/MusicPlayerContext";
-import { useLyricManager, LyricWindow, LyricDisplay } from "@/lyrics";
+import { useLyricManager, LyricWindow, LyricDisplay, LyricsSettingsPanel, loadLyricsSettings, saveLyricsSettings, DEFAULT_LYRICS_SETTINGS } from "@/lyrics";
+import type { LyricsSettingsValues } from "@/lyrics";
 import type { MusicMetadata, PlaybackState, Page } from "@/types";
 import { useTheme } from "@/hooks/useTheme";
 import { getAnimDuration, EASE_OUT } from "@/utils/animations";
@@ -169,11 +170,15 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [progressHover, setProgressHover] = useState(false);
   const [playBtnGlow, setPlayBtnGlow] = useState({ x: 0.5, y: 0.5, visible: false });
   const [lyricsVisible, setLyricsVisible] = useState(false);
+  const [lyricsSettingsOpen, setLyricsSettingsOpen] = useState(false);
+  const [lyricsBtnHover, setLyricsBtnHover] = useState(false);
+  const lyricsGearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { lyricData, loading: lyricsLoading, error: lyricsError, currentLineIndex, currentTime } = useLyricManager();
   const [volumeHover, setVolumeHover] = useState(false);
   const [volGlow, setVolGlow] = useState({ x: 0.5, y: 0.5, visible: false });
   const [fluidSettingsOpen, setFluidSettingsOpen] = useState(false);
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => externalSettings ?? loadFluidSettings());
+  const [lyricsSettings, setLyricsSettings] = useState<LyricsSettingsValues>(() => loadLyricsSettings());
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
   // ?????????
   useEffect(() => {
@@ -817,26 +822,62 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
             display: "flex", alignItems: "center", justifyContent: "center", gap: space[4],
             flex: "0 0 auto",
           }}>
-            {/* Lyrics Toggle */}
-            <GlassTooltip text={tx.lyrics}>
-            <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <GlassButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setLyricsVisible(v => !v)}
+            {/* Lyrics Toggle + Settings Gear */}
+            <span
+              onMouseEnter={() => { if (lyricsGearTimer.current) { clearTimeout(lyricsGearTimer.current); lyricsGearTimer.current = null; } setLyricsBtnHover(true); }}
+              onMouseLeave={() => { lyricsGearTimer.current = setTimeout(() => setLyricsBtnHover(false), 600); }}
+              style={{ position: "relative", display: "inline-flex", alignItems: "center", height: 34, flexShrink: 0 }}
+            >
+              {/* Gear ? slides out left */}
+              <span
                 style={{
-                  width: 34, height: 34, minWidth: 34, padding: 0,
-                  borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 600,
-                  color: lyricsVisible ? "var(--accent)" : "var(--text-tertiary)",
-                  transition: "color 0.2s ease",
+                  position: "absolute",
+                  right: "calc(100% + 6px)",
+                  top: 0,
+                  display: "flex", alignItems: "center",
+                  height: 34,
+                  transform: lyricsBtnHover ? "translateX(0) scale(1)" : "translateX(8px) scale(0.5)",
+                  opacity: lyricsBtnHover ? 1 : 0,
+                  transition: "transform 0.2s ease, opacity 0.15s ease",
+                  pointerEvents: lyricsBtnHover ? "auto" : "none",
                 }}
-
               >
-                {tx.lyrics}
-              </GlassButton>
+                <GlassButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLyricsSettingsOpen(true)}
+                  style={{
+                    width: 34, height: 34, minWidth: 34, padding: 0,
+                    borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "var(--text-tertiary)",
+                    transition: "color 0.2s ease",
+                  }}
+                  title={lang === "zh" ? "歌词设置" : "Lyrics Settings"}
+                >
+                  <Settings size={14} />
+                </GlassButton>
+              </span>
+
+              {/* Lyrics Toggle */}
+              <GlassTooltip text={tx.lyrics}>
+              <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <GlassButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLyricsVisible(v => !v)}
+                  style={{
+                    width: 34, height: 34, minWidth: 34, padding: 0,
+                    borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 600,
+                    color: lyricsVisible ? "var(--accent)" : "var(--text-tertiary)",
+                    transition: "color 0.2s ease",
+                  }}
+                >
+                  {tx.lyrics}
+                </GlassButton>
+              </span>
+              </GlassTooltip>
             </span>
-            </GlassTooltip>
 
             {/* Prev */}
             <GlassTooltip text={tx.prevTrack}>
@@ -1013,6 +1054,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
           noLyricsText={tx.lyricsNoLyrics}
           instrumentalText={tx.lyricsInstrumental}
           onLineClick={seekTo}
+          settings={lyricsSettings}
         />
       </LyricWindow>
 
@@ -1021,6 +1063,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         onClose={() => setFluidSettingsOpen(false)}
         values={fluidSettings}
         onChange={setFluidSettings}
+      />
+
+      <LyricsSettingsPanel
+        open={lyricsSettingsOpen}
+        onClose={() => setLyricsSettingsOpen(false)}
+        values={lyricsSettings}
+        onChange={(v) => { setLyricsSettings(v); saveLyricsSettings(v); }}
       />
     </>
   );

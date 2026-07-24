@@ -1,13 +1,21 @@
 /**
- * LyricDisplay — Apple Music style lyrics rendering (pure UI)
+ * LyricDisplay — 歌词显示组件（重构版）
  *
- * 滚动逻辑全部在 useLyricScroller hook 中，本组件只负责渲染。
+ * 使用 position:absolute 布局替代 flex+spacer 方案。
+ * 当前行居中，上下行按缩放公式层叠排布。
+ * 动画由 CSS transition 驱动。
+ *
+ * @module lyrics/LyricDisplay
  */
 
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useLayoutEffect, useState, useCallback } from "react";
 import type { LyricData, LyricLine } from "./types";
-import { useLyricScroller } from "./useLyricScroller";
-import InterludeDots from "./InterludeDots";
+import type { LyricsSettingsValues } from "./LyricsSettingsPanel";
+import { DEFAULT_LYRICS_SETTINGS } from "./LyricsSettingsPanel";
+import LyricsLine from "./LyricsLine";
+
+const ROW_HEIGHT_BASE = 28;
+const CURRENT_ROW_HEIGHT = 36;
 
 interface LyricDisplayProps {
   lyricData: LyricData | null;
@@ -18,19 +26,34 @@ interface LyricDisplayProps {
   noLyricsText?: string;
   instrumentalText?: string;
   onLineClick?: (time: number) => void;
-  /** 歌曲标识，变化时重置滚动位置到顶部 */
-  songKey?: string;
+  /** 歌词设置 */
+  settings?: LyricsSettingsValues;
 }
-
-const ROW_HEIGHT = 64;
 
 export default function LyricDisplay({
   lyricData, currentTime, loading, error,
   loadingText, noLyricsText, instrumentalText,
   onLineClick,
-  songKey,
+  settings = DEFAULT_LYRICS_SETTINGS,
 }: LyricDisplayProps) {
-  // ── Compute current line ──
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [isManual, setIsManual] = useState(false);
+  const manualTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualLine = useRef(0);
+
+  // ── 容器尺寸 ──
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setContainerHeight(el.clientHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // ── 当前行索引 ──
   const { currentIndex, allLines } = useMemo(() => {
     if (!lyricData?.lines?.length) {
       return { currentIndex: -1, allLines: [] as LyricLine[] };
@@ -44,20 +67,69 @@ export default function LyricDisplay({
     return { currentIndex: idx, allLines: lines };
   }, [lyricData, currentTime]);
 
-  // ── Scrolling logic (all encapsulated) ──
-  const {
-    containerRef,
-    setRowRef,
-    spacerH,
-    isManual,
-    touchHandlers,
-  } = useLyricScroller({ currentIndex, rowHeight: ROW_HEIGHT, resetKey: songKey });
+  // ── 手动浏览 ──
+  const enterManual = useCallback((lineIdx: number) => {
+    setIsManual(true);
+    manualLine.current = lineIdx;
+    if (manualTimer.current) clearTimeout(manualTimer.current);
+    manualTimer.current = setTimeout(() => {
+      setIsManual(false);
+    }, 3000);
+  }, []);
 
-  // ── Click-vs-drag: 200ms threshold prevents seek during window drag ──
-  const pressStartTime = useRef(0);
+  const focusLine = isManual ? manualLine.current : currentIndex;
 
-  // ── Empty / loading states ──
-  var cs = {
+  // ── 计算每行 top ──
+  const linePositions = useMemo(() => {
+    if (allLines.length === 0 || containerHeight === 0) return [];
+    const positions: number[] = new Array(allLines.length).fill(0);
+    const focus = Math.max(0, Math.min(focusLine, allLines.length - 1));
+
+    // 当前行位置（受 alignment 设置影响）
+    const alignMap = { center: 0.5, top: 0.3, bottom: 0.7 };
+    const alignPct = alignMap[settings.alignment] ?? 0.5;
+    const lineSpacing = settings.lineSpacing ?? 24;
+    const gap = Math.max(12, Math.min(48, lineSpacing));
+    const centerY = containerHeight * alignPct;
+    positions[focus] = centerY - CURRENT_ROW_HEIGHT / 2;
+
+    // 向上层叠
+    let prevTop = positions[focus];
+    for (let i = focus - 1; i >= 0; i--) {
+      const rowH = allLines[i].isInterlude ? ROW_HEIGHT_BASE * 0.6 : ROW_HEIGHT_BASE;
+      const scale = 1 - (focus - i) * 0.18;
+      const scaledH = rowH * Math.max(scale, 0.7);
+      positions[i] = prevTop - scaledH - gap;
+      prevTop = positions[i];
+    }
+
+    // 向下层叠
+    let nextTop = positions[focus] + CURRENT_ROW_HEIGHT;
+    for (let i = focus + 1; i < allLines.length; i++) {
+      const rowH = allLines[i].isInterlude ? ROW_HEIGHT_BASE * 0.6 : ROW_HEIGHT_BASE;
+      const scale = 1 - (i - focus) * 0.18;
+      const scaledH = rowH * Math.max(scale, 0.7);
+      positions[i] = nextTop + gap;
+      nextTop = positions[i] + scaledH;
+    }
+
+    return positions;
+  }, [allLines, focusLine, containerHeight, settings.alignment, settings.lineSpacing]);
+
+  // ── cleanup ──
+  useLayoutEffect(() => {
+    return () => {
+      if (manualTimer.current) clearTimeout(manualTimer.current);
+    };
+  }, []);
+
+  // ── CSS 变量：根据设置注入 easing ──
+  const rootStyle = {
+    "--lyric-easing": "ease",
+  } as React.CSSProperties;
+
+  // ── 空 / 加载状态 ──
+  const cs = {
     height: "100%", display: "flex", alignItems: "center",
     justifyContent: "center", textAlign: "center", padding: "0 16px",
   } as React.CSSProperties;
@@ -75,120 +147,57 @@ export default function LyricDisplay({
     return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{instrumentalText || "\u7EAF\u97F3\u4E50\uFF0C\u8BF7\u6B23\u8D4F"}</span></div>;
   }
 
-  // ── Render ──
+  // ── 渲染 ──
   return (
     <div
       ref={containerRef}
-      {...touchHandlers}
+      onWheel={(e) => {
+        e.preventDefault();
+        const dir = e.deltaY > 0 ? 1 : -1;
+        let next = focusLine + dir;
+        while (next >= 0 && next < allLines.length && allLines[next]?.isInterlude) {
+          next += dir;
+        }
+        if (next >= 0 && next < allLines.length) {
+          enterManual(next);
+        }
+      }}
       style={{
+        ...rootStyle,
         height: "100%",
         overflow: "hidden",
         position: "relative",
-        touchAction: "none",
         maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
         WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
       }}
     >
-      {/* Top spacer */}
-      <div style={{ height: spacerH, flexShrink: 0 }} />
-
       {allLines.map((line, i) => {
-        var isCurrent = i === currentIndex;
-        var dist = Math.abs(i - currentIndex);
-        var base = isManual ? 0.65 : 0.5;
-        var minOp = isManual ? 0.25 : 0.08;
-        var opacity = isCurrent ? 1 : Math.max(minOp, base - dist * 0.11);
+        const offset = i - focusLine;
+        const isCurrent = i === focusLine;
 
-        // ── Interlude line: render dots ──
-        if (line.isInterlude) {
-          return (
-            <div
-              key={i}
-              ref={setRowRef(i)}
-              data-lr={i}
-              style={{
-                minHeight: ROW_HEIGHT,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity,
-                transition: "opacity 0.35s ease",
-                pointerEvents: "none",
-              }}
-            >
-              <InterludeDots
-                line={line}
-                currentTime={currentTime}
-                isCurrent={isCurrent}
-              />
-            </div>
-          );
-        }
-
-        // ── Normal lyric line ──
         return (
           <div
             key={i}
-            ref={setRowRef(i)}
-            data-lr={i}
-            onMouseDown={onLineClick ? () => { pressStartTime.current = Date.now(); } : undefined}
-            onMouseUp={onLineClick ? () => {
-              if (Date.now() - pressStartTime.current < 200) {
-                onLineClick(line.time);
-              }
-            } : undefined}
-            onMouseMove={(e) => {
-              var el = e.currentTarget;
-              var r = el.getBoundingClientRect();
-              el.style.setProperty("--lx", ((e.clientX - r.left) / r.width * 100) + "%");
-              el.style.setProperty("--ly", ((e.clientY - r.top) / r.height * 100) + "%");
-              el.style.setProperty("--lo", "1");
-            }}
-            onMouseEnter={(e) => {
-              var el = e.currentTarget;
-              var r = el.getBoundingClientRect();
-              el.style.setProperty("--lx", ((e.clientX - r.left) / r.width * 100) + "%");
-              el.style.setProperty("--ly", ((e.clientY - r.top) / r.height * 100) + "%");
-              el.style.setProperty("--lo", "1");
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.setProperty("--lo", "0");
-            }}
             style={{
-              minHeight: ROW_HEIGHT,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              textAlign: "center",
-              fontSize: isCurrent ? 17 : 13,
-              fontWeight: isCurrent ? 700 : 400,
-              lineHeight: 1.5,
-              color: isCurrent ? "var(--text-primary)" : "var(--text-tertiary)",
-              opacity,
-              padding: "4px 12px",
-              transition: "font-weight 0.35s ease, color 0.35s ease, opacity 0.35s ease",
-              cursor: onLineClick ? "pointer" : "default",
-              userSelect: "none",
-              textShadow: isCurrent ? "0 0 14px rgba(var(--accent-rgb), 0.35)" : "none",
-              position: "relative",
-              overflowWrap: "break-word", wordBreak: "break-word",
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: linePositions[i] ?? 0,
+              transition: "top 0.5s var(--lyric-easing, ease)",
+              willChange: "top",
             }}
           >
-            {/* Cursor-following glow */}
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute", inset: 0, pointerEvents: "none",
-                background: "radial-gradient(300px circle at var(--lx, 50%) var(--ly, 50%), rgba(255,255,255,0.10), transparent 60%)",
-                opacity: "var(--lo, 0)",
-                transition: "opacity 0.3s ease-out",
-              }}
+            <LyricsLine
+              line={line}
+              offset={offset}
+              isCurrent={isCurrent}
+              currentTime={currentTime}
+              onClick={onLineClick}
+              settings={settings}
             />
-            <span style={{ position: "relative", zIndex: 1 }}>{line.text}</span>
           </div>
         );
       })}
-
-      {/* Bottom spacer */}
-      <div style={{ height: spacerH, flexShrink: 0 }} />
     </div>
   );
 }
