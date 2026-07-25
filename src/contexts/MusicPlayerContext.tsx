@@ -246,6 +246,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const releaseHandle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    isStoppingRef.current = true;
     audio.pause();
     audio.src = "";
   }, []);

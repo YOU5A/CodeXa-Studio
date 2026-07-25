@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   AGENTS.md — CodeXa Studio
   重构于 2026-07-25
   精简版：面向 AI Agent 的操作指令
@@ -8,9 +8,9 @@
 
 **项目:** CodeXa Studio — Windows 系统调优一体化工具箱
 **作者:** YOU5A
-**技术栈:** TypeScript 6 · React 19 · Tailwind CSS 4 · Framer Motion 12 · Electron 42 · Python 3.13
+**技术栈:** TypeScript 6 · React 19 · Tailwind CSS 4 · Framer Motion 12 · Electron 42 · .NET 10
 **仓库:** https://github.com/YOU5A/CodeXa-Studio
-**版本:** 1.3.8
+**版本:** 2.0.0
 **许可证:** AGPL-3.0
 
 ---
@@ -147,7 +147,7 @@ CodeXa-Studio/
 ### 四层架构
 
 ```
-React 19 (TypeScript)  ←IPC→  Electron 42  ←JSON-RPC→  Python 3.13 (bridge/server.py)  →  resources/*.pyw
+React 19 (TypeScript)  ←IPC→  Electron 42  ←JSON-RPC→  .NET 10 (dotnet-bridge/CodeXaBridge.exe)
 ```
 
 Electron 主进程额外集成 NeteaseCloudMusicApi 实现在线歌词搜索。
@@ -233,7 +233,7 @@ npm run electron:dev # 仅 Electron
 npm run build        # 生产构建 (Vite + electron-builder)
 ```
 
-**环境:** Node.js 22+ · Python 3.13 (psutil, mutagen, Pillow) · Windows 11（管理员权限）
+**环境:** Node.js 22+ · .NET 10 SDK · Windows 11（管理员权限）
 
 **Vite 配置:** 端口 5173 · base: `./` · chunk: react-vendor / motion-vendor / icons-vendor · 别名 `@` → `src/`
 

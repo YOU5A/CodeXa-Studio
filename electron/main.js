@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { execSync, spawnSync } = require("child_process");
@@ -245,12 +245,9 @@ function setupIPC() {
     return { ...electronSettings };
   });
 
-  // Python bridge - system.info + music.* routed to .NET when available (Phase 2)
+  // All 29 RPC methods routed to .NET bridge (Phase 3)
   ipcMain.handle("python:call", async (_event, method, params) => {
-    const dotnetMethods = ["system.info", "music.scan", "music.get_metadata", "music.save_tags",
-      "music.extract_cover", "music.apply_cover", "music.remove_cover", "music.read_cover_file",
-      "music.save_cover_file", "music.rename", "music.get_lyrics"];
-    if (dotnetMethods.includes(method) && dotnetBridge?.isRunning) {
+    if (dotnetBridge?.isRunning) {
       try { return await dotnetBridge.call(method, params); }
       catch (e) { console.warn("[.NET Bridge]", method, "failed:", e.message); }
     }
@@ -920,7 +917,7 @@ ipcMain.handle("music:downloadCoverImage", async (_event, url) => {
 // ---- .NET Bridge (Phase 1: system.info) ----
 function startDotNetBridge() {
   const exePath = isDev
-    ? path.join(__dirname, "..", "dotnet-bridge", "publish2", "CodeXaBridge.exe")
+    ? path.join(__dirname, "..", "dotnet-bridge", "publish", "CodeXaBridge.exe")
     : path.join(process.resourcesPath, "dotnet-bridge", "CodeXaBridge.exe");
   const dataDir = isDev
     ? path.join(__dirname, "..", "data")
@@ -984,6 +981,10 @@ function startPythonBridge() {
   const bridgePath = isDev
     ? path.join(__dirname, "..", "bridge", "server.py")
     : path.join(process.resourcesPath, "bridge", "server.py");
+  if (!fs.existsSync(bridgePath)) {
+    console.warn("[Python Bridge] server.py not found - running in .NET-only mode");
+    return;
+  }
   pythonBridge = new PythonBridge(bridgePath);
   pythonBridge.start();
   app.on("before-quit", () => { pythonBridge?.stop(); });

@@ -6,6 +6,8 @@ namespace CodeXaBridge;
 
 class Program
 {
+    private const string BackupDir = @"C:\CodeXaStudio\backups";
+
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -15,24 +17,25 @@ class Program
 
     static void Main(string[] args)
     {
-        // Force UTF-8 on stdin/stdout (matching Python's reconfigure)
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
-        // Resolve DATA_DIR relative to this executable or from args
         var scriptDir = AppDomain.CurrentDomain.BaseDirectory;
         var dataDir = Path.GetFullPath(Path.Combine(scriptDir, "..", "..", "..", "..", "data"));
-        if (args.Length > 0)
-            dataDir = args[0];
+        if (args.Length > 0) dataDir = args[0];
 
-        // Ensure data dir exists
         Directory.CreateDirectory(dataDir);
 
-        // Initialize services
+        // Initialize all services
         var systemInfo = new SystemInfoService(dataDir);
         var music = new MusicService();
+        var registry = new RegistryService();
+        var backup = new BackupService(BackupDir);
+        var admin = new AdminService();
+        var priority = new PriorityService();
+        var config = new ConfigService(dataDir);
 
-        // JSON-RPC main loop (same protocol as bridge/server.py)
+        // JSON-RPC main loop
         string? line;
         while ((line = Console.ReadLine()) != null)
         {
@@ -40,14 +43,8 @@ class Program
             if (line.Length == 0) continue;
 
             JsonElement request;
-            try
-            {
-                request = JsonSerializer.Deserialize<JsonElement>(line);
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
+            try { request = JsonSerializer.Deserialize<JsonElement>(line); }
+            catch (JsonException) { continue; }
 
             int reqId = 0;
             if (request.TryGetProperty("id", out var idProp))
@@ -56,69 +53,79 @@ class Program
             var method = request.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
             var reqParamsRaw = request.TryGetProperty("params", out var rp) ? rp : default;
 
-            if (method == "__shutdown__")
-            {
-                Environment.Exit(0);
-            }
+            if (method == "__shutdown__") Environment.Exit(0);
 
-            // Convert JsonElement params to Dictionary<string, object?>
             var reqParams = JsonElementToDict(reqParamsRaw);
-
             object? result = null;
             string? error = null;
 
-            try
-            {
-                result = HandleMethod(method, reqParams, systemInfo, music);
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-            }
+            try { result = HandleMethod(method, reqParams, systemInfo, music, registry, backup, admin, priority, config); }
+            catch (Exception ex) { error = ex.Message; }
 
-            var response = new Dictionary<string, object?>
-            {
-                ["id"] = reqId,
-            };
+            var response = new Dictionary<string, object?> { ["id"] = reqId };
+            if (error != null) response["error"] = error;
+            else response["result"] = result;
 
-            if (error != null)
-                response["error"] = error;
-            else
-                response["result"] = result;
-
-            var json = JsonSerializer.Serialize(response, _jsonOptions);
-            Console.WriteLine(json);
+            Console.WriteLine(JsonSerializer.Serialize(response, _jsonOptions));
             Console.Out.Flush();
         }
     }
 
-    private static object? HandleMethod(string method, Dictionary<string, object?> reqParams,
-        SystemInfoService systemInfo, MusicService music)
+    private static object? HandleMethod(string method, Dictionary<string, object?> p,
+        SystemInfoService sys, MusicService music, RegistryService reg, BackupService bak,
+        AdminService adm, PriorityService pri, ConfigService cfg)
     {
         return method switch
         {
             // System
-            "system.info" => systemInfo.GetSystemInfo(),
+            "system.info" => sys.GetSystemInfo(),
 
-            // Music (Phase 2: all 10 methods)
-            "music.scan" => music.Scan(reqParams),
-            "music.get_metadata" => music.GetMetadata(reqParams),
-            "music.save_tags" => music.SaveTags(reqParams),
-            "music.extract_cover" => music.ExtractCover(reqParams),
-            "music.apply_cover" => music.ApplyCover(reqParams),
-            "music.remove_cover" => music.RemoveCover(reqParams),
-            "music.read_cover_file" => music.ReadCoverFile(reqParams),
-            "music.save_cover_file" => music.SaveCoverFile(reqParams),
-            "music.rename" => music.Rename(reqParams),
-            "music.get_lyrics" => music.GetLyrics(reqParams),
+            // Registry
+            "registry.read" => reg.Read(p),
+            "registry.write" => reg.Write(p),
+            "registry.backup" => reg.Backup(p, BackupDir),
+
+            // Admin
+            "admin.check" => adm.Check(p),
+            "admin.restart" => adm.Restart(p),
+
+            // Priority
+            "priority.list" => pri.List(p),
+            "priority.add" => pri.Add(p),
+            "priority.edit" => pri.Edit(p),
+            "priority.delete" => pri.Delete(p),
+            "priority.export" => pri.Export(p, Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "data"))),
+            "priority.import_config" => pri.Import(p),
+
+            // Music
+            "music.scan" => music.Scan(p),
+            "music.get_metadata" => music.GetMetadata(p),
+            "music.save_tags" => music.SaveTags(p),
+            "music.extract_cover" => music.ExtractCover(p),
+            "music.apply_cover" => music.ApplyCover(p),
+            "music.remove_cover" => music.RemoveCover(p),
+            "music.read_cover_file" => music.ReadCoverFile(p),
+            "music.save_cover_file" => music.SaveCoverFile(p),
+            "music.rename" => music.Rename(p),
+            "music.get_lyrics" => music.GetLyrics(p),
+
+            // Backup
+            "backup.list" => bak.List(p),
+            "backup.dir" => bak.Dir(p),
+            "backup.export" => bak.Export(p),
+            "backup.restore" => bak.Restore(p, reg),
+            "backup.delete" => bak.Delete(p),
+            "backup.clear_all" => bak.ClearAll(p),
+
+            // Config
+            "config.get" => cfg.Get(p),
+            "config.set" => cfg.Set(p),
 
             _ => new Dictionary<string, string> { ["error"] = $"Unknown method: {method}" },
         };
     }
 
-    /// <summary>
-    /// Convert JsonElement params to Dictionary for easier typed access in services.
-    /// </summary>
     private static Dictionary<string, object?> JsonElementToDict(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object)
@@ -126,24 +133,19 @@ class Program
 
         var dict = new Dictionary<string, object?>();
         foreach (var prop in element.EnumerateObject())
-        {
             dict[prop.Name] = JsonElementToObject(prop.Value);
-        }
         return dict;
     }
 
-    private static object? JsonElementToObject(JsonElement element)
+    private static object? JsonElementToObject(JsonElement element) => element.ValueKind switch
     {
-        return element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Number => element.TryGetInt64(out var l) ? (object)l : element.GetDouble(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null,
-            JsonValueKind.Array => element.EnumerateArray().Select(JsonElementToObject).ToArray(),
-            JsonValueKind.Object => JsonElementToDict(element),
-            _ => null,
-        };
-    }
+        JsonValueKind.String => element.GetString(),
+        JsonValueKind.Number => element.TryGetInt64(out var l) ? (object)l : element.GetDouble(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Null => null,
+        JsonValueKind.Array => element.EnumerateArray().Select(JsonElementToObject).ToArray(),
+        JsonValueKind.Object => JsonElementToDict(element),
+        _ => null,
+    };
 }
