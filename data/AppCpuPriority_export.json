@@ -1,0 +1,77 @@
+[
+  {
+    "name": "Calabiyau-Win64-Shipping.exe",
+    "cpu_priority": "3",
+    "io_priority": "3"
+  },
+  {
+    "name": "Client.exe",
+    "cpu_priority": "3",
+    "io_priority": "3"
+  },
+  {
+    "name": "cloudmusic.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "DeltaForceClient-Win64-Shipping.exe",
+    "cpu_priority": "3",
+    "io_priority": "3"
+  },
+  {
+    "name": "msedge.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "MSPCManagerService.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "oopz.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "QQ.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "SGuard64.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "SGuardSvc64.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "steam.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "steamwebhelper.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  },
+  {
+    "name": "VRChat.exe",
+    "cpu_priority": "3",
+    "io_priority": "3"
+  },
+  {
+    "name": "vrmonitor.exe",
+    "cpu_priority": "3",
+    "io_priority": "3"
+  },
+  {
+    "name": "wallpaper32.exe",
+    "cpu_priority": "1",
+    "io_priority": "0"
+  }
+]

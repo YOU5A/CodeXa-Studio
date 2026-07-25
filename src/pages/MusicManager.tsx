@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
@@ -164,8 +164,15 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [tagYear, setTagYear] = useState("");
   const [tagGenre, setTagGenre] = useState("");
   const [renameName, setRenameName] = useState("");
-  const { audioState, playingFile, volume, playMode, playlist, playFile: contextPlayFile, toggle: contextToggle, seek: contextSeek, seekTo, setVolume, setPlaylist, setPlayMode, playNext: contextPlayNext, playPrev: contextPlayPrev, fmtTime } = useMusicPlayer();
+  const { audioState, playingFile, volume, playMode, playlist, playFile: contextPlayFile, toggle: contextToggle, seek: contextSeek, seekTo, setVolume, setPlaylist, setPlayMode, playNext: contextPlayNext, playPrev: contextPlayPrev, stop: contextStop, releaseHandle, fmtTime } = useMusicPlayer();
   const [saving, setSaving] = useState(false);
+  // Stop playback if modifying the currently playing file (prevents file-lock errors)
+  const ensureFileWritable = (filepath: string) => {
+    if (filepath && playingFile && filepath === playingFile) {
+      releaseHandle();
+      showToast(lang === "zh" ? "已停止播放以释放文件" : "Playback stopped to release file", "info");
+    }
+  };
   const progressRef = useRef<HTMLDivElement | null>(null);
   const volumeRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -433,6 +440,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   // ── Tags ──
   const saveTags = async () => {
     if (!selectedFile) { showToast(tx.noFileSelected, "warning"); return; }
+    ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.saveTagsConfirm });
     if (!ok) return;
     setSaving(true);
@@ -445,6 +453,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   };
   const applyAll = async () => {
     if (files.length === 0) return;
+    ensureFileWritable(files[0] || selectedFile);
     const ok = await confirm({ title: tx.applyAllConfirm, danger: true });
     if (!ok) return;
     setSaving(true);
@@ -465,6 +474,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   };
   const applyCover = async () => {
     if (!selectedFile || !newCoverPath) return;
+    ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.applyCoverConfirm });
     if (!ok) return;
     const r = await window.electronAPI?.python.call("music.apply_cover", { filepath: selectedFile, cover_path: newCoverPath });
@@ -492,6 +502,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
   const removeCover = async () => {
     if (!selectedFile) return;
+    ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.removeCoverConfirm, danger: true });
     if (!ok) return;
     const r = await window.electronAPI?.python.call("music.remove_cover", { filepath: selectedFile });
@@ -502,6 +513,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   // ?? Cover from URL (for CoverSearchPanel) ??
   const handleApplyCoverFromUrl = async (urlOrDataUrl: string) => {
     if (!selectedFile) throw new Error(lang === "zh" ? "?????" : "No file selected");
+    ensureFileWritable(selectedFile);
     let coverPath = urlOrDataUrl;
     if (urlOrDataUrl.startsWith("data:")) {
       const base64 = urlOrDataUrl.split(",")[1];
@@ -555,6 +567,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const renameOne = async () => {
     if (!selectedFile) { showToast(tx.noFileSelected, "warning"); return; }
     if (!renameName.trim()) { showToast(lang === "zh" ? "请输入文件名" : "Enter a file name", "warning"); return; }
+    ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.renameOneConfirm });
     if (!ok) return;
     const r = await window.electronAPI?.python.call("music.rename", { filepath: selectedFile, new_name: renameName.trim() });
@@ -562,6 +575,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     else showToast(r?.error ?? tx.renameFailed, "error");
   };
   const renameAll = async () => {
+    ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.renameAllConfirm });
     if (!ok) return;
     let c = 0;

@@ -17,6 +17,7 @@ interface MusicPlayerContextValue {
   playFile: (fp: string) => void;
   toggle: (currentSelectedFile?: string) => void;
   stop: () => void;
+  releaseHandle: () => void;
   seek: (clientX: number, progressRef: React.RefObject<HTMLDivElement | null>) => void;
   seekTo: (seconds: number) => void;
   setVolume: (v: number) => void;
@@ -36,6 +37,7 @@ const MusicPlayerContext = createContext<MusicPlayerContextValue>({
   playFile: () => {},
   toggle: () => {},
   stop: () => {},
+  releaseHandle: () => {},
   seek: () => {},
   seekTo: () => {},
   setVolume: () => {},
@@ -240,6 +242,15 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     playingFileRef.current = "";
   }, []);
 
+  // Release file handle without clearing playback state (for file write operations)
+  const releaseHandle = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.src = "";
+  }, []);
+
+
   const playNext = useCallback(() => {
     const list = playlistRef.current;
     const mode = playModeRef.current;
@@ -320,7 +331,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     <MusicPlayerContext.Provider
       value={{
         audioState, playingFile, volume, playMode, playlist,
-        playFile, toggle, stop, seek, seekTo, setVolume,
+          playFile, toggle, stop, releaseHandle, seek, seekTo, setVolume,
         setPlaylist, setPlayMode, playNext, playPrev, fmtTime,
       }}
     >

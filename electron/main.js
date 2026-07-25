@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
+﻿const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { execSync, spawnSync } = require("child_process");
@@ -8,6 +8,7 @@ const { cloudsearch, lyric } = require("NeteaseCloudMusicApi");
 
 let mainWindow = null;
 let pythonBridge = null;
+let dotnetBridge = null;
 let tray = null;
 let isQuitting = false;
 
@@ -244,8 +245,15 @@ function setupIPC() {
     return { ...electronSettings };
   });
 
-  // Python bridge
+  // Python bridge - system.info + music.* routed to .NET when available (Phase 2)
   ipcMain.handle("python:call", async (_event, method, params) => {
+    const dotnetMethods = ["system.info", "music.scan", "music.get_metadata", "music.save_tags",
+      "music.extract_cover", "music.apply_cover", "music.remove_cover", "music.read_cover_file",
+      "music.save_cover_file", "music.rename", "music.get_lyrics"];
+    if (dotnetMethods.includes(method) && dotnetBridge?.isRunning) {
+      try { return await dotnetBridge.call(method, params); }
+      catch (e) { console.warn("[.NET Bridge]", method, "failed:", e.message); }
+    }
     if (!pythonBridge) return { error: "Python bridge not ready" };
     try { return await pythonBridge.call(method, params); }
     catch (e) { return { error: e.message }; }
@@ -908,6 +916,69 @@ ipcMain.handle("music:downloadCoverImage", async (_event, url) => {
 });
 
 
+
+// ---- .NET Bridge (Phase 1: system.info) ----
+function startDotNetBridge() {
+  const exePath = isDev
+    ? path.join(__dirname, "..", "dotnet-bridge", "publish2", "CodeXaBridge.exe")
+    : path.join(process.resourcesPath, "dotnet-bridge", "CodeXaBridge.exe");
+  const dataDir = isDev
+    ? path.join(__dirname, "..", "data")
+    : path.join(process.resourcesPath, "data");
+
+  if (!fs.existsSync(exePath)) {
+    console.warn("[.NET Bridge] Executable not found at", exePath, "- using Python fallback");
+    return;
+  }
+
+  try {
+    const { spawn } = require("child_process");
+    dotnetBridge = new PythonBridge(exePath);
+
+    // Override start() to use .NET exe instead of Python script
+    const originalStart = dotnetBridge.start.bind(dotnetBridge);
+    dotnetBridge.start = () => {
+      const proc = spawn(exePath, [dataDir], { stdio: ["pipe", "pipe", "pipe"] });
+      dotnetBridge.process = proc;
+      dotnetBridge._isRunning = true;
+
+      proc.stdout?.on("data", (data) => {
+        dotnetBridge.buffer += data.toString("utf-8");
+        dotnetBridge.processBuffer();
+      });
+
+      proc.stderr?.on("data", (data) => {
+        console.error("[.NET Bridge]", data.toString("utf-8"));
+      });
+
+      proc.on("close", (code) => {
+        console.log("[.NET Bridge] Exited with code", code);
+        dotnetBridge._isRunning = false;
+        dotnetBridge.process = null;
+        for (const [id, call] of dotnetBridge.pending) {
+          clearTimeout(call.timer);
+          call.reject(new Error(".NET bridge disconnected"));
+          dotnetBridge.pending.delete(id);
+        }
+        if (!dotnetBridge._stopping) {
+          dotnetBridge.restartTimer = setTimeout(() => dotnetBridge.start(), 2000);
+        }
+      });
+
+      proc.on("error", (err) => {
+        console.error("[.NET Bridge] Failed to start:", err.message);
+        dotnetBridge._isRunning = false;
+        dotnetBridge.process = null;
+      });
+    };
+
+    dotnetBridge.start();
+    app.on("before-quit", () => { dotnetBridge?.stop(); });
+    console.log("[.NET Bridge] Started successfully");
+  } catch (err) {
+    console.warn("[.NET Bridge] Init failed:", err.message);
+  }
+}
 // ---- Python Bridge ----
 function startPythonBridge() {
   const bridgePath = isDev
@@ -969,6 +1040,7 @@ app.whenReady().then(() => {
 
   setupIPC();
   startPythonBridge();
+  startDotNetBridge();
   createWindow();
   createTray();
 

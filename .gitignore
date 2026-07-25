@@ -44,3 +44,12 @@ AMLL深度分析.md
 
 # 文档
 docs/
+
+# .NET build outputs
+bin/
+obj/
+publish/
+publish2/
+
+# Dev temp files
+.tmp-dev-*
