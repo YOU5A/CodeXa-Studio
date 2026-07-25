@@ -9,7 +9,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { useToast } from "@/contexts/ToastContext";
 import { APP_VERSION } from "@/version";
-import { GlassButton, GlassModal, GlassPanel, GlassToggle, GlassPillButton } from "@/design-system";
+import { GlassButton, GlassModal, GlassPanel, GlassToggle, GlassPillButton, GlassSlider } from "@/design-system";
 import { getAnimDuration, EASE_OUT } from "@/utils/animations";
 import type { Theme, Language } from "@/types";
 
@@ -310,37 +310,29 @@ export default function Settings() {
 
         {/* Opacity */}
         <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div style={labelStyle}>{tx.opacity}</div>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-              {settings.windowOpacity}%
-            </span>
-          </div>
-          <input
-            type="range"
+          <GlassSlider
+            label={tx.opacity}
+            display={settings.windowOpacity + "%"}
+            value={settings.windowOpacity}
+            defaultVal={100}
             min={70}
             max={100}
-            value={settings.windowOpacity}
-            onChange={(e) => updateSettings({ windowOpacity: Number(e.target.value) })}
-            style={{ width: "100%", accentColor: "var(--accent)" }}
+            step={1}
+            onChange={(v) => updateSettings({ windowOpacity: v })}
           />
         </div>
 
         {/* Radius */}
         <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div style={labelStyle}>{tx.radius}</div>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-              {settings.borderRadius}px
-            </span>
-          </div>
-          <input
-            type="range"
+          <GlassSlider
+            label={tx.radius}
+            display={settings.borderRadius + "px"}
+            value={settings.borderRadius}
+            defaultVal={20}
             min={0}
             max={30}
-            value={settings.borderRadius}
-            onChange={(e) => updateSettings({ borderRadius: Number(e.target.value) })}
-            style={{ width: "100%", accentColor: "var(--accent)" }}
+            step={1}
+            onChange={(v) => updateSettings({ borderRadius: v })}
           />
         </div>
 

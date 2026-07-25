@@ -78,6 +78,8 @@ export {
   GlassPillButton,
   GlassFloat,
   GlassTooltip,
+  GlassSlider,
+  GlassScrollArea,
 } from './components';
 export type {
   GlassSurfaceProps,
@@ -99,6 +101,8 @@ export type {
   GlassGlowProps,
   GlassPillButtonProps,
   GlassFloatProps,
+  GlassSliderProps,
+  GlassScrollAreaProps,
 } from './components';
 
 /* ─── Layouts ─── */

@@ -57,7 +57,6 @@ if (electronSettings.autoStart) {
   app.setLoginItemSettings({ openAtLogin: true, path: process.execPath });
 }
 
-
 // ---- Auto-Elevation (Admin Privileges) ----
 function ensureAdmin() {
   if (process.platform !== "win32") return;
@@ -208,7 +207,6 @@ function setupIPC() {
   ipcMain.handle("window:getSize", () => mainWindow?.getSize());
   ipcMain.handle("window:setPosition", (_e, x, y) => { mainWindow?.setPosition(x, y); });
 
-
   // Electron settings (autoStart, minimizeToTray, closeToTray)
   ipcMain.handle("settings:get", (_e, key) => {
     return electronSettings[key];
@@ -239,7 +237,6 @@ function setupIPC() {
     }
     return true;
   });
-
 
   ipcMain.handle("settings:getAll", () => {
     return { ...electronSettings };
@@ -279,7 +276,6 @@ function setupIPC() {
   ipcMain.handle("shell:openExternal", async (_event, url) => shell.openExternal(url));
   ipcMain.handle("app:getPath", async (_event, name) => app.getPath(name));
 }
-
 
 // ── Fuzzy matching helper ──
 // ── Chinese normalization: Traditional → Simplified (lightweight, ~150 pairs) ──
@@ -455,134 +451,6 @@ function httpRequest(url, options = {}) {
     req.end();
   });
 }
-
-// ── QQ Music helper: simple HTTPS request ──
-function qqRequest(urlOrOptions, postData) {
-  return new Promise((resolve, reject) => {
-    const opts = typeof urlOrOptions === "string" ? new URL(urlOrOptions) : urlOrOptions;
-    const req = https.request({
-      hostname: opts.hostname,
-      path: opts.pathname + (opts.search || ""),
-      method: postData ? "POST" : "GET",
-      headers: {
-        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        "Referer": "https://i.y.qq.com/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Content-Type": postData ? "application/json" : undefined,
-      },
-      timeout: 15000,
-    }, (res) => {
-      const chunks = [];
-      res.on("data", (d) => chunks.push(d));
-      res.on("end", () => {
-        const raw = Buffer.concat(chunks);
-        // Gunzip if needed
-        const encoding = res.headers["content-encoding"];
-        let body;
-        if (encoding === "gzip" || encoding === "deflate") {
-          try { body = require("zlib").gunzipSync(raw).toString("utf-8"); } catch { body = raw.toString("utf-8"); }
-        } else {
-          body = raw.toString("utf-8");
-        }
-        resolve(body);
-      });
-    });
-    req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("Request timeout")); });
-    if (postData) req.write(JSON.stringify(postData));
-    req.end();
-  });
-}
-
-// ── QQ Music lyrics search & fetch ──
-async function searchQQMusicLyrics(title, artist) {
-  const query = artist ? `${title} ${artist}` : title;
-  const searchBody = {
-    req_0: {
-      module: "music.search.SearchCgiService",
-      method: "DoSearchForQQMusicDesktop",
-      param: { search_type: 0, query, page_num: 1, num_per_page: 20 },
-    },
-  };
-
-  const searchText = await qqRequest("https://u.y.qq.com/cgi-bin/musicu.fcg", searchBody);
-  const searchJson = JSON.parse(searchText);
-  const songList = searchJson?.req_0?.data?.body?.song?.list;
-  if (!songList || songList.length === 0) return null;
-
-  // Score and pick best match
-  let best = null;
-  let bestScore = -1;
-  for (const s of songList) {
-    const score = scoreMatch(s.name, s.singer, title, artist);
-    if (score > bestScore) { bestScore = score; best = s; }
-  }
-  if (!best || bestScore < 0.25) return null;
-
-  const songmid = best.mid || best.songmid;
-  if (!songmid) return null;
-
-  // Fetch lyrics
-  const lyricUrl = `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${songmid}&g_tk=5381&format=json&inCharset=utf8&outCharset=utf-8`;
-  let lyricText = await qqRequest(lyricUrl);
-  // Strip JSONP wrapper
-  lyricText = lyricText.replace(/^\s*\w+\(/, "").replace(/\)\s*;?\s*$/, "");
-  const lyricJson = JSON.parse(lyricText);
-  const lrc = lyricJson?.lyric;
-  if (!lrc) return null;
-  return lrc;
-}
-
-
-// ── LRCLIB lyrics search ──
-async function searchLrclibLyrics(title, artist, album, duration) {
-  try {
-    // Build search URL with track_name + artist_name
-    const params = new URLSearchParams();
-    params.set("track_name", title);
-    if (artist) params.set("artist_name", artist);
-    if (album) params.set("album_name", album);
-    if (duration && duration > 0) params.set("duration", String(Math.round(duration)));
-
-    const url = `https://lrclib.net/api/search?${params.toString()}`;
-    const respText = await httpRequest(url, {
-      userAgent: "CodeXaStudio/1.3 (https://github.com/YOU5A/CodeXa-Studio)",
-      timeout: 10000,
-    });
-
-    const results = JSON.parse(respText);
-    if (!Array.isArray(results) || results.length === 0) {
-      console.log("[Lyrics:LRCLIB] No results for", title, "-", artist);
-      return null;
-    }
-
-    // Score results to find best match
-    let best = null;
-    let bestScore = -1;
-    for (const r of results) {
-      const artists = r.artistName ? [{ name: r.artistName }] : [];
-      const score = scoreMatch(r.trackName, artists, title, artist);
-      if (score > bestScore) { bestScore = score; best = r; }
-    }
-
-    if (!best || bestScore < 0.25) {
-      console.log(`[Lyrics:LRCLIB] Best score ${bestScore.toFixed(2)} < 0.25`);
-      return null;
-    }
-
-    // Prefer synced lyrics, fallback to plain
-    const lrc = best.syncedLyrics || best.plainLyrics;
-    if (lrc) {
-      console.log(`[Lyrics:LRCLIB] Found lyrics (${best.syncedLyrics ? "synced" : "plain"}), score=${bestScore.toFixed(2)}`);
-      return lrc;
-    }
-    return null;
-  } catch (e) {
-    console.log("[Lyrics:LRCLIB] Error:", e.message);
-    return null;
-  }
-}
-
 // ── Multi-query lyrics search helper: try different query formulations ──
 async function searchLyricsMultiQuery(title, artist, searchFn) {
   // Build query variants: stripped versions without brackets/feat
@@ -612,7 +480,7 @@ async function searchLyricsMultiQuery(title, artist, searchFn) {
   return null;
 }
 
-// ── Music: Online Lyrics Search (LRCLIB → Netease → QQ) ──
+// ── Music: Online Lyrics Search (Netease) ──
 ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) => {
   const searchNetease = async (t, a) => {
     try {
@@ -631,10 +499,14 @@ ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) 
       if (!best || bestScore < 0.3) return null;
 
       const lyricRes = await lyric({ id: best.id });
-      const lrc = lyricRes?.body?.lrc?.lyric;
+      const body = lyricRes?.body;
+      const lrc = body?.lrc?.lyric;
+      const tlyric = body?.tlyric?.lyric;
+      const romalrc = body?.romalrc?.lyric;
+      const yrc = body?.yrc?.lyric;
       if (lrc) {
-        console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}`);
-        return { text: lrc, source: "netease" };
+        console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}, hasTrans=${!!tlyric}, hasRoma=${!!romalrc}, hasDyn=${!!yrc}`);
+        return { text: lrc, translated_text: tlyric || "", roman_text: romalrc || "", dynamic_text: yrc || "", source: "netease" };
       }
       return null;
     } catch (e) {
@@ -643,72 +515,23 @@ ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) 
     }
   };
 
-  const searchQQ = async (t, a) => {
-    const lrc = await searchQQMusicLyrics(t, a);
-    return lrc ? { text: lrc, source: "qq" } : null;
-  };
-
-  const searchLrclib = async (t, a) => {
-    const lrc = await searchLrclibLyrics(t, a);
-    return lrc ? { text: lrc, source: "lrclib" } : null;
-  };
-
   try {
     const src = lyricSource || "auto";
     console.log("[Lyrics] Source mode:", src);
 
-    // Helper: try a specific source with multi-query
-    const trySource = async (name, fn) => {
-      console.log("[Lyrics] Trying " + name + "...");
-      const result = await searchLyricsMultiQuery(title, artist, fn);
-      if (result) return result;
-      // Single-query fallback
-      const direct = await fn(title, artist);
-      return direct ? { text: direct.text, source: direct.source } : null;
-    };
+    // Both "auto" and "netease": try Netease with multi-query + single fallback
+    const result = await searchLyricsMultiQuery(title, artist, searchNetease);
+    if (result) return { lyrics_text: result.text, translated_text: result.translated_text || "", roman_text: result.roman_text || "", dynamic_text: result.dynamic_text || "", source: result.source };
 
-    if (src === "lrclib") {
-      const r = await trySource("LRCLIB", searchLrclib);
-      if (r) return { lyrics_text: r.text, source: r.source };
-      return { lyrics_text: null, source: "none" };
-    }
-    if (src === "netease") {
-      const r = await trySource("Netease", searchNetease);
-      if (r) return { lyrics_text: r.text, source: r.source };
-      return { lyrics_text: null, source: "none" };
-    }
-    if (src === "qq") {
-      const r = await trySource("QQ", searchQQ);
-      if (r) return { lyrics_text: r.text, source: r.source };
-      return { lyrics_text: null, source: "none" };
-    }
+    // Single-query fallback
+    console.log("[Lyrics] Multi-query failed, trying single fallback...");
+    const direct = await searchNetease(title, artist);
+    if (direct) return { lyrics_text: direct.text, translated_text: direct.translated_text || "", roman_text: direct.roman_text || "", dynamic_text: direct.dynamic_text || "", source: direct.source };
 
-    // "auto" — try all sources in priority order
-    // 1. LRCLIB (multi-query)
-    const lrclibResult = await searchLyricsMultiQuery(title, artist, searchLrclib);
-    if (lrclibResult) return { lyrics_text: lrclibResult.text, source: lrclibResult.source };
-
-    // 2. Netease (multi-query)
-    const neteaseResult = await searchLyricsMultiQuery(title, artist, searchNetease);
-    if (neteaseResult) return { lyrics_text: neteaseResult.text, source: neteaseResult.source };
-
-    // 3. QQ (multi-query)
-    const qqResult = await searchLyricsMultiQuery(title, artist, searchQQ);
-    if (qqResult) return { lyrics_text: qqResult.text, source: qqResult.source };
-
-    // 4. Last-ditch single queries
-    console.log("[Lyrics] All multi-query failed, trying single fallback...");
-    const lrclibDirect = await searchLrclib(title, artist);
-    if (lrclibDirect) return { lyrics_text: lrclibDirect.text, source: lrclibDirect.source };
-    const neteaseDirect = await searchNetease(title, artist);
-    if (neteaseDirect) return { lyrics_text: neteaseDirect.text, source: neteaseDirect.source };
-    const qqDirect = await searchQQ(title, artist);
-    if (qqDirect) return { lyrics_text: qqDirect.text, source: qqDirect.source };
-
-    return { lyrics_text: null, source: "none" };
+    return { lyrics_text: null, translated_text: null, roman_text: null, dynamic_text: null, source: "none" };
   } catch (e) {
     console.error("[Music:SearchLyrics]", e.message);
-    return { lyrics_text: null, source: "none", error: e.message };
+    return { lyrics_text: null, translated_text: null, roman_text: null, dynamic_text: null, source: "none", error: e.message };
   }
 });
 
@@ -911,8 +734,6 @@ ipcMain.handle("music:downloadCoverImage", async (_event, url) => {
     }
   });
 });
-
-
 
 // ---- .NET Bridge (Phase 1: system.info) ----
 function startDotNetBridge() {

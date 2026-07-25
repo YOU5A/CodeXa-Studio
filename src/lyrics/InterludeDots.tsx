@@ -1,73 +1,103 @@
-﻿/**
- * InterludeDots — 间奏等待点动画组件
+/**
+ * InterludeDots — Interlude waiting dots with per-dot time-based animation
  *
- * 歌曲间奏（无歌词段落）时显示 3 个逐渐填充的呼吸圆点。
+ * Ported from refined-now-playing-netease-next.
+ * 3 dots fill up progressively over the interlude duration using RAF-driven animation.
+ * Container uses breathing animation. Paused when not current line or not playing.
  *
  * @module lyrics/InterludeDots
  */
 
+import { useRef, useState, useEffect, useCallback } from "react";
 import type { LyricLine } from "./types";
 
-/** 间奏行在滚动容器中的行高 */
-export const INTERLUDE_ROW_HEIGHT = 28;
-
 interface InterludeDotsProps {
-  /** 间奏行数据 */
   line: LyricLine;
-  /** 当前播放秒数 */
   currentTime: number;
-  /** 是否为当前高亮行 */
   isCurrent: boolean;
+  id: number;
+  getCurrentTime?: () => number;
+  seekCounter?: number;
+  playState?: boolean;
+  pageOpen?: boolean;
 }
 
+const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+
 export default function InterludeDots({
-  line,
-  currentTime,
-  isCurrent,
+  line, currentTime, isCurrent, id,
+  getCurrentTime, seekCounter = 0, playState = true, pageOpen = true,
 }: InterludeDotsProps) {
-  const duration = line.duration || 3;
-  const elapsed = currentTime - line.time;
+  const dotContainerRef = useRef<HTMLDivElement>(null);
+
+  const getDisplayedCurrentTime = useCallback(() => {
+    return getCurrentTime ? getCurrentTime() : currentTime;
+  }, [getCurrentTime, currentTime]);
+
+  const [renderTime, setRenderTime] = useState(getDisplayedCurrentTime());
+  const effectiveCurrentTime = isCurrent ? renderTime : currentTime;
+
   const dotCount = 3;
-  const perDotTime = duration / dotCount;
+  const perDotTime = Math.floor((line.duration || 3000) / dotCount);
+  const dots = Array.from({ length: dotCount }).map((_, i) => ({
+    time: line.time + perDotTime * i,
+    duration: perDotTime,
+  }));
+
+  const dotAnimation = (dot: { time: number; duration: number }) => {
+    if (!isCurrent) {
+      return {
+        transition: "opacity 200ms ease, transform 200ms ease",
+        opacity: 0.2,
+        transform: "scale(0.9)",
+      };
+    }
+    const progress = clamp((effectiveCurrentTime - dot.time) / Math.max(dot.duration, 1));
+    return {
+      transition: "none",
+      opacity: 0.2 + 0.7 * progress,
+      transform: `scale(${0.9 + 0.1 * progress})`,
+    };
+  };
+
+  // Sync on seek or state change
+  useEffect(() => {
+    setRenderTime(getDisplayedCurrentTime());
+  }, [getDisplayedCurrentTime, isCurrent, id, seekCounter, playState]);
+
+  // RAF-driven time update when this is the current line and playing
+  useEffect(() => {
+    if (!pageOpen || !isCurrent || !playState) {
+      return;
+    }
+    let rafId = 0;
+    const tick = () => {
+      setRenderTime(getDisplayedCurrentTime());
+      rafId = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [isCurrent, playState, pageOpen, seekCounter, getDisplayedCurrentTime]);
+
+  const pauseClass = !isCurrent || !playState ? " pause-breath" : "";
 
   return (
     <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        height: INTERLUDE_ROW_HEIGHT,
-      }}
-      className={isCurrent ? "interlude-breathing" : undefined}
+      className={"interlude-inner" + pauseClass}
+      ref={dotContainerRef}
     >
-      {Array.from({ length: dotCount }).map((_, i) => {
-        const dotProgress = Math.max(
-          0,
-          Math.min(1, (elapsed - perDotTime * i) / Math.max(perDotTime, 0.1))
-        );
-        const dotOpacity = 0.25 + 0.65 * dotProgress;
-        const dotScale = 0.85 + 0.15 * dotProgress;
-
-        return (
-          <span
-            key={i}
-            className="interlude-dot"
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "var(--text-primary)",
-              opacity: 0.25,
-              transform: `scale(${dotScale})`,
-              transition: isCurrent
-                ? "none"
-                : "opacity 0.2s ease, transform 0.2s ease",
-            }}
-          />
-        );
-      })}
+      {dots.map((dot, i) => (
+        <span
+          key={i}
+          className="interlude-dot"
+          style={dotAnimation(dot)}
+        />
+      ))}
     </div>
   );
 }
+
+/** Row height used for interlude lines in scroll calculations */
+export const INTERLUDE_ROW_HEIGHT = 0;

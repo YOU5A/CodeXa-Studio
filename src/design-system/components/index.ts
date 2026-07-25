@@ -46,3 +46,9 @@ export { GlassFloat } from "./GlassFloat";
 export type { GlassFloatProps } from "./GlassFloat";
 export { GlassTooltip } from "./GlassTooltip";
 export type { } from "./GlassTooltip";
+
+export { GlassSlider } from "./GlassSlider";
+export type { GlassSliderProps } from "./GlassSlider";
+
+export { GlassScrollArea } from "./GlassScrollArea";
+export type { GlassScrollAreaProps } from "./GlassScrollArea";

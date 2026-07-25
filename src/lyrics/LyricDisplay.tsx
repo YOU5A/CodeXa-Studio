@@ -1,234 +1,483 @@
-﻿/**
- * LyricDisplay — 歌词显示组件（重构版）
+/**
+ * LyricDisplay — Core lyrics display with transform-based layout
  *
- * 使用 position:absolute 布局替代 flex+spacer 方案。
- * 当前行居中，上下行按缩放公式层叠排布。
- * 动画由 CSS transition 驱动。
- *
- * Performance:
- * - Only sets willChange on ±3 surrounding lines (not all lines).
- * - Uses contain:layout style on container for independent compositing.
- * - Visibility window skips rendering lines far outside viewport.
+ * Ported from refined-now-playing-netease-next.
+ * Each line is absolutely positioned with transform-based animation.
+ * Line heights are estimated dynamically based on fontSize and visible sub-layers.
+ * Uses ResizeObserver for container size tracking.
  *
  * @module lyrics/LyricDisplay
  */
 
 import { useRef, useMemo, useLayoutEffect, useState, useCallback, useEffect } from "react";
-import type { LyricData, LyricLine } from "./types";
-import type { LyricsSettingsValues } from "./LyricsSettingsPanel";
-import { DEFAULT_LYRICS_SETTINGS } from "./LyricsSettingsPanel";
-import LyricsLine, { estimateCharUnits } from "./LyricsLine";
+import type { LyricData, LyricLine, LyricsSettingsValues } from "./types";
+import { DEFAULT_LYRICS_SETTINGS } from "./types";
+import LyricsLine, { scaleByOffset, blurByOffset, opacityByOffset } from "./LyricsLine";
 
-const ROW_HEIGHT_BASE = 28;
-const CURRENT_ROW_HEIGHT = 36;
-/** Only render lines within this many positions of focus (rest are too far offscreen) */
-const VISIBILITY_WINDOW = 12;
+const VIRTUALIZED_LYRIC_MIN_LINES = 90;
+const VIRTUALIZED_LYRIC_WINDOW_BEFORE = 24;
+const VIRTUALIZED_LYRIC_WINDOW_AFTER = 30;
+const VIRTUALIZED_LYRIC_SCROLLING_EXTRA = 12;
+
+const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+
+// ── Helpers ──
+
+function estimateLyricLineHeight(line: LyricLine, options: LyricsSettingsValues): number {
+  const fontSize = Math.max(1, Number(options.fontSize) || 20);
+  const baseLineHeight = fontSize * 1.2;
+  if (!line || line.isInterlude || (!line.originalLyric && !line.dynamicLyric)) {
+    return Math.ceil(baseLineHeight);
+  }
+
+  let height = baseLineHeight;
+  const gap = fontSize * 0.3;
+
+  if (options.showRomaji && line.romanLyric) {
+    height += gap + fontSize * (options.romajiFontSize || 0.6);
+  }
+  if (options.showTranslation && line.translatedLyric) {
+    height += gap + fontSize * (options.translationFontSize || 1.0);
+  }
+
+  return Math.ceil(Math.max(baseLineHeight, height));
+}
+
+// ── Props ──
 
 interface LyricDisplayProps {
   lyricData: LyricData | null;
   currentTime: number;
   currentLineIndex: number;
+  getCurrentTime?: () => number;
+  seekCounter?: number;
+  playState?: boolean;
+  pageOpen?: boolean;
   loading?: boolean;
   error?: string | null;
   loadingText?: string;
   noLyricsText?: string;
   instrumentalText?: string;
   onLineClick?: (time: number) => void;
-  /** 歌词设置 */
   settings?: LyricsSettingsValues;
+  scrollingMode?: boolean;
+  scrollingFocusLine?: number;
 }
 
+// ── Component ──
+
 export default function LyricDisplay({
-  lyricData, currentTime, currentLineIndex, loading, error,
-  loadingText, noLyricsText, instrumentalText,
-  onLineClick,
-  settings = DEFAULT_LYRICS_SETTINGS,
+  lyricData, currentTime, currentLineIndex, getCurrentTime,
+  seekCounter = 0, playState = true, pageOpen = true,
+  loading, error, loadingText, noLyricsText, instrumentalText,
+  onLineClick, settings = DEFAULT_LYRICS_SETTINGS,
+  scrollingMode = false, scrollingFocusLine = 0,
 }: LyricDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(0);
-  const [isManual, setIsManual] = useState(false);
-  const manualTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const manualLine = useRef(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerHeightRef = useRef(0);
 
-  // ── 容器尺寸 ──
+  const heightOfItems = useRef<number[]>([]);
+  const shouldTransit = useRef(true);
+  const previousFocusedLineRef = useRef(0);
+
+  // ── Resize tracking ──
+
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const measure = () => setContainerHeight(el.clientHeight);
+    const measure = () => {
+      if (!containerRef.current) return;
+      const h = containerRef.current.clientHeight;
+      containerHeightRef.current = h;
+      setContainerHeight(h);
+      setContainerWidth(containerRef.current.clientWidth);
+    };
     measure();
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(() => {
+      shouldTransit.current = false;
+      measure();
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, [lyricData]);
 
-  // ── 当前行索引 ──
-  const { currentIndex, allLines } = useMemo(() => {
-    if (!lyricData?.lines?.length) {
-      return { currentIndex: -1, allLines: [] as LyricLine[] };
-    }
-    const lines = lyricData.lines;
-    let idx = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].time <= currentTime) idx = i;
-      else break;
-    }
-    return { currentIndex: idx, allLines: lines };
-  }, [lyricData, currentTime]);
+  // ── Data ──
 
-  // ── 手动浏览 ──
+  const allLines = useMemo(() => {
+    return lyricData?.lines ?? [];
+  }, [lyricData]);
+
+  const focusLine = scrollingMode ? scrollingFocusLine : currentLineIndex;
+
+  // ── Recalculate item heights ──
+
+  const recalcHeightOfItems = useCallback(() => {
+    if (!allLines.length) return;
+    for (let i = 0; i < allLines.length; i++) {
+      heightOfItems.current[i] = estimateLyricLineHeight(allLines[i], settings);
+    }
+  }, [allLines, settings]);
+
+  // Measure actual heights after render
+  useEffect(() => {
+    if (!allLines.length) return;
+    const container = containerRef.current;
+    if (!container) return;
+    // Use requestAnimationFrame to measure after browser layout
+    const raf = requestAnimationFrame(() => {
+      const items = container.querySelectorAll('.lyric-line');
+      const heights: number[] = [];
+      items.forEach((item) => {
+        const h = (item as HTMLElement).offsetHeight || 0;
+        if (h > 0) heights.push(h);
+      });
+      if (heights.length > 0 && heights.length === allLines.length) {
+        heightOfItems.current = heights;
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [allLines, containerWidth, settings.fontSize, settings.showTranslation, settings.showRomaji, settings.romajiFontSize, settings.translationFontSize, currentLineIndex, scrollingMode]);
+
+  // ── Line transforms ──
+
+  const lineTransforms = useMemo(() => {
+    // Use ref value as fallback when state hasn't caught up yet (fixes initial overlap)
+    const effectiveContainerHeight = containerHeight || containerHeightRef.current || 400;
+    if (!allLines.length) {
+      return [] as Array<{ top: number; scale: number; delay: number; blur: number; opacity: number }>;
+    }
+
+    recalcHeightOfItems();
+
+    const space = settings.fontSize * 1.2;
+
+    const delayByOffset = (offset: number) => {
+      if (scrollingMode) return 0;
+      if (!settings.enableStagger) return 0;
+      let sign = 1;
+      if (currentLineIndex - previousFocusedLineRef.current !== 0) {
+        sign = currentLineIndex - previousFocusedLineRef.current > 0 ? 1 : -1;
+      }
+      offset = Math.max(-4, Math.min(4, offset)) * sign + 4;
+      return offset * 50;
+    };
+
+    const sByOffset = (offset: number) => {
+      if (!settings.enableScale) return 1;
+      return scaleByOffset(offset);
+    };
+
+    const bByOffset = (offset: number) => {
+      if (!settings.enableBlur || scrollingMode) return 0;
+      return blurByOffset(offset);
+    };
+
+    const oByOffset = (offset: number) => {
+      return opacityByOffset(offset);
+    };
+
+    const t: Array<{ top: number; scale: number; delay: number; blur: number; opacity: number }> = [];
+    for (let i = 0; i < allLines.length; i++) {
+      t.push({ top: 0, scale: 1, delay: 0, blur: 0, opacity: 1 });
+    }
+
+    let current = Math.min(Math.max(focusLine ?? 0, 0), allLines.length - 1);
+    if (current === -1) current = 0;
+
+    if (scrollingMode) {
+      current = Math.min(Math.max(scrollingFocusLine ?? 0, 0), allLines.length - 1);
+    }
+
+    // Position current line at alignment percentage
+    t[current].top =
+      effectiveContainerHeight * (settings.alignmentPercentage * 0.01) -
+      heightOfItems.current[current] / 2;
+    t[current].scale = 1;
+    t[current].blur = bByOffset(0);
+    t[current].opacity = oByOffset(0);
+    t[current].delay = 0;
+
+    const currentLineH = heightOfItems.current[current];
+
+    // Temporary heighten interlude line
+    if (allLines[current]?.isInterlude && !scrollingMode) {
+      heightOfItems.current[current] = currentLineH + 50;
+    }
+
+    // Lines above current
+    for (let i = current - 1; i >= 0; i--) {
+      const offset = i - current;
+      t[i].scale = sByOffset(offset);
+      t[i].blur = bByOffset(offset);
+      t[i].opacity = oByOffset(offset);
+      const scaledH = heightOfItems.current[i] * t[i].scale;
+      t[i].top = t[i + 1].top - scaledH - space;
+      t[i].delay = delayByOffset(offset);
+    }
+
+    // Lines below current
+    for (let i = current + 1; i < allLines.length; i++) {
+      const offset = i - current;
+      t[i].scale = sByOffset(offset);
+      t[i].blur = bByOffset(offset);
+      t[i].opacity = oByOffset(offset);
+      const prevScaledH = heightOfItems.current[i - 1] * t[i - 1].scale;
+      t[i].top = t[i - 1].top + prevScaledH + space;
+      t[i].delay = delayByOffset(offset);
+    }
+
+    // Restore interlude height
+    heightOfItems.current[current] = currentLineH;
+
+    // Reset delay/duration if should not transit
+    if (!shouldTransit.current && !scrollingMode) {
+      for (let i = 0; i < allLines.length; i++) {
+        t[i].delay = 0;
+      }
+    }
+
+    shouldTransit.current = true;
+    previousFocusedLineRef.current = focusLine;
+    return t;
+  }, [
+    focusLine, containerHeight, containerWidth,
+    settings.fontSize, settings.enableScale, settings.enableBlur,
+    settings.showTranslation, settings.showRomaji,
+    settings.romajiFontSize, settings.translationFontSize,
+    settings.alignmentPercentage, settings.enableStagger,
+    scrollingMode, scrollingFocusLine, allLines, recalcHeightOfItems,
+    currentLineIndex,
+  ]);
+
+  // ── Scrolling mode via wheel ──
+
+  const [isManual, setIsManual] = useState(false);
+  const manualTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualLineRef = useRef(0);
+
   const enterManual = useCallback((lineIdx: number) => {
     setIsManual(true);
-    manualLine.current = lineIdx;
+    manualLineRef.current = lineIdx;
     if (manualTimer.current) clearTimeout(manualTimer.current);
-    manualTimer.current = setTimeout(() => {
-      setIsManual(false);
-    }, 3000);
+    manualTimer.current = setTimeout(() => setIsManual(false), 3000);
   }, []);
 
-  const focusLine = isManual ? manualLine.current : currentLineIndex;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const hw = (e: WheelEvent) => {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? 1 : -1;
+      let next = focusLine + dir;
+      while (next >= 0 && next < allLines.length && allLines[next]?.isInterlude) next += dir;
+      if (next >= 0 && next < allLines.length) enterManual(next);
+    };
+    el.addEventListener("wheel", hw, { passive: false });
+    return () => el.removeEventListener("wheel", hw);
+  }, [focusLine, allLines, enterManual]);
 
-  // ── 计算每行 top ──
-  const linePositions = useMemo(() => {
-    if (allLines.length === 0 || containerHeight === 0) return [] as number[];
-    const positions: number[] = new Array(allLines.length).fill(0);
-    const focus = Math.max(0, Math.min(focusLine, allLines.length - 1));
-
-    // 当前行位置（受 alignment 设置影响）
-    const alignMap = { center: 0.5, top: 0.3, bottom: 0.7 };
-    const alignPct = alignMap[settings.alignment] ?? 0.5;
-    const lineSpacing = settings.lineSpacing ?? 24;
-    const gap = Math.max(12, Math.min(48, lineSpacing));
-
-    // 当前行折行时，下方额外加 5px 间距
-    const FONT_PX = { small: 13, medium: 15, large: 17 } as Record<string, number>;
-    const currentFontPx = FONT_PX[settings.fontSize] ?? 15;
-    const currentLineWraps =
-      focus >= 0 && focus < allLines.length &&
-      estimateCharUnits(allLines[focus].text) > 140 / currentFontPx;
-    // 上一行折行检测：当上一行文本较长时，与当前行之间额外加间距
-    const prevLineWraps =
-      focus > 0 && focus < allLines.length &&
-      estimateCharUnits(allLines[focus - 1].text) > 140 / currentFontPx;
-    const centerY = containerHeight * alignPct;
-    positions[focus] = centerY - CURRENT_ROW_HEIGHT / 2;
-
-    // 向上层叠
-    let prevTop = positions[focus];
-    for (let i = focus - 1; i >= 0; i--) {
-      const rowH = allLines[i].isInterlude ? ROW_HEIGHT_BASE * 0.6 : ROW_HEIGHT_BASE;
-      const scale = 1 - (focus - i) * 0.18;
-      const scaledH = rowH * Math.max(scale, 0.7);
-      positions[i] = prevTop - scaledH - gap - (i === focus - 1 && prevLineWraps ? 15 : 0);
-      prevTop = positions[i];
-    }
-
-    // 向下层叠
-    let nextTop = positions[focus] + CURRENT_ROW_HEIGHT;
-    for (let i = focus + 1; i < allLines.length; i++) {
-      const rowH = allLines[i].isInterlude ? ROW_HEIGHT_BASE * 0.6 : ROW_HEIGHT_BASE;
-      const scale = 1 - (i - focus) * 0.18;
-      const scaledH = rowH * Math.max(scale, 0.7);
-      positions[i] = nextTop + gap + (i === focus + 1 && currentLineWraps ? 15 : 0);
-      nextTop = positions[i] + scaledH;
-    }
-
-    return positions;
-  }, [allLines, focusLine, containerHeight, settings.alignment, settings.lineSpacing]);
-
-
-
-  // ── cleanup ──
   useLayoutEffect(() => {
     return () => {
       if (manualTimer.current) clearTimeout(manualTimer.current);
     };
   }, []);
 
-  // ── 滚轮事件（需 passive:false 才能 preventDefault）──
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const dir = e.deltaY > 0 ? 1 : -1;
-      let next = focusLine + dir;
-      while (next >= 0 && next < allLines.length && allLines[next]?.isInterlude) {
-        next += dir;
-      }
-      if (next >= 0 && next < allLines.length) {
-        enterManual(next);
-      }
-    };
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => el.removeEventListener("wheel", handleWheel);
-  }, [focusLine, allLines, enterManual]);
+  // ── Virtualization ──
 
-  // ── 空 / 加载状态 ──
-  const cs = {
-    height: "100%", display: "flex", alignItems: "center",
-    justifyContent: "center", textAlign: "center", padding: "0 16px",
-  } as React.CSSProperties;
+  const displayFocusLine = scrollingMode ? scrollingFocusLine : (isManual ? manualLineRef.current : focusLine);
+  const shouldVirtualize = allLines.length > VIRTUALIZED_LYRIC_MIN_LINES;
+  const virtualWindowExtra = scrollingMode ? VIRTUALIZED_LYRIC_SCROLLING_EXTRA : 0;
+  const virtualStart = Math.max(0, displayFocusLine - VIRTUALIZED_LYRIC_WINDOW_BEFORE - virtualWindowExtra);
+  const virtualEnd = Math.min(allLines.length - 1, displayFocusLine + VIRTUALIZED_LYRIC_WINDOW_AFTER + virtualWindowExtra);
 
-  if (loading) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{loadingText || "加载中..."}</span></div>;
-  }
-  if (error) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{error}</span></div>;
-  }
-  if (!lyricData || !allLines.length) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{noLyricsText || "暂无歌词"}</span></div>;
-  }
-  if (!allLines.some(l => l.text.trim())) {
-    return <div style={cs}><span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{instrumentalText || "纯音乐，请欣赏"}</span></div>;
-  }
+  const shouldRenderLine = (index: number) => {
+    if (!shouldVirtualize) return true;
+    return index >= virtualStart && index <= virtualEnd;
+  };
 
-  // ── 渲染 ──
+  // Animation timing CSS variable
+  const timingMap: Record<string, string> = {
+    smooth: "ease",
+    sharp: "cubic-bezier(0.45, 0, 0.07, 1)",
+    easeout: "cubic-bezier(0.18, 0.77, 0.58, 0.99)",
+    lazy: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+  };
+
+  // Container class for centering/bold
+  const containerClass =
+    "lyric-display-container" +
+    (scrollingMode ? " scrolling" : "") +
+    (settings.fontBold ? " font-bold" : "");
+
+  // ── Render: loading / error / empty states ──
+
+  const cs: React.CSSProperties = {
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    padding: "0 16px",
+  };
+
+  if (loading)
+    return (
+      <div style={cs}>
+        <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{loadingText || "加载中..."}</span>
+      </div>
+    );
+  if (error)
+    return (
+      <div style={cs}>
+        <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{error}</span>
+      </div>
+    );
+  if (!lyricData || !allLines.length)
+    return (
+      <div style={cs}>
+        <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{noLyricsText || "暂无歌词"}</span>
+      </div>
+    );
+  if (!allLines.some((l) => (l.originalLyric || l.text || "").trim()))
+    return (
+      <div style={cs}>
+        <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{instrumentalText || "纯音乐，请欣赏"}</span>
+      </div>
+    );
+
+  // ── Main render ──
+
   return (
-    <div
-      ref={containerRef}
-      style={{
-        height: "100%",
-        overflow: "hidden",
-        position: "relative",
-        maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
-        WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
-        // Independent compositing — prevents repaints from bubbling up
-        contain: "layout style",
-      }}
-    >
-      {allLines.map((line, i) => {
-        // Visibility window: skip lines too far from focus (entirely offscreen)
-        const dist = Math.abs(i - focusLine);
-        if (dist > VISIBILITY_WINDOW) return null;
+    <>
+      {/* Global keyframe styles */}
+      <style>{`
+        @keyframes interlude-breath {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+          100% { transform: scale(1); }
+        }
+        .lyric-display-container.scrolling .interlude-inner {
+          opacity: 0 !important;
+          transition: opacity .5s ease !important;
+          transition-delay: 0s !important;
+        }
+        .interlude-inner {
+          animation-name: interlude-breath;
+          animation-duration: 2s;
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-in-out;
+          transform-origin: left;
+          opacity: 0;
+          transition: opacity .5s ease;
+        }
+        .interlude-inner.pause-breath {
+          animation-play-state: paused;
+        }
+        .lyric-interlude-line[data-offset="0"] .interlude-inner {
+          transition-delay: .5s;
+          opacity: 1;
+        }
+        .interlude-dot {
+          display: inline-block;
+          width: 0.7em;
+          height: 0.7em;
+          aspect-ratio: 1/1;
+          border-radius: 50%;
+          background-color: var(--text-primary);
+        }
+        .interlude-dot:not(:last-child) {
+          margin-right: 0.5em;
+        }
+        .lyric-display-container.font-bold .lyric-line-original {
+          font-weight: bold !important;
+        }
+        .lyric-line-original {
+          margin-bottom: 0.3em;
+        }
+        .lyric-line-romaji {
+          margin-bottom: 0.4em;
+        }
+      `}</style>
 
-        const offset = i - focusLine;
-        const isCurrent = i === focusLine;
-        // Only hint GPU layer for lines that will actually animate (near focus)
-        const nearFocus = dist <= 3;
+      <div
+        ref={containerRef}
+        className={containerClass}
+        style={{
+          height: "100%",
+          overflow: "hidden",
+          position: "relative",
+          display: "flex",
+          justifyContent: "center",
+          textAlign: "center",
+          maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+          contain: "layout style",
+          ["--lyric-timing-function" as string]: timingMap[settings.animationTiming] || "ease",
+        }}
+      >
+        {allLines.map((line, i) => {
+          if (!shouldRenderLine(i)) {
+            // Placeholder for virtualized lines
+            const estH = heightOfItems.current[i] || estimateLyricLineHeight(line, settings);
+            return (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  visibility: "hidden",
+                  pointerEvents: "none",
+                  height: estH,
+                  top: 0,
+                }}
+              />
+            );
+          }
 
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: linePositions[i] ?? 0,
-              transition: "top 0.5s var(--lyric-easing, ease)",
-              willChange: nearFocus ? "top" : "auto",
-            }}
-          >
-            <LyricsLine
-              line={line}
-              offset={offset}
-              isCurrent={isCurrent}
-              currentTime={currentTime}
-              onClick={onLineClick}
-              settings={settings}
-            />
-          </div>
-        );
-      })}
-    </div>
+          const tf = lineTransforms[i];
+          if (!tf) return null;
+
+          const isCurrent = i === focusLine;
+          const ds = tf.delay ? ` ${tf.delay}ms` : "";
+
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                top: tf.top,
+                transform: `scale(${tf.scale})`,
+                filter: tf.blur > 0.5 ? `blur(${tf.blur}px)` : "none",
+                opacity: tf.opacity,
+                transition: [
+                  `top 0.5s var(--lyric-timing-function, ease)${ds}`,
+                  `transform 0.5s var(--lyric-timing-function, ease)${ds}`,
+                  `filter 0.5s ease${ds}`,
+                  `opacity 0.5s ease${ds}`,
+                ].join(", "),
+                willChange: Math.abs(i - displayFocusLine) <= 3 ? "top, transform" : "auto",
+                transformOrigin: "center",
+                maxWidth: "calc(100% - 40px)",
+              }}
+            >
+              <LyricsLine
+                line={line}
+                offset={i - focusLine}
+                isCurrent={isCurrent}
+                currentTime={currentTime}
+                id={i}
+                getCurrentTime={getCurrentTime}
+                seekCounter={seekCounter}
+                playState={playState}
+                pageOpen={pageOpen}
+                onClick={onLineClick}
+                settings={settings}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

@@ -4,7 +4,7 @@
  */
 
 import type { FC } from "react";
-import { GlassModal, GlassToggle, GlassButton, GlassSurface, GlassPillButton } from "@/design-system";
+import { GlassModal, GlassToggle, GlassButton, GlassSurface, GlassPillButton, GlassSlider } from "@/design-system";
 import type { FluidPresetId } from "@/components/FluidBackground/config";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Language } from "@/types";
@@ -197,27 +197,16 @@ const FluidSettingsPanel: FC<FluidSettingsPanelProps> = ({ open, onClose, values
 
         {/* ── 速度 ── */}
         <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div>
-              <div style={{...labelStyle, opacity: dim}}>{tx.speed}</div>
-            </div>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", opacity: dim }}>
-              {values.speedMultiplier.toFixed(1)}x
-            </span>
-          </div>
-          <input
-            type="range"
+          <GlassSlider
+            label={tx.speed}
+            display={values.speedMultiplier.toFixed(1) + "x"}
+            value={values.speedMultiplier}
+            defaultVal={1.0}
             min={0.1}
             max={3.0}
             step={0.1}
-            value={values.speedMultiplier}
-            onChange={(e) => set("speedMultiplier", parseFloat(e.target.value))}
+            onChange={(v) => set("speedMultiplier", v)}
             disabled={!values.enabled}
-            style={{
-              width: "100%",
-              accentColor: "var(--accent)",
-              opacity: values.enabled ? 1 : 0.4,
-            }}
           />
         </div>
 
@@ -265,27 +254,16 @@ const FluidSettingsPanel: FC<FluidSettingsPanelProps> = ({ open, onClose, values
 
         {/* ── 强度 ── */}
         <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div>
-              <div style={{...labelStyle, opacity: dim}}>{tx.intensity}</div>
-            </div>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", opacity: dim }}>
-              {Math.round(values.intensity * 100)}%
-            </span>
-          </div>
-          <input
-            type="range"
+          <GlassSlider
+            label={tx.intensity}
+            display={Math.round(values.intensity * 100) + "%"}
+            value={values.intensity}
+            defaultVal={0.5}
             min={0.05}
             max={1.0}
             step={0.05}
-            value={values.intensity}
-            onChange={(e) => set("intensity", parseFloat(e.target.value))}
+            onChange={(v) => set("intensity", v)}
             disabled={!values.enabled}
-            style={{
-              width: "100%",
-              accentColor: "var(--accent)",
-              opacity: values.enabled ? 1 : 0.4,
-            }}
           />
         </div>
 
@@ -293,28 +271,16 @@ const FluidSettingsPanel: FC<FluidSettingsPanelProps> = ({ open, onClose, values
 
         {/* ── 模糊 ── */}
         <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div>
-              <div style={{...labelStyle, opacity: 0.35}}>{tx.blur}</div>
-            </div>
-            <span style={{ fontSize: 12, color: "var(--text-tertiary)", fontVariantNumeric: "tabular-nums", opacity: 0.4 }}>
-              N/A
-            </span>
-          </div>
-          <input
-            type="range"
+          <GlassSlider
+            label={tx.blur}
+            display="N/A"
+            value={0}
+            defaultVal={0}
             min={0}
             max={1.0}
             step={0.05}
-            value={0}
-            onChange={(e) => set("blurAmount", parseFloat(e.target.value))}
-            disabled={true}
-            style={{
-              width: "100%",
-              accentColor: "var(--text-tertiary)",
-              opacity: 0.3,
-              cursor: "not-allowed",
-            }}
+            onChange={(v) => set("blurAmount", v)}
+            disabled
           />
         </div>
 

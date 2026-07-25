@@ -1,63 +1,68 @@
-﻿/**
- * LyricsLine — 单行歌词组件
+/**
+ * LyricsLine — Single lyric line with original + romaji + translation layers
  *
- * 三态渲染：active（当前行）/ before（之前）/ after（之后）
- * 动画公式来自 Refined Now Playing 研究，受 LyricsSettings 控制。
- *
- * 当前行动态字号：根据文本长度自动缩放——短文本（单排）放大，长文本（多排）缩小。
+ * Ported from refined-now-playing-netease-next.
+ * Each line renders up to 3 stacked div layers.
+ * Romaji uses CSS var --lyric-romaji-size-em, translation uses --lyric-translation-size-em.
+ * Interlude lines render InterludeDots.
+ * Offset-based opacity: current line (offset=0) is full opacity, others dim.
  *
  * @module lyrics/LyricsLine
  */
 
-import { memo, useRef, useMemo } from "react";
+import { memo, useRef } from "react";
 import type { LyricLine } from "./types";
-import type { LyricsSettingsValues } from "./LyricsSettingsPanel";
-import { DEFAULT_LYRICS_SETTINGS } from "./LyricsSettingsPanel";
+import type { LyricsSettingsValues } from "./types";
+import { DEFAULT_LYRICS_SETTINGS } from "./types";
 import InterludeDots from "./InterludeDots";
 
 export interface LyricsLineProps {
   line: LyricLine;
-  /** 距离当前行的偏移量（0=当前行） */
   offset: number;
   isCurrent: boolean;
   currentTime: number;
+  id?: number;
+  getCurrentTime?: () => number;
+  seekCounter?: number;
+  playState?: boolean;
+  pageOpen?: boolean;
   onClick?: (time: number) => void;
   settings?: LyricsSettingsValues;
 }
 
-/** scale = clamp((1 - |offset| × 0.2)³ × 0.3 + 0.7, 0, 1) */
-function scaleByOffset(offset: number): number {
+/** scale = (max(1 - |offset|*0.2, 0))^3 * 0.3 + 0.7 */
+export function scaleByOffset(offset: number): number {
   const a = Math.abs(offset);
   const s = 1 - a * 0.2;
   if (s <= 0) return 0.7;
   return s * s * s * 0.3 + 0.7;
 }
 
-/** blur = min(0.5 + |offset| × 1.0, 4.5) px */
-function blurByOffset(offset: number): number {
+/** blur = min(0.5 + |offset|*1.0, 4.5) px */
+export function blurByOffset(offset: number): number {
   return Math.min(0.5 + Math.abs(offset) * 1.0, 4.5);
 }
 
-/** opacity: |offset| ≤ 1 → 1, else → max(1 - 0.4 × (|offset|-1), 0) */
-function opacityByOffset(offset: number): number {
+/** opacity: |offset|<=1->1, else max(1-0.4*(|offset|-1), 0) */
+export function opacityByOffset(offset: number): number {
   const a = Math.abs(offset);
   if (a <= 1) return 1;
   return Math.max(1 - 0.4 * (a - 1), 0);
 }
 
-const FONT_MAP = { small: 11, medium: 14, large: 17 };
-const CURRENT_FONT_MAP = { small: 13, medium: 15, large: 17 };
-
-/** 估算文本字符宽度单位（CJK=1, ASCII≈0.55, 其他≈0.65） */
-function estimateCharUnits(text: string): number {
+/** Estimate character width units (CJK=1, ASCII 0.55, other 0.65) */
+export function estimateCharUnits(text: string): number {
   let units = 0;
   for (const ch of text) {
     const cp = ch.codePointAt(0)!;
     if (cp <= 0x7F) units += 0.55;
-    else if (cp >= 0x4E00 && cp <= 0x9FFF) units += 1;
-    else if (cp >= 0x3000 && cp <= 0x303F) units += 1;
-    else if (cp >= 0xFF00 && cp <= 0xFFEF) units += 1;
-    else if (cp >= 0xAC00 && cp <= 0xD7AF) units += 1;
+    else if (
+      (cp >= 0x4E00 && cp <= 0x9FFF) ||
+      (cp >= 0x3000 && cp <= 0x303F) ||
+      (cp >= 0xFF00 && cp <= 0xFFEF) ||
+      (cp >= 0xAC00 && cp <= 0xD7AF)
+    )
+      units += 1;
     else units += 0.65;
   }
   return units;
@@ -68,106 +73,131 @@ const LyricsLine = memo(function LyricsLine({
   offset,
   isCurrent,
   currentTime,
+  id,
+  getCurrentTime,
+  seekCounter = 0,
+  playState = true,
+  pageOpen = true,
   onClick,
   settings = DEFAULT_LYRICS_SETTINGS,
 }: LyricsLineProps) {
-  const absOffset = Math.abs(offset);
   const pressStartTime = useRef(0);
-  const { enableScale, enableBlur, enableGlow, enableStagger, fontSize } = settings;
 
+  const { fontBold, fontSize, romajiFontSize, translationFontSize, showTranslation, showRomaji } = settings;
 
-  // ── 普通歌词行 ──
-  const scale = enableScale ? scaleByOffset(offset) : 1;
-  const blur = enableBlur ? blurByOffset(offset) : 0;
-  const opacity = opacityByOffset(offset);
-  const staggerDelay = enableStagger ? absOffset * 50 : 0;
-
-  const baseFont = FONT_MAP[fontSize];
-  const currentFontBase = CURRENT_FONT_MAP[fontSize];
-
-  // 当前行动态字号：短文本放大，长文本缩小（基于 LyricWindow 280px 宽度）
-  const currentFont = useMemo(() => {
-    if (!isCurrent) return currentFontBase;
-    const charUnits = estimateCharUnits(line.text);
-    const maxUnits = 248 / currentFontBase; // 可用像素宽度 ÷ 单字宽
-    const scale = maxUnits / Math.max(charUnits, 1);
-    return Math.min(18, Math.round(currentFontBase * Math.max(0.8, Math.min(1.4, scale))));
-  }, [isCurrent, currentFontBase, line.text]);
-
-  // ?? ??? ??
+  // Interlude line
   if (line.isInterlude) {
     return (
       <div
+        className="lyric-line lyric-interlude-line"
+        data-offset={offset}
         style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
+          height: 0,
+          overflow: "visible",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          opacity: isCurrent ? 1 : 0.25,
-          transform: enableScale ? `scale(${scaleByOffset(offset)})` : "scale(1)",
-          transition: "opacity 0.5s ease, transform 0.5s var(--lyric-easing, ease)",
           pointerEvents: "none",
         }}
       >
-        <InterludeDots line={line} currentTime={currentTime} isCurrent={isCurrent} />
+        <InterludeDots
+          line={line}
+          currentTime={currentTime}
+          isCurrent={isCurrent}
+          id={id ?? 0}
+          getCurrentTime={getCurrentTime}
+          seekCounter={seekCounter}
+          playState={playState}
+          pageOpen={pageOpen}
+        />
       </div>
     );
   }
 
+  const displayText = line.originalLyric || line.text;
+  const isZeroOffset = offset === 0;
+
+  // Opacity classes: current line (offset=0) items full, others dim
+  const originalOpacity = isZeroOffset ? 1 : 0.4;
+  const subOpacity = isZeroOffset ? 0.8 : 0.32;
+
   return (
     <div
-      onMouseDown={onClick ? () => { pressStartTime.current = Date.now(); } : undefined}
-      onMouseUp={onClick ? () => {
-        if (Date.now() - pressStartTime.current < 200) {
-          onClick(line.time);
-        }
-      } : undefined}
+      className="lyric-line"
+      data-offset={offset}
+      onMouseDown={
+        onClick
+          ? () => {
+              pressStartTime.current = Date.now();
+            }
+          : undefined
+      }
+      onMouseUp={
+        onClick
+          ? () => {
+              if (Date.now() - pressStartTime.current < 200) onClick(line.time);
+            }
+          : undefined
+      }
       style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        padding: "4px 16px",
         cursor: onClick ? "pointer" : "default",
         userSelect: "none",
         overflowWrap: "break-word",
         wordBreak: "break-word",
-        transform: `scale(${scale})`,
-        filter: blur > 0.5 ? `blur(${blur}px)` : "none",
-        opacity,
-        transition: [
-          "transform 0.5s var(--lyric-easing, ease)",
-          "filter 0.5s ease",
-          "opacity 0.5s ease",
-        ].join(", "),
-        transitionDelay: `${staggerDelay}ms`,
-        textShadow: enableGlow && isCurrent
-          ? "0 0 14px rgba(var(--fluid-glow-rgb, 255, 255, 255), 0.40), 0 0 28px rgba(var(--fluid-glow-rgb, 255, 255, 255), 0.15)"
-          : "none",
       }}
     >
-      <span
+      {/* Original lyric */}
+      <div
+        className="lyric-line-original"
         style={{
-          fontSize: isCurrent ? currentFont : baseFont,
-          fontWeight: isCurrent ? 700 : 400,
-          lineHeight: 1.5,
-          color: isCurrent ? "var(--text-primary)" : "var(--text-tertiary)",
-          position: "relative",
-          zIndex: 1,
-          filter: isCurrent ? "brightness(1.15)" : "none",
-          transition: "font-size 0.5s ease, font-weight 0.5s ease, color 0.5s ease, filter 0.5s ease",
+          fontSize: `${fontSize}px`,
+          fontWeight: fontBold ? 700 : (isZeroOffset ? 600 : 400),
+          lineHeight: 1.2,
+          color: isZeroOffset ? "var(--text-primary)" : "var(--text-tertiary)",
+          opacity: originalOpacity,
+          transition: "opacity 0.5s ease",
         }}
       >
-        {line.text}
-      </span>
+        {displayText}
+      </div>
+
+      {/* Romaji */}
+      {showRomaji && line.romanLyric && (
+        <div
+          className="lyric-line-romaji"
+          style={{
+            fontSize: `calc(${fontSize}px * ${romajiFontSize})`,
+            fontWeight: isZeroOffset ? 400 : 300,
+            lineHeight: 1.2,
+            color: isZeroOffset ? "var(--text-secondary)" : "var(--text-tertiary)",
+            opacity: subOpacity * 0.8,
+            marginBottom: "0.4em",
+            transition: "opacity 0.5s ease",
+          }}
+        >
+          {line.romanLyric}
+        </div>
+      )}
+
+      {/* Translation */}
+      {showTranslation && line.translatedLyric && (
+        <div
+          className="lyric-line-translated"
+          style={{
+            fontSize: `calc(${fontSize}px * ${translationFontSize})`,
+            fontWeight: isZeroOffset ? 400 : 300,
+            lineHeight: 1.2,
+            color: isZeroOffset ? "var(--text-secondary)" : "var(--text-tertiary)",
+            opacity: subOpacity,
+            marginBottom: "0.3em",
+            transition: "opacity 0.5s ease",
+          }}
+        >
+          {line.translatedLyric}
+        </div>
+      )}
     </div>
   );
 });
 
 export default LyricsLine;
-export { scaleByOffset, blurByOffset, opacityByOffset, estimateCharUnits };
