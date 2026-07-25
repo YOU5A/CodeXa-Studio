@@ -1,6 +1,45 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
 import { getCssTransitionValues, type AnimationSpeed } from "@/utils/animations";
 
+
+// Dynamic theme CSS injection for non-default themes (light/dark stay in globals.css)
+const THEME_CSS_FILES: Record<string, string> = {
+  graphite: "graphite",
+  midnight: "midnight",
+  ocean: "ocean",
+  emerald: "emerald",
+  crimson: "crimson",
+};
+
+const THEME_CSS_CACHE: Record<string, string> = {};
+
+function injectThemeCss(theme: string) {
+  const existing = document.getElementById("theme-injected");
+  if (existing) existing.remove();
+
+  if (theme === "light" || theme === "dark" || theme === "auto") return;
+
+  const fileName = THEME_CSS_FILES[theme];
+  if (!fileName) return;
+
+  const style = document.createElement("style");
+  style.id = "theme-injected";
+
+  if (THEME_CSS_CACHE[theme]) {
+    style.textContent = THEME_CSS_CACHE[theme];
+    document.head.appendChild(style);
+    return;
+  }
+
+  fetch("/themes/" + fileName + ".css")
+    .then((r) => r.text())
+    .then((css) => {
+      THEME_CSS_CACHE[theme] = css;
+      style.textContent = css;
+      document.head.appendChild(style);
+    })
+    .catch(() => {});
+}
 export type Theme = "light" | "dark" | "auto" | "graphite" | "midnight" | "ocean" | "emerald" | "crimson";
 
 export interface AppSettings {
@@ -84,6 +123,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--transition-fast", tv.fast);
     root.style.setProperty("--transition-normal", tv.normal);
     root.style.setProperty("--transition-slow", tv.slow);
+    injectThemeCss(settings.theme);
   }, [settings]);
 
   // System theme listener

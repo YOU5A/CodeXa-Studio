@@ -1,76 +1,74 @@
 {
-    "name":  "codexa-studio",
-    "version":  "2.0.0",
-    "description":  "CodeXa Studio - Windows 系统调优一体化工具箱",
-    "main":  "electron/main.js",
-    "scripts":  {
-                    "dev":  "concurrently \"vite\" \"wait-on http://localhost:5173 \u0026\u0026 C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd .\"",
-                    "build":  "vite build \u0026\u0026 electron-builder",
-                    "vite:dev":  "vite",
-                    "electron:dev":  "C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd ."
-                },
-    "keywords":  [
-
-                 ],
-    "author":  "Y0USA",
-    "license":  "AGPL-3.0",
-    "type":  "commonjs",
-    "dependencies":  {
-                         "framer-motion":  "^12.40.0",
-                         "lucide-react":  "^1.17.0",
-                         "NeteaseCloudMusicApi":  "^4.32.0",
-                         "react":  "^19.2.7",
-                         "react-dom":  "^19.2.7"
-                     },
-    "devDependencies":  {
-                            "@tailwindcss/vite":  "^4.3.0",
-                            "@types/react":  "^19.2.16",
-                            "@types/react-dom":  "^19.2.3",
-                            "@vitejs/plugin-react":  "^6.0.2",
-                            "concurrently":  "^10.0.1",
-                            "electron":  "^42.3.3",
-                            "electron-builder":  "^26.8.1",
-                            "tailwindcss":  "^4.3.0",
-                            "typescript":  "^6.0.3",
-                            "vite":  "^8.0.16",
-                            "wait-on":  "^9.0.10"
-                        },
-    "build":  {
-                  "appId":  "com.yousa.codexa-studio",
-                  "productName":  "CodeXa Studio",
-                  "directories":  {
-                                      "output":  "dist-electron"
-                                  },
-                  "files":  [
-                                "dist/**/*",
-                                "electron/**/*",
-                                "dotnet-bridge/publish-sc/**/*"
-                            ],
-                  "extraResources":  [
-                                         {
-                                             "from":  "dotnet-bridge/publish-sc",
-                                             "to":  "dotnet-bridge",
-                                             "filter":  [
-                                                            "**/*"
-                                                        ]
-                                         },
-                                         {
-                                             "to":  "icon.ico",
-                                             "from":  "icon.ico"
-                                         }
-                                     ],
-                  "win":  {
-                              "target":  [
-                                             "portable",
-                                             "nsis"
-                                         ],
-                              "icon":  "icon.ico",
-                              "requestedExecutionLevel":  "requireAdministrator"
-                          },
-                  "nsis":  {
-                               "oneClick":  false,
-                               "allowToChangeInstallationDirectory":  true,
-                               "perMachine":  true
-                           }
-              }
+  "name": "codexa-studio",
+  "version": "2.0.0",
+  "description": "CodeXa Studio - Windows 系统调优一体化工具箱",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on -i 50 http://localhost:5173 && C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd .\"",
+    "build": "vite build && electron-builder",
+    "vite:dev": "vite",
+    "electron:dev": "C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd ."
+  },
+  "keywords": [],
+  "author": "Y0USA",
+  "license": "AGPL-3.0",
+  "type": "commonjs",
+  "dependencies": {
+    "framer-motion": "^12.40.0",
+    "lucide-react": "^1.17.0",
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^10.0.1",
+    "electron": "^42.3.3",
+    "electron-builder": "^26.8.1",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.yousa.codexa-studio",
+    "productName": "CodeXa Studio",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "dotnet-bridge/publish-sc/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "dotnet-bridge/publish-sc",
+        "to": "dotnet-bridge",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "to": "icon.ico",
+        "from": "icon.ico"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "icon": "icon.ico",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true
+    }
+  }
 }

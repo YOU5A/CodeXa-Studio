@@ -90,20 +90,24 @@ export function useLyricManager() {
     // Resolve title/artist from metadata
     let title = extractTitleFromPath(filePath);
     let artist = extractArtistFromPath(filePath);
+    let album = "";
     try {
       const metaResult = await window.electronAPI?.python.call("music.get_metadata", { filepath: filePath });
       if (metaResult?.title) title = metaResult.title;
       if (metaResult?.artist) artist = metaResult.artist;
+      if (metaResult?.album) album = metaResult.album;
     } catch {
       /* use filename fallback */
     }
 
     // Helper: fetch from Netease online
     const fetchNetease = async (): Promise<LyricData | null> => {
-      if (!window.electronAPI?.music?.searchLyrics) return null;
+      if (!window.electronAPI?.music?.searchLyrics) { console.log("[LyricManager] searchLyrics API not available"); return null; }
+      console.log("[LyricManager] Calling searchLyrics:", { title, artist, album });
       const result: OnlineLyricResult | null = await window.electronAPI.music.searchLyrics(
-        title, artist || undefined, "netease"
+        title, artist || undefined, album || undefined, "netease"
       );
+      console.log("[LyricManager] searchLyrics result:", result?.lyrics_text ? "got lyrics" : "null");
       if (result?.lyrics_text) {
         return parseLyricData(
           result.lyrics_text,
@@ -219,7 +223,7 @@ export function useLyricManager() {
   useEffect(() => {
     const tick = () => {
       const rawTime = audioState.pos ?? 0;
-      const t = rawTime + globalOffsetRef.current;
+      const t = rawTime + globalOffsetRef.current / 1000;
       currentTimeRef.current = t;
       const data = lyricDataRef.current;
       if (data?.lines?.length) {

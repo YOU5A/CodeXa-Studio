@@ -125,7 +125,7 @@ export interface ElectronAPI {
   };
 
   music: {
-    searchLyrics: (title: string, artist?: string, source?: string) => Promise<{ lyrics_text: string | null; source: string; error?: string }>;
+    searchLyrics: (title: string, artist?: string, album?: string, source?: string) => Promise<{ lyrics_text: string | null; translated_text?: string | null; roman_text?: string | null; dynamic_text?: string | null; source: string; error?: string }>;
     searchCoverNetease: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
     searchCoverQQ: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
     searchCoverITunes: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;

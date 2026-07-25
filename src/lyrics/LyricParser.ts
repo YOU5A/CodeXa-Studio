@@ -1,4 +1,4 @@
-﻿/**
+/**
  * LyricParser — Multi-format lyric parser
  *
  * Supports: LRC / YRC (dynamic/karaoke) / unsynced text
@@ -555,6 +555,17 @@ export function parseLyricData(
   dynamicRaw?: string,
 ): LyricData {
   const lines = parseLyric(raw, translatedRaw || "", romanRaw || "", dynamicRaw || "");
+
+  // Suppress same-script translations (e.g., Chinese original + Chinese "translation")
+  for (const line of lines) {
+    if (line.translatedLyric && line.originalLyric) {
+      const origIsCJK = isDominantlyCJK(line.originalLyric);
+      const transIsCJK = isDominantlyCJK(line.translatedLyric);
+      if (origIsCJK === transIsCJK) {
+        line.translatedLyric = undefined;
+      }
+    }
+  }
 
   const hasTranslation = lines.some((l) => !!l.translatedLyric);
   const hasRomaji = lines.some((l) => !!l.romanLyric);

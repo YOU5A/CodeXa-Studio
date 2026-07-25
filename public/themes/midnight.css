@@ -1,0 +1,26 @@
+﻿[data-theme-name="midnight"] {
+  --bg-base: #13101c;
+  --bg-primary: rgba(10,12,20,0.72);
+  --bg-secondary: rgba(15,18,28,0.30);
+  --bg-tertiary: rgba(20,24,36,0.20);
+  --bg-elevated: rgba(25,30,42,0.68);
+  --bg-glass: rgba(15,18,28,0.40);
+  --border-color: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.10);
+  --text-primary: rgba(255,255,255,0.90);
+  --text-secondary: rgba(255,255,255,0.50);
+  --text-tertiary: rgba(255,255,255,0.30);
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-bg: rgba(99,102,241,0.15);
+  --accent-rgb: 99,102,241;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --danger-rgb: 239,68,68;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.30);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.40);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.50);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.60);
+  --slider-track: rgba(255,255,255,0.13);
+}

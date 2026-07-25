@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
 const fs = require("fs");
 const path = require("path");
-const { execSync, spawnSync } = require("child_process");
+const { spawnSync, exec } = require("child_process");
 const https = require("https");
 const { PythonBridge } = require("./python-bridge");
 const { cloudsearch, lyric } = require("NeteaseCloudMusicApi");
@@ -58,15 +58,7 @@ if (electronSettings.autoStart) {
 }
 
 // ---- Auto-Elevation (Admin Privileges) ----
-function ensureAdmin() {
-  if (process.platform !== "win32") return;
-
-  try {
-    execSync("net session", { stdio: "ignore" });
-    return; // Already admin
-  } catch {}
-
-  // Not admin: elevate via PowerShell with Base64 encoding
+function elevateViaPowerShell() {
   try {
     const electronPath = process.execPath.replace(/'/g, "''");
     let psCmd;
@@ -89,6 +81,15 @@ function ensureAdmin() {
     if (err.stderr) console.error("[Admin] stderr:", err.stderr.toString().trim());
   }
   app.quit();
+}
+
+function ensureAdmin() {
+  if (process.platform !== "win32") return;
+
+  // Async admin check — avoids blocking Electron startup (~344ms saved)
+  exec("net session", { stdio: "ignore" }, (err) => {
+    if (err) elevateViaPowerShell();
+  });
 }
 ensureAdmin();
 
@@ -300,6 +301,27 @@ const CN_S2T_MAP = {
   '園':'园','圓':'圆','團':'团','圖':'图','場':'场','報':'报','夠':'够',
 };
 
+// ── Full-width → half-width normalization (handles Japanese/Chinese punctuation) ──
+function normalizeFullwidth(s) {
+  if (!s) return "";
+  let out = "";
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    // Full-width ASCII punctuation, digits, letters: U+FF01–U+FF5E → U+0021–U+007E
+    if (cp >= 0xFF01 && cp <= 0xFF5E) {
+      out += String.fromCodePoint(cp - 0xFEE0);
+    }
+    // Full-width space U+3000 → U+0020
+    else if (cp === 0x3000) {
+      out += " ";
+    }
+    else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
 function normalizeChinese(s) {
   if (!s) return "";
   let out = "";
@@ -357,8 +379,8 @@ function chinese2gramOverlap(a, b) {
   return total > 0 ? hits / total : 0;
 }
 
-function scoreMatch(songName, songArtists, queryTitle, queryArtist) {
-  const toLower = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+function scoreMatch(songName, songArtists, queryTitle, queryArtist, queryAlbum, songAlbum) {
+  const toLower = (s) => normalizeFullwidth((s || "").toLowerCase()).replace(/\s+/g, " ").trim();
 
   // Normalize: strip brackets + normalize Chinese
   const snRaw = toLower(normalizeChinese(stripBrackets(songName || "")));
@@ -393,6 +415,18 @@ function scoreMatch(songName, songArtists, queryTitle, queryArtist) {
     if (overlap > 0) score += 0.12 * (overlap / Math.max(qtWords.size, 1));
   }
 
+  // ★ Bonus for raw (unstripped) title match — helps distinguish song versions
+  // When stripBrackets removes version info, exact raw match breaks the tie
+  if (sn !== snRaw && qt !== qtRaw) {
+    if (sn === qt) score += 0.15;
+    else if (sn.includes(qt) || qt.includes(sn)) score += 0.10;
+    // 2-gram overlap on raw strings for version-specific matching
+    else {
+      const raw2g = chinese2gramOverlap(sn, qt);
+      if (raw2g > 0.5) score += 0.08 * raw2g;
+    }
+  }
+
   // Artist matching (with Chinese normalization)
   if (qa && songArtists && songArtists.length > 0) {
     const artistNames = songArtists.map(a => toLower(normalizeChinese(typeof a === "string" ? a : a.name || "")));
@@ -402,6 +436,24 @@ function scoreMatch(songName, songArtists, queryTitle, queryArtist) {
     }
   } else if (!qa) {
     score += 0.2;
+  }
+
+  // Album matching — helps distinguish different versions of the same song
+  if (queryAlbum && songAlbum) {
+    const qal = toLower(normalizeChinese(queryAlbum || ""));
+    const sal = toLower(normalizeChinese(songAlbum || ""));
+    if (qal && sal) {
+      if (qal === sal) score += 0.3;
+      else if (qal.includes(sal) || sal.includes(qal)) score += 0.18;
+      else {
+        const maxLen = Math.max(qal.length, sal.length);
+        if (maxLen > 3) {
+          const dist = levenshteinDistance(qal, sal);
+          const ratio = 1 - dist / maxLen;
+          if (ratio > 0.7) score += 0.10;
+        }
+      }
+    }
   }
 
   return score;
@@ -452,7 +504,7 @@ function httpRequest(url, options = {}) {
   });
 }
 // ── Multi-query lyrics search helper: try different query formulations ──
-async function searchLyricsMultiQuery(title, artist, searchFn) {
+async function searchLyricsMultiQuery(title, artist, album, searchFn) {
   // Build query variants: stripped versions without brackets/feat
   const strippedTitle = stripBrackets(title);
   const strippedArtist = artist ? stripBrackets(artist) : "";
@@ -473,7 +525,7 @@ async function searchLyricsMultiQuery(title, artist, searchFn) {
 
   for (const q of unique) {
     try {
-      const result = await searchFn(q.title, q.artist);
+      const result = await searchFn(q.title, q.artist, album);
       if (result) return result;
     } catch {}
   }
@@ -481,19 +533,39 @@ async function searchLyricsMultiQuery(title, artist, searchFn) {
 }
 
 // ── Music: Online Lyrics Search (Netease) ──
-ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) => {
-  const searchNetease = async (t, a) => {
+ipcMain.handle("music:searchLyrics", async (_event, title, artist, album, lyricSource) => {
+  const searchNetease = async (t, a, al) => {
     try {
       const keywords = a ? `${t} ${a}` : t;
-      const searchRes = await cloudsearch({ keywords, type: 1, limit: 20 });
+      const searchRes = await cloudsearch({ keywords, type: 1, limit: 50 });
       const songs = searchRes?.body?.result?.songs;
       if (!songs || songs.length === 0) return null;
 
       let best = null;
       let bestScore = -1;
+      let bestRawDist = Infinity;
       for (const s of songs) {
-        const score = scoreMatch(s.name, s.ar, t, a);
-        if (score > bestScore) { bestScore = score; best = s; }
+        const score = scoreMatch(s.name, s.ar, t, a, al, s.al?.name);
+        // Tie-breaking: when scores are very close, prefer the song whose
+        // raw (unstripped) title is closest to the query — this resolves
+        // version conflicts (e.g., "2017 Mix" vs "10 years after Ver.")
+        if (score > bestScore + 0.02) {
+          bestScore = score;
+          best = s;
+          bestRawDist = levenshteinDistance(
+            normalizeFullwidth(s.name.toLowerCase()),
+            normalizeFullwidth((t || "").toLowerCase())
+          );
+        } else if (Math.abs(score - bestScore) <= 0.02 && best) {
+          const rawDist = levenshteinDistance(
+            normalizeFullwidth(s.name.toLowerCase()),
+            normalizeFullwidth((t || "").toLowerCase())
+          );
+          if (rawDist < bestRawDist) {
+            best = s;
+            bestRawDist = rawDist;
+          }
+        }
       }
 
       if (!best || bestScore < 0.3) return null;
@@ -505,7 +577,7 @@ ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) 
       const romalrc = body?.romalrc?.lyric;
       const yrc = body?.yrc?.lyric;
       if (lrc) {
-        console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}, hasTrans=${!!tlyric}, hasRoma=${!!romalrc}, hasDyn=${!!yrc}`);
+        console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}, album="${best.al?.name || ""}", hasTrans=${!!tlyric}, hasRoma=${!!romalrc}, hasDyn=${!!yrc}`);
         return { text: lrc, translated_text: tlyric || "", roman_text: romalrc || "", dynamic_text: yrc || "", source: "netease" };
       }
       return null;
@@ -520,12 +592,12 @@ ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) 
     console.log("[Lyrics] Source mode:", src);
 
     // Both "auto" and "netease": try Netease with multi-query + single fallback
-    const result = await searchLyricsMultiQuery(title, artist, searchNetease);
+    const result = await searchLyricsMultiQuery(title, artist, album, searchNetease);
     if (result) return { lyrics_text: result.text, translated_text: result.translated_text || "", roman_text: result.roman_text || "", dynamic_text: result.dynamic_text || "", source: result.source };
 
     // Single-query fallback
     console.log("[Lyrics] Multi-query failed, trying single fallback...");
-    const direct = await searchNetease(title, artist);
+    const direct = await searchNetease(title, artist, album);
     if (direct) return { lyrics_text: direct.text, translated_text: direct.translated_text || "", roman_text: direct.roman_text || "", dynamic_text: direct.dynamic_text || "", source: direct.source };
 
     return { lyrics_text: null, translated_text: null, roman_text: null, dynamic_text: null, source: "none" };
@@ -539,7 +611,7 @@ ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) 
 ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) => {
   try {
     const keywords = [title, artist, album].filter(Boolean).join(" ");
-    const searchRes = await cloudsearch({ keywords, type: 1, limit: 20 });
+    const searchRes = await cloudsearch({ keywords, type: 1, limit: 50 });
     const songs = searchRes?.body?.result?.songs;
     if (!songs || songs.length === 0) return { results: [] };
 

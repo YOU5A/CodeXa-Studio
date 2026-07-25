@@ -1,0 +1,24 @@
+﻿[data-theme-name="emerald"] {
+  --bg-base: #f5f7e6;
+  --bg-primary: rgba(240,252,245,0.72);
+  --bg-secondary: rgba(230,248,238,0.30);
+  --bg-tertiary: rgba(220,244,230,0.18);
+  --bg-elevated: rgba(245,255,248,0.68);
+  --bg-glass: rgba(230,248,238,0.38);
+  --border-color: rgba(0,100,50,0.08);
+  --border-strong: rgba(0,100,50,0.12);
+  --text-primary: rgba(10,40,25,0.88);
+  --text-secondary: rgba(10,40,25,0.68);
+  --text-tertiary: rgba(10,40,25,0.52);
+  --accent: #059669;
+  --accent-hover: #10b981;
+  --accent-bg: rgba(5,150,105,0.10);
+  --accent-rgb: 5,150,105;
+  --success: #34c759;
+  --warning: #ff9500;
+  --danger: #ff3b30;
+  --shadow-sm: 0 1px 3px rgba(0,100,50,0.06);
+  --shadow-md: 0 4px 12px rgba(0,100,50,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,100,50,0.10);
+  --shadow-xl: 0 16px 48px rgba(0,100,50,0.14);
+}

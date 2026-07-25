@@ -1,0 +1,26 @@
+﻿[data-theme-name="crimson"] {
+  --bg-base: #231315;
+  --bg-primary: rgba(25,10,15,0.72);
+  --bg-secondary: rgba(30,15,20,0.30);
+  --bg-tertiary: rgba(35,20,25,0.20);
+  --bg-elevated: rgba(40,25,30,0.68);
+  --bg-glass: rgba(30,15,20,0.40);
+  --border-color: rgba(255,180,180,0.08);
+  --border-strong: rgba(255,180,180,0.14);
+  --text-primary: rgba(255,235,235,0.90);
+  --text-secondary: rgba(255,200,200,0.55);
+  --text-tertiary: rgba(255,180,180,0.35);
+  --accent: #f43f5e;
+  --accent-hover: #fb7185;
+  --accent-bg: rgba(244,63,94,0.15);
+  --accent-rgb: 244,63,94;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --danger-rgb: 220,38,38;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.30);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.40);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.50);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.60);
+  --slider-track: rgba(255,180,180,0.18);
+}

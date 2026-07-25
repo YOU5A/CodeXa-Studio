@@ -81,7 +81,7 @@ export default function LyricDisplay({
   const heightOfItems = useRef<number[]>([]);
   const shouldTransit = useRef(true);
   const previousFocusedLineRef = useRef(0);
-
+  const [lyricGen, setLyricGen] = useState(0);
   // ── Resize tracking ──
 
   useLayoutEffect(() => {
@@ -108,6 +108,9 @@ export default function LyricDisplay({
   const allLines = useMemo(() => {
     return lyricData?.lines ?? [];
   }, [lyricData]);
+
+  // Force remount on lyric data change to prevent position transition artifacts
+  useEffect(() => { setLyricGen(g => g + 1); }, [lyricData]);
 
   const focusLine = scrollingMode ? scrollingFocusLine : currentLineIndex;
 
@@ -156,12 +159,10 @@ export default function LyricDisplay({
     const delayByOffset = (offset: number) => {
       if (scrollingMode) return 0;
       if (!settings.enableStagger) return 0;
-      let sign = 1;
-      if (currentLineIndex - previousFocusedLineRef.current !== 0) {
-        sign = currentLineIndex - previousFocusedLineRef.current > 0 ? 1 : -1;
-      }
-      offset = Math.max(-4, Math.min(4, offset)) * sign + 4;
-      return offset * 50;
+      // Only stagger on manual jumps (>1 line), not during normal auto-advance
+      const jump = Math.abs(focusLine - previousFocusedLineRef.current);
+      if (jump <= 1) return 0;
+      return Math.min(Math.abs(offset) * 80, 400);
     };
 
     const sByOffset = (offset: number) => {
@@ -300,9 +301,9 @@ export default function LyricDisplay({
   // Animation timing CSS variable
   const timingMap: Record<string, string> = {
     smooth: "ease",
-    sharp: "cubic-bezier(0.45, 0, 0.07, 1)",
-    easeout: "cubic-bezier(0.18, 0.77, 0.58, 0.99)",
-    lazy: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+    sharp: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+    easeout: "cubic-bezier(0, 0, 0.58, 1)",
+    lazy: "cubic-bezier(0.45, 0, 0.75, 0.35)",
   };
 
   // Container class for centering/bold
@@ -402,6 +403,7 @@ export default function LyricDisplay({
       `}</style>
 
       <div
+        key={lyricGen}
         ref={containerRef}
         className={containerClass}
         style={{
@@ -453,8 +455,8 @@ export default function LyricDisplay({
                 transition: [
                   `top 0.5s var(--lyric-timing-function, ease)${ds}`,
                   `transform 0.5s var(--lyric-timing-function, ease)${ds}`,
-                  `filter 0.5s ease${ds}`,
-                  `opacity 0.5s ease${ds}`,
+                  `filter 0.5s var(--lyric-timing-function, ease)${ds}`,
+                  `opacity 0.5s var(--lyric-timing-function, ease)${ds}`,
                 ].join(", "),
                 willChange: Math.abs(i - displayFocusLine) <= 3 ? "top, transform" : "auto",
                 transformOrigin: "center",
