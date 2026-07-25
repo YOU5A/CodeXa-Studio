@@ -90,12 +90,12 @@ const LyricBlock = memo(function LyricBlock({
         className="lyric-block lyric-interlude-line"
         data-offset={offset}
         style={{
-          height: 0,
-          overflow: "visible",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           pointerEvents: "none",
+          paddingTop: "0.1em",
+          paddingBottom: "0.1em",
         }}
       >
         <InterludeDots

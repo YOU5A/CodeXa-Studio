@@ -85,6 +85,7 @@ export default function LyricDisplay({
   const previousFocusedLineRef = useRef(0);
   const [lyricGen, setLyricGen] = useState(0);
   const [heightVersion, setHeightVersion] = useState(0);
+  const [coverGlowColor, setCoverGlowColor] = useState<string | null>(null);
   // ── Resize tracking ──
 
   useLayoutEffect(() => {
@@ -113,7 +114,29 @@ export default function LyricDisplay({
   }, [lyricData]);
 
   // Force remount on lyric data change to prevent position transition artifacts
-  useEffect(() => { setLyricGen(g => g + 1); }, [lyricData]);
+  // useLayoutEffect ensures remount happens before paint (no flash of wrong positions)
+  useLayoutEffect(() => { setLyricGen(g => g + 1); }, [lyricData]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const color = (e as CustomEvent).detail as [number, number, number] | null;
+      if (color) {
+        setCoverGlowColor("rgb(" + color[0] + "," + color[1] + "," + color[2] + ")");
+      } else {
+        setCoverGlowColor(null);
+      }
+    };
+    const cached = localStorage.getItem("fluidCoverColor");
+    if (cached) {
+      try {
+        const c = JSON.parse(cached) as [number, number, number];
+        setCoverGlowColor("rgb(" + c[0] + "," + c[1] + "," + c[2] + ")");
+      } catch {}
+    }
+    window.addEventListener("fluidCoverColorChanged", handler);
+    return () => window.removeEventListener("fluidCoverColorChanged", handler);
+  }, []);
+
 
   const focusLine = scrollingMode ? scrollingFocusLine : currentLineIndex;
 
@@ -125,6 +148,15 @@ export default function LyricDisplay({
       heightOfItems.current[i] = estimateBlockHeight(allLines[i], settings);
     }
   }, [allLines, settings]);
+
+  // Track previous height-affecting settings to detect changes
+  const prevHeightSettingsRef = useRef({
+    fontSize: settings.fontSize,
+    showTranslation: settings.showTranslation,
+    showRomaji: settings.showRomaji,
+    romajiFontSize: settings.romajiFontSize,
+    translationFontSize: settings.translationFontSize,
+  });
 
   // Measure actual heights after render
   useEffect(() => {
@@ -147,17 +179,49 @@ export default function LyricDisplay({
     return () => cancelAnimationFrame(raf);
   }, [allLines, containerWidth, settings.fontSize, settings.showTranslation, settings.showRomaji, settings.romajiFontSize, settings.translationFontSize, currentLineIndex, scrollingMode]);
 
+  // Reset height cache when lyric data changes (before key-based re-mount)
+  // This ensures the interim render (before lyicGen kicks in) has correct estimates
+  useLayoutEffect(() => {
+    heightOfItems.current = [];
+  }, [lyricData]);
+
+  // ── Manual scroll state ──
+
+  const [isManual, setIsManual] = useState(false);
+  const [manualLine, setManualLine] = useState(0);
+const manualBaseRef = useRef(0);
+  const isManualRef = useRef(false);
+  const manualTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Line transforms ──
 
   const lineTransforms = useMemo(() => {
+    // Detect height-affecting settings changes and reset heights
+    const heightSettingsChanged =
+      settings.fontSize !== prevHeightSettingsRef.current.fontSize ||
+      settings.showTranslation !== prevHeightSettingsRef.current.showTranslation ||
+      settings.showRomaji !== prevHeightSettingsRef.current.showRomaji ||
+      settings.romajiFontSize !== prevHeightSettingsRef.current.romajiFontSize ||
+      settings.translationFontSize !== prevHeightSettingsRef.current.translationFontSize;
+
+    if (heightSettingsChanged) {
+      prevHeightSettingsRef.current = {
+        fontSize: settings.fontSize,
+        showTranslation: settings.showTranslation,
+        showRomaji: settings.showRomaji,
+        romajiFontSize: settings.romajiFontSize,
+        translationFontSize: settings.translationFontSize,
+      };
+    }
+
     // Use ref value as fallback when state hasn't caught up yet (fixes initial overlap)
     const effectiveContainerHeight = containerHeight || containerHeightRef.current || 400;
     if (!allLines.length) {
       return [] as Array<{ top: number; scale: number; delay: number; blur: number; opacity: number }>;
     }
 
-    // Only estimate heights on first render; use measured heights once available
-    if (heightOfItems.current.length !== allLines.length || heightVersion === 0) {
+    // Re-estimate on first render, settings change, or line count change
+    if (heightOfItems.current.length !== allLines.length || heightVersion === 0 || heightSettingsChanged) {
       recalcHeightOfItems();
     }
 
@@ -196,12 +260,20 @@ export default function LyricDisplay({
 
     if (scrollingMode) {
       current = Math.min(Math.max(scrollingFocusLine ?? 0, 0), allLines.length - 1);
+    } else if (isManual) {
+      current = Math.min(Math.max(manualLine ?? 0, 0), allLines.length - 1);
     }
 
-    // Position current line at alignment percentage
-    t[current].top =
-      effectiveContainerHeight * (settings.alignmentPercentage * 0.01) -
-      heightOfItems.current[current] / 2;
+    // Position current line at alignment percentage (auto) or free-range (manual)
+    if (isManual) {
+      // In manual mode, center on the scrolled-to line with full viewport range
+      const rawCenter = effectiveContainerHeight * (settings.alignmentPercentage * 0.01);
+      t[current].top = rawCenter - heightOfItems.current[current] / 2;
+    } else {
+      t[current].top =
+        effectiveContainerHeight * (settings.alignmentPercentage * 0.01) -
+        heightOfItems.current[current] / 2;
+    }
     t[current].scale = 1;
     t[current].blur = bByOffset(0);
     t[current].opacity = oByOffset(0);
@@ -211,7 +283,7 @@ export default function LyricDisplay({
 
     // Temporary heighten interlude line
     if (allLines[current]?.isInterlude && !scrollingMode) {
-      heightOfItems.current[current] = currentLineH + 50;
+      heightOfItems.current[current] = currentLineH + 8;
     }
 
     // Lines above current
@@ -256,20 +328,22 @@ export default function LyricDisplay({
     settings.romajiFontSize, settings.translationFontSize,
     settings.alignmentPercentage, settings.enableStagger,
     scrollingMode, scrollingFocusLine, allLines, recalcHeightOfItems,
-    currentLineIndex, heightVersion,
+    currentLineIndex, heightVersion, isManual, manualLine,
   ]);
 
   // ── Scrolling mode via wheel ──
 
-  const [isManual, setIsManual] = useState(false);
-  const manualTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const manualLineRef = useRef(0);
-
-  const enterManual = useCallback((lineIdx: number) => {
+  const enterManual = useCallback((lineIdx: number, baseIdx?: number) => {
+    setManualLine(lineIdx);
+    if (baseIdx !== undefined) manualBaseRef.current = baseIdx;
+    isManualRef.current = true;
     setIsManual(true);
-    manualLineRef.current = lineIdx;
     if (manualTimer.current) clearTimeout(manualTimer.current);
-    manualTimer.current = setTimeout(() => setIsManual(false), 3000);
+    manualTimer.current = setTimeout(() => {
+      isManualRef.current = false;
+      setIsManual(false);
+      manualBaseRef.current = 0;
+    }, 3000);
   }, []);
 
   useEffect(() => {
@@ -278,13 +352,14 @@ export default function LyricDisplay({
     const hw = (e: WheelEvent) => {
       e.preventDefault();
       const dir = e.deltaY > 0 ? 1 : -1;
-      let next = focusLine + dir;
+      const base = isManualRef.current ? manualBaseRef.current : focusLine;
+      let next = base + dir;
       while (next >= 0 && next < allLines.length && allLines[next]?.isInterlude) next += dir;
-      if (next >= 0 && next < allLines.length) enterManual(next);
+      if (next >= 0 && next < allLines.length) enterManual(next, next);
     };
     el.addEventListener("wheel", hw, { passive: false });
     return () => el.removeEventListener("wheel", hw);
-  }, [focusLine, allLines, enterManual]);
+  }, [focusLine, allLines, enterManual, isManual]);
 
   useLayoutEffect(() => {
     return () => {
@@ -294,7 +369,7 @@ export default function LyricDisplay({
 
   // ── Virtualization ──
 
-  const displayFocusLine = scrollingMode ? scrollingFocusLine : (isManual ? manualLineRef.current : focusLine);
+  const displayFocusLine = scrollingMode ? scrollingFocusLine : (isManual ? manualLine : focusLine);
   const shouldVirtualize = allLines.length > VIRTUALIZED_LYRIC_MIN_LINES;
   const virtualWindowExtra = scrollingMode ? VIRTUALIZED_LYRIC_SCROLLING_EXTRA : 0;
   const virtualStart = Math.max(0, displayFocusLine - VIRTUALIZED_LYRIC_WINDOW_BEFORE - virtualWindowExtra);
@@ -329,7 +404,6 @@ export default function LyricDisplay({
     textAlign: "center",
     padding: "0 16px",
   };
-
   if (loading)
     return (
       <div style={cs}>
@@ -361,48 +435,23 @@ export default function LyricDisplay({
     <>
       {/* Global keyframe styles */}
       <style>{`
-        @keyframes interlude-breath {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.1); }
-          100% { transform: scale(1); }
-        }
-        .lyric-display-container.scrolling .interlude-inner {
-          opacity: 0 !important;
-          transition: opacity .5s ease !important;
-          transition-delay: 0s !important;
+        @keyframes interlude-dot-breathe {
+          0%   { transform: scale(0.9); opacity: 0.25; }
+          50%  { transform: scale(1.08); opacity: 0.75; }
+          100% { transform: scale(0.9); opacity: 0.25; }
         }
         .interlude-inner {
-          animation-name: interlude-breath;
-          animation-duration: 2s;
-          animation-iteration-count: infinite;
-          animation-timing-function: ease-in-out;
-          transform-origin: left;
-          opacity: 0;
-          transition: opacity .5s ease;
-        }
-        .interlude-inner.pause-breath {
-          animation-play-state: paused;
-        }
-        .lyric-interlude-line[data-offset="0"] .interlude-inner {
-          transition-delay: .5s;
           opacity: 1;
         }
         .interlude-dot {
           display: inline-block;
           width: 0.7em;
           height: 0.7em;
-          aspect-ratio: 1/1;
+          aspect-ratio: 1 / 1;
           border-radius: 50%;
-          background-color: var(--text-primary);
         }
         .interlude-dot:not(:last-child) {
           margin-right: 0.5em;
-        }
-        .lyric-display-container.font-bold .lyric-block-original {
-          font-weight: bold !important;
-        }
-        .lyric-block-original {
-          margin-bottom: 0.3em;
         }
         .lyric-block-romaji {
           margin-bottom: 0.4em;
@@ -424,6 +473,7 @@ export default function LyricDisplay({
           WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
           contain: "layout style",
           ["--lyric-timing-function" as string]: timingMap[settings.animationTiming] || "ease",
+          ["--lyric-glow" as string]: coverGlowColor || "var(--accent)",
         }}
       >
         {allLines.map((line, i) => {
@@ -447,7 +497,8 @@ export default function LyricDisplay({
           const tf = lineTransforms[i];
           if (!tf) return null;
 
-          const isCurrent = i === focusLine;
+          const activeLine = isManual ? manualLine : focusLine;
+          const isCurrent = i === activeLine;
           const ds = tf.delay ? ` ${tf.delay}ms` : "";
 
           return (
@@ -460,10 +511,10 @@ export default function LyricDisplay({
                 filter: tf.blur > 0.5 ? `blur(${tf.blur}px)` : "none",
                 opacity: tf.opacity,
                 transition: [
-                  `top 0.5s var(--lyric-timing-function, ease)${ds}`,
-                  `transform 0.5s var(--lyric-timing-function, ease)${ds}`,
-                  `filter 0.5s var(--lyric-timing-function, ease)${ds}`,
-                  `opacity 0.5s var(--lyric-timing-function, ease)${ds}`,
+                  `top ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
+                  `transform ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
+                  `filter ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
+                  `opacity ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
                 ].join(", "),
                 willChange: Math.abs(i - displayFocusLine) <= 3 ? "top, transform" : "auto",
                 transformOrigin: "center",
@@ -472,7 +523,7 @@ export default function LyricDisplay({
             >
               <LyricBlock
                 line={line}
-                offset={i - focusLine}
+                offset={i - (isManual ? manualLine : focusLine)}
                 isCurrent={isCurrent}
                 currentTime={currentTime}
                 id={i}

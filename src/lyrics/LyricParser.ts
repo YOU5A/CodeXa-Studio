@@ -301,7 +301,6 @@ function parsePureLyric(raw: string): LyricPureLine[] {
     }
 
     const text = trimmed.replace(LRC_TIME_RE, "").trim();
-    if (!text) continue;
 
     for (const m of matches) {
       const t = parseTimeTag(m[1], m[2], m[3]);
@@ -384,6 +383,28 @@ const PURE_MUSIC_LYRIC_LINE: LyricLine[] = [{
  * Post-process parsed lyrics: merge short interlude gaps, strip leading/trailing
  * empty lines, insert intro interlude, fix English punctuation.
  */
+// Estimate how long a lyric line takes to sing (in milliseconds).
+// CJK/kana ~150ms/char, Latin ~80ms/char, min 1s for any non-empty line.
+function estimateSingDuration(text: string): number {
+  if (!text) return 0;
+  let ms = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp <= 0x7F) {
+      ms += 80;
+    } else if (
+      (cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0x3000 && cp <= 0x303F) ||
+      (cp >= 0x3040 && cp <= 0x309F) || (cp >= 0x30A0 && cp <= 0x30FF) ||
+      (cp >= 0xFF00 && cp <= 0xFFEF) || (cp >= 0xAC00 && cp <= 0xD7AF)
+    ) {
+      ms += 150;
+    } else {
+      ms += 100;
+    }
+  }
+  return Math.max(ms, 1000);
+}
+
 function processLyric(lyric: LyricLine[]): LyricLine[] {
   if (lyric.length > 0 && lyric[lyric.length - 1].time === 5940000 && lyric[lyric.length - 1].duration === 0) {
     return PURE_MUSIC_LYRIC_LINE;
@@ -391,17 +412,28 @@ function processLyric(lyric: LyricLine[]): LyricLine[] {
 
   const result: LyricLine[] = [];
   let isSpace = false;
+  let lastNonEmptyTime = 0;
+  let lastNonEmptyText = "";
 
   lyric.forEach((thisLyric, i, arr) => {
     if ((thisLyric.originalLyric || "").trim().length === 0) {
       const nextLyric = arr[i + 1];
-      if (nextLyric && nextLyric.time - thisLyric.time > 1500 && !isSpace) {
+      const gapToNext = nextLyric ? nextLyric.time - thisLyric.time : 0;
+      const gapFromPrevMs = (thisLyric.time - lastNonEmptyTime) * 1000;
+      const estSingMs = estimateSingDuration(lastNonEmptyText);
+      const singingElapsed = estSingMs > 0 ? gapFromPrevMs / estSingMs : 0;
+      // Keep if meaningful interlude: gap to next >= 0.8s AND
+      // either (1) large gap (>1.5s), or (2) >=70% singing elapsed (transition cue)
+      const isRealInterlude = gapToNext >= 0.8 && (gapToNext > 1.5 || singingElapsed >= 0.7);
+      if (isRealInterlude && !isSpace) {
         result.push(thisLyric);
         isSpace = true;
       }
     } else {
       isSpace = false;
       result.push(thisLyric);
+      lastNonEmptyTime = thisLyric.time;
+      lastNonEmptyText = thisLyric.originalLyric || "";
     }
   });
 
@@ -420,6 +452,63 @@ function processLyric(lyric: LyricLine[]): LyricLine[] {
       isInterlude: true,
     });
   }
+
+  // Dynamic interlude insertion: subtract estimated singing time from gap.
+  // Only insert if the remaining "dead air" exceeds 3s (or gap is huge >10s).
+  // LRC-authored empty lines are kept above and used as interlude timing hints.
+  // Compute median from gaps >= 1.5s to exclude credits/metadata lines (<0.5s gaps).
+  const MIN_LYRIC_GAP = 1500;
+  const lyricGaps: number[] = [];
+  for (let i = 0; i < result.length - 1; i++) {
+    const g = (result[i + 1].time - result[i].time) * 1000;
+    if (g >= MIN_LYRIC_GAP) lyricGaps.push(g);
+  }
+  lyricGaps.sort((a, b) => a - b);
+  const medianGap = lyricGaps.length > 0
+    ? lyricGaps[Math.floor(lyricGaps.length / 2)]
+    : 3000;
+  const GAP_THRESHOLD = Math.max(medianGap * 2, 5000);
+  const MIN_DEAD_AIR = 3000; // minimum dead air after singing to qualify as interlude
+
+  const withInterludes: LyricLine[] = [];
+  for (let i = 0; i < result.length; i++) {
+    withInterludes.push(result[i]);
+    if (i < result.length - 1) {
+      const gap = (result[i + 1].time - result[i].time) * 1000;
+      const curEmpty = (result[i].originalLyric || "").trim() === "";
+      const nextEmpty = (result[i + 1].originalLyric || "").trim() === "";
+      if (!curEmpty && !nextEmpty) {
+        const estSing = estimateSingDuration(result[i].originalLyric || "");
+        const deadAir = gap - estSing; // time after estimated singing ends
+        // Must exceed BOTH dead-air minimum AND statistical gap threshold
+        // (prevents slow ballads from generating dots between every line).
+        // Exception: gaps > 10s always qualify regardless of threshold.
+        const needsInterlude = (deadAir > MIN_DEAD_AIR && gap > GAP_THRESHOLD) || gap > 10000;
+
+        if (needsInterlude) {
+          // LRC empty line in this gap -> use its timestamp as interlude start
+          const emptyInGap = lyric.find(
+            (l) => (l.originalLyric || "").trim() === ""
+              && l.time > result[i].time + 1.5
+              && l.time < result[i + 1].time - 0.5
+          );
+          // interlude starts after singing + 2s buffer (or at LRC empty line)
+          const interludeTime = emptyInGap
+            ? emptyInGap.time
+            : result[i].time + estSing / 1000 + 2;
+          withInterludes.push({
+            time: interludeTime,
+            duration: gap / 1000,
+            originalLyric: "",
+            text: "",
+            isInterlude: true,
+          });
+        }
+      }
+    }
+  }
+  result.length = 0;
+  result.push(...withInterludes);
 
   // Fix Chinese punctuation in English sentences
   for (const thisLine of result) {

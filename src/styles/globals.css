@@ -1,4 +1,4 @@
-@import "tailwindcss" source("../");
+﻿@import "tailwindcss" source("../");
 
 /* ??? Global Focus Reset ??? */
 /* Hide Chromium default yellow focus ring */
@@ -31,7 +31,7 @@
 :root, [data-theme="light"], [data-theme-name="light"] {
   --bg-primary: rgba(255,255,255,0.72);
   --bg-secondary: rgba(249,247,244,0.32);
-  --bg-tertiary: rgba(242,241,238,0.22);
+  --bg-tertiary: rgba(242,241,238,0.14);
   --bg-elevated: rgba(253,251,248,0.70);
   --bg-glass: rgba(249,247,244,0.35);
   --border-color: rgba(0,0,0,0.10);
@@ -59,7 +59,7 @@
   --bg-base: #231e16;
   --bg-primary: rgba(30,30,32,0.70);
   --bg-secondary: rgba(30,30,32,0.30);
-  --bg-tertiary: rgba(30,30,32,0.18);
+  --bg-tertiary: rgba(30,30,32,0.06);
   --bg-elevated: rgba(44,44,46,0.68);
   --bg-glass: rgba(30,30,32,0.38);
   --border-color: rgba(255,255,255,0.08);

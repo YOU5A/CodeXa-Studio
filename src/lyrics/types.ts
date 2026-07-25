@@ -131,7 +131,12 @@ export function loadLyricsSettings(): LyricsSettingsValues {
 
 export function saveLyricsSettings(values: LyricsSettingsValues): void {
   try {
+    const old = loadLyricsSettings();
     localStorage.setItem(LYRICS_SETTINGS_KEY, JSON.stringify(values));
-    window.dispatchEvent(new CustomEvent("lyricsSettingsChanged"));
+    // Only dispatch when source or global offset changes
+    // Display-only changes (fontSize, toggles, etc.) propagate via React props
+    if (old.lyricSource !== values.lyricSource || old.globalOffset !== values.globalOffset) {
+      window.dispatchEvent(new CustomEvent("lyricsSettingsChanged"));
+    }
   } catch { /* ignore */ }
 }

@@ -60,6 +60,7 @@ export function useLyricManager() {
   const [seekCounter, setSeekCounter] = useState(0);
 
   const lastFileRef = useRef<string>("");
+  const prevSourceRef = useRef<LyricSourceOption>(getLyricSource());
 
   const computeLineIndex = useCallback(
     (time: number, lines: LyricLine[]): number => {
@@ -197,14 +198,20 @@ export function useLyricManager() {
   // Listen for settings changes (lyric source or global offset)
   useEffect(() => {
     const handler = () => {
-      const newOffset = getGlobalOffset();
+      const settings = loadLyricsSettings();
+      const newOffset = settings.globalOffset;
       if (newOffset !== globalOffset) {
         setGlobalOffset(newOffset);
         setSeekCounter(+new Date());
       }
-      lyricCache.clear();
-      if (lastFileRef.current) {
-        fetchLyrics(lastFileRef.current);
+      // Only re-fetch when lyrics source changes
+      const newSource = settings.lyricSource;
+      if (newSource !== prevSourceRef.current) {
+        prevSourceRef.current = newSource;
+        lyricCache.clear();
+        if (lastFileRef.current) {
+          fetchLyrics(lastFileRef.current);
+        }
       }
     };
     window.addEventListener("lyricsSettingsChanged", handler);
