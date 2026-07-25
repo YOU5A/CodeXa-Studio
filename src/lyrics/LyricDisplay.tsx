@@ -12,7 +12,7 @@
 import { useRef, useMemo, useLayoutEffect, useState, useCallback, useEffect } from "react";
 import type { LyricData, LyricLine, LyricsSettingsValues } from "./types";
 import { DEFAULT_LYRICS_SETTINGS } from "./types";
-import LyricsLine, { scaleByOffset, blurByOffset, opacityByOffset } from "./LyricsLine";
+import LyricBlock, { scaleByOffset, blurByOffset, opacityByOffset } from "./LyricBlock";
 
 const VIRTUALIZED_LYRIC_MIN_LINES = 90;
 const VIRTUALIZED_LYRIC_WINDOW_BEFORE = 24;
@@ -23,24 +23,26 @@ const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, v
 
 // ── Helpers ──
 
-function estimateLyricLineHeight(line: LyricLine, options: LyricsSettingsValues): number {
+function estimateBlockHeight(line: LyricLine, options: LyricsSettingsValues): number {
   const fontSize = Math.max(1, Number(options.fontSize) || 20);
-  const baseLineHeight = fontSize * 1.2;
   if (!line || line.isInterlude || (!line.originalLyric && !line.dynamicLyric)) {
-    return Math.ceil(baseLineHeight);
+    return Math.ceil(fontSize * 1.2);
   }
 
-  let height = baseLineHeight;
-  const gap = fontSize * 0.3;
+  // Original lyric: fontSize * lineHeight + marginBottom (0.3em)
+  let height = fontSize * 1.2 + fontSize * 0.3;
+
+  const romajiSize = fontSize * (options.romajiFontSize || 0.6);
+  const transSize = fontSize * (options.translationFontSize || 1.0);
 
   if (options.showRomaji && line.romanLyric) {
-    height += gap + fontSize * (options.romajiFontSize || 0.6);
+    height += romajiSize * 1.2 + romajiSize * 0.4;
   }
   if (options.showTranslation && line.translatedLyric) {
-    height += gap + fontSize * (options.translationFontSize || 1.0);
+    height += transSize * 1.2 + transSize * 0.3;
   }
 
-  return Math.ceil(Math.max(baseLineHeight, height));
+  return Math.ceil(height);
 }
 
 // ── Props ──
@@ -82,6 +84,7 @@ export default function LyricDisplay({
   const shouldTransit = useRef(true);
   const previousFocusedLineRef = useRef(0);
   const [lyricGen, setLyricGen] = useState(0);
+  const [heightVersion, setHeightVersion] = useState(0);
   // ── Resize tracking ──
 
   useLayoutEffect(() => {
@@ -119,7 +122,7 @@ export default function LyricDisplay({
   const recalcHeightOfItems = useCallback(() => {
     if (!allLines.length) return;
     for (let i = 0; i < allLines.length; i++) {
-      heightOfItems.current[i] = estimateLyricLineHeight(allLines[i], settings);
+      heightOfItems.current[i] = estimateBlockHeight(allLines[i], settings);
     }
   }, [allLines, settings]);
 
@@ -130,14 +133,15 @@ export default function LyricDisplay({
     if (!container) return;
     // Use requestAnimationFrame to measure after browser layout
     const raf = requestAnimationFrame(() => {
-      const items = container.querySelectorAll('.lyric-line');
+      const items = container.querySelectorAll('.lyric-block');
       const heights: number[] = [];
       items.forEach((item) => {
         const h = (item as HTMLElement).offsetHeight || 0;
-        if (h > 0) heights.push(h);
+        heights.push(h);
       });
       if (heights.length > 0 && heights.length === allLines.length) {
         heightOfItems.current = heights;
+        setHeightVersion(v => v + 1);
       }
     });
     return () => cancelAnimationFrame(raf);
@@ -152,7 +156,10 @@ export default function LyricDisplay({
       return [] as Array<{ top: number; scale: number; delay: number; blur: number; opacity: number }>;
     }
 
-    recalcHeightOfItems();
+    // Only estimate heights on first render; use measured heights once available
+    if (heightOfItems.current.length !== allLines.length || heightVersion === 0) {
+      recalcHeightOfItems();
+    }
 
     const space = settings.fontSize * 1.2;
 
@@ -249,7 +256,7 @@ export default function LyricDisplay({
     settings.romajiFontSize, settings.translationFontSize,
     settings.alignmentPercentage, settings.enableStagger,
     scrollingMode, scrollingFocusLine, allLines, recalcHeightOfItems,
-    currentLineIndex,
+    currentLineIndex, heightVersion,
   ]);
 
   // ── Scrolling mode via wheel ──
@@ -391,13 +398,13 @@ export default function LyricDisplay({
         .interlude-dot:not(:last-child) {
           margin-right: 0.5em;
         }
-        .lyric-display-container.font-bold .lyric-line-original {
+        .lyric-display-container.font-bold .lyric-block-original {
           font-weight: bold !important;
         }
-        .lyric-line-original {
+        .lyric-block-original {
           margin-bottom: 0.3em;
         }
-        .lyric-line-romaji {
+        .lyric-block-romaji {
           margin-bottom: 0.4em;
         }
       `}</style>
@@ -422,7 +429,7 @@ export default function LyricDisplay({
         {allLines.map((line, i) => {
           if (!shouldRenderLine(i)) {
             // Placeholder for virtualized lines
-            const estH = heightOfItems.current[i] || estimateLyricLineHeight(line, settings);
+            const estH = heightOfItems.current[i] || estimateBlockHeight(line, settings);
             return (
               <div
                 key={i}
@@ -463,7 +470,7 @@ export default function LyricDisplay({
                 maxWidth: "calc(100% - 40px)",
               }}
             >
-              <LyricsLine
+              <LyricBlock
                 line={line}
                 offset={i - focusLine}
                 isCurrent={isCurrent}

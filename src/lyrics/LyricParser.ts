@@ -395,7 +395,7 @@ function processLyric(lyric: LyricLine[]): LyricLine[] {
   lyric.forEach((thisLyric, i, arr) => {
     if ((thisLyric.originalLyric || "").trim().length === 0) {
       const nextLyric = arr[i + 1];
-      if (nextLyric && nextLyric.time - thisLyric.time > 5000 && !isSpace) {
+      if (nextLyric && nextLyric.time - thisLyric.time > 1500 && !isSpace) {
         result.push(thisLyric);
         isSpace = true;
       }

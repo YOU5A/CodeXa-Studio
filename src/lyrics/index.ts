@@ -8,8 +8,8 @@ export { parseLyric, parseLyricData, parsePureLyric, parsePureDynamicLyric, proc
 export { useLyricManager } from "./LyricManager";
 export { default as LyricWindow } from "./LyricWindow";
 export { default as LyricDisplay } from "./LyricDisplay";
-export { default as LyricsLine } from "./LyricsLine";
-export { scaleByOffset, blurByOffset, opacityByOffset, estimateCharUnits } from "./LyricsLine";
+export { default as LyricBlock } from "./LyricBlock";
+export { scaleByOffset, blurByOffset, opacityByOffset, estimateCharUnits } from "./LyricBlock";
 export { default as InterludeDots, INTERLUDE_ROW_HEIGHT } from "./InterludeDots";
 export { default as LyricsSettingsPanel } from "./LyricsSettingsPanel";
 export {
@@ -28,4 +28,4 @@ export type {
   LyricWindowState,
 } from "./types";
 export type { LyricManagerState } from "./LyricManager";
-export type { LyricsLineProps } from "./LyricsLine";
+export type { LyricBlockProps } from "./LyricBlock";

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
@@ -186,7 +186,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [lyricsSettingsOpen, setLyricsSettingsOpen] = useState(false);
   const [lyricsBtnHover, setLyricsBtnHover] = useState(false);
   const lyricsGearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { lyricData, loading: lyricsLoading, error: lyricsError, currentLineIndex, currentTime } = useLyricManager();
+  const { lyricData, loading: lyricsLoading, error: lyricsError, currentLineIndex, currentTime, getCurrentTime } = useLyricManager();
   const [volumeHover, setVolumeHover] = useState(false);
   const [volGlow, setVolGlow] = useState({ x: 0.5, y: 0.5, visible: false });
   const [fluidSettingsOpen, setFluidSettingsOpen] = useState(false);

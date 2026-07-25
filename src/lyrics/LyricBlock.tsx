@@ -1,13 +1,11 @@
 /**
- * LyricsLine — Single lyric line with original + romaji + translation layers
+ * LyricBlock — Single lyric block with original + romaji + translation layers
  *
- * Ported from refined-now-playing-netease-next.
- * Each line renders up to 3 stacked div layers.
- * Romaji uses CSS var --lyric-romaji-size-em, translation uses --lyric-translation-size-em.
- * Interlude lines render InterludeDots.
- * Offset-based opacity: current line (offset=0) is full opacity, others dim.
+ * Ported from refined-now-playing-netease-next. Refactored to block-based centering.
+ * Each block is the fundamental rendering unit for scrolling, highlighting, and animation.
+ * All sub-layers share the same block-level visual treatment (opacity controlled by LyricDisplay).
  *
- * @module lyrics/LyricsLine
+ * @module lyrics/LyricBlock
  */
 
 import { memo, useRef } from "react";
@@ -16,7 +14,7 @@ import type { LyricsSettingsValues } from "./types";
 import { DEFAULT_LYRICS_SETTINGS } from "./types";
 import InterludeDots from "./InterludeDots";
 
-export interface LyricsLineProps {
+export interface LyricBlockProps {
   line: LyricLine;
   offset: number;
   isCurrent: boolean;
@@ -68,7 +66,7 @@ export function estimateCharUnits(text: string): number {
   return units;
 }
 
-const LyricsLine = memo(function LyricsLine({
+const LyricBlock = memo(function LyricBlock({
   line,
   offset,
   isCurrent,
@@ -80,7 +78,7 @@ const LyricsLine = memo(function LyricsLine({
   pageOpen = true,
   onClick,
   settings = DEFAULT_LYRICS_SETTINGS,
-}: LyricsLineProps) {
+}: LyricBlockProps) {
   const pressStartTime = useRef(0);
 
   const { fontBold, fontSize, romajiFontSize, translationFontSize, showTranslation, showRomaji } = settings;
@@ -89,7 +87,7 @@ const LyricsLine = memo(function LyricsLine({
   if (line.isInterlude) {
     return (
       <div
-        className="lyric-line lyric-interlude-line"
+        className="lyric-block lyric-interlude-line"
         data-offset={offset}
         style={{
           height: 0,
@@ -115,15 +113,15 @@ const LyricsLine = memo(function LyricsLine({
   }
 
   const displayText = line.originalLyric || line.text;
-  const isZeroOffset = offset === 0;
 
-  // Opacity classes: current line (offset=0) items full, others dim
-  const originalOpacity = isZeroOffset ? 1 : 0.4;
-  const subOpacity = isZeroOffset ? 0.8 : 0.32;
+  // Block-level color treatment: current line is primary, others dim to tertiary.
+  // Opacity is handled at the container level by LyricDisplay (no per-sub-layer opacity).
+  const textColor = isCurrent ? "var(--text-primary)" : "var(--text-tertiary)";
+  const subColor = isCurrent ? "var(--text-secondary)" : "var(--text-tertiary)";
 
   return (
     <div
-      className="lyric-line"
+      className="lyric-block"
       data-offset={offset}
       onMouseDown={
         onClick
@@ -148,14 +146,14 @@ const LyricsLine = memo(function LyricsLine({
     >
       {/* Original lyric */}
       <div
-        className="lyric-line-original"
+        className="lyric-block-original"
         style={{
           fontSize: `${fontSize}px`,
-          fontWeight: fontBold ? 700 : (isZeroOffset ? 600 : 400),
+          fontWeight: fontBold ? 700 : (isCurrent ? 600 : 400),
           lineHeight: 1.2,
-          color: isZeroOffset ? "var(--text-primary)" : "var(--text-tertiary)",
-          opacity: originalOpacity,
-          transition: "opacity 0.5s ease",
+          color: textColor,
+          marginBottom: "0.3em",
+          transition: "color 0.5s ease",
         }}
       >
         {displayText}
@@ -164,15 +162,14 @@ const LyricsLine = memo(function LyricsLine({
       {/* Romaji */}
       {showRomaji && line.romanLyric && (
         <div
-          className="lyric-line-romaji"
+          className="lyric-block-romaji"
           style={{
             fontSize: `calc(${fontSize}px * ${romajiFontSize})`,
-            fontWeight: isZeroOffset ? 400 : 300,
+            fontWeight: isCurrent ? 400 : 300,
             lineHeight: 1.2,
-            color: isZeroOffset ? "var(--text-secondary)" : "var(--text-tertiary)",
-            opacity: subOpacity * 0.8,
+            color: subColor,
             marginBottom: "0.4em",
-            transition: "opacity 0.5s ease",
+            transition: "color 0.5s ease",
           }}
         >
           {line.romanLyric}
@@ -182,15 +179,14 @@ const LyricsLine = memo(function LyricsLine({
       {/* Translation */}
       {showTranslation && line.translatedLyric && (
         <div
-          className="lyric-line-translated"
+          className="lyric-block-translated"
           style={{
             fontSize: `calc(${fontSize}px * ${translationFontSize})`,
-            fontWeight: isZeroOffset ? 400 : 300,
+            fontWeight: isCurrent ? 400 : 300,
             lineHeight: 1.2,
-            color: isZeroOffset ? "var(--text-secondary)" : "var(--text-tertiary)",
-            opacity: subOpacity,
+            color: subColor,
             marginBottom: "0.3em",
-            transition: "opacity 0.5s ease",
+            transition: "color 0.5s ease",
           }}
         >
           {line.translatedLyric}
@@ -200,4 +196,4 @@ const LyricsLine = memo(function LyricsLine({
   );
 });
 
-export default LyricsLine;
+export default LyricBlock;
