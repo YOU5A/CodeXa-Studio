@@ -24,8 +24,6 @@ import { useToast } from "@/contexts/ToastContext";
 import type { Language } from "@/types";
 import type { CoverSearchResult } from "@/types";
 
-// ── Types ──
-
 export interface CoverSearchPanelProps {
   open: boolean;
   onClose: () => void;
@@ -37,8 +35,6 @@ export interface CoverSearchPanelProps {
 }
 
 type SearchSource = "netease" | "qq" | "both";
-
-// ── Translations ──
 
 const t: Record<Language, Record<string, string>> = {
   zh: {
@@ -89,8 +85,6 @@ const t: Record<Language, Record<string, string>> = {
   },
 };
 
-// ── Component ──
-
 const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
   open,
   onClose,
@@ -114,7 +108,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [noticeMsg, setNoticeMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // Auto-fill query on panel open with current song info
   useEffect(() => {
     if (open) {
       const parts = [title, artist, album].filter(Boolean);
@@ -125,9 +118,8 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
         setSelected(null);
       }
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  // Auto-clear notice after 3s
   useEffect(() => {
     if (noticeMsg) {
       const timer = setTimeout(() => setNoticeMsg(null), 3000);
@@ -135,7 +127,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
     }
   }, [noticeMsg]);
 
-  // Search
   const doSearch = useCallback(async () => {
     const q = query.trim();
     if (!q) return;
@@ -163,7 +154,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
       console.error("[CoverSearch] QQ error:", e);
     }
 
-    // Deduplicate by coverUrl
     const seen = new Set<string>();
     const deduped: CoverSearchResult[] = [];
     for (const item of allResults) {
@@ -177,12 +167,11 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
     setLoading(false);
   }, [query, source, title, artist, album]);
 
-  // Re-search when source changes (if already searched)
   useEffect(() => {
     if (hasSearched && query.trim()) {
       doSearch();
     }
-  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [source]);
 
   const handleApply = useCallback(async () => {
     if (!selected) return;
@@ -231,12 +220,10 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
   return (
     <GlassModal open={open} onClose={onClose} maxWidth={480}>
       <div style={{ padding: "28px 28px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Title */}
         <h3 style={{ fontSize: 17, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
           {tx.title}
         </h3>
 
-        {/* Search Row: Input + Source Select + Search Btn */}
         <div style={{ display: "flex", gap: space[2], alignItems: "flex-end" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{tx.searchLabel}</span>
@@ -261,7 +248,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
           </GlassButton>
         </div>
 
-        {/* Source Pills */}
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginRight: 4 }}>{tx.source}:</span>
           {(["both", "netease", "qq"] as SearchSource[]).map((s) => (
@@ -276,7 +262,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
           ))}
         </div>
 
-        {/* Results Count */}
         {results.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
             <span style={{ fontSize: fontSizes.xs, color: "var(--text-secondary)" }}>
@@ -301,7 +286,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
           </div>
         )}
 
-        {/* Results Grid or Empty State */}
         {loading ? (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -325,8 +309,8 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
             overflowY: "auto",
             padding: "2px 0",
             marginRight: -16,
-            marginBottom: 8,
             paddingRight: 16,
+            marginBottom: -8,
             "--scroll-fade-size": "36px",
             maskImage: "linear-gradient(to bottom, transparent, black 36px, black calc(100% - 36px), transparent)",
             WebkitMaskImage: "linear-gradient(to bottom, transparent, black 36px, black calc(100% - 36px), transparent)",
@@ -367,7 +351,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
                       (e.target as HTMLImageElement).style.display = "none";
                     }}
                   />
-                  {/* Hover overlay */}
                   <div style={{
                     position: "absolute", bottom: 0, left: 0, right: 0,
                     background: "linear-gradient(transparent, rgba(0,0,0,0.7))",
@@ -385,7 +368,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
                       {item.source === "netease" ? tx.netease : tx.qq}
                     </GlassBadge>
                   </div>
-                  {/* Selected check */}
                   {isSel && (
                     <div style={{
                       position: "absolute", top: 6, right: 6,
@@ -402,7 +384,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
           </div>
         ) : null}
 
-        {/* Inline Notice */}
         <AnimatePresence>
           {noticeMsg && (
             <motion.div
@@ -422,9 +403,7 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
                 background: noticeMsg.type === "success"
                   ? "rgba(22,163,74,0.22)"
                   : "rgba(220,38,38,0.22)",
-                color: noticeMsg.type === "success"
-                  ? "rgba(255,255,255,0.92)"
-                  : "rgba(255,255,255,0.92)",
+                color: "rgba(255,255,255,0.92)",
                 border: "1px solid rgba(255,255,255,0.10)",
                 boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
                 textAlign: "center",
@@ -435,7 +414,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Action Buttons with animation */}
         <AnimatePresence>
           {selected && (
             <motion.div

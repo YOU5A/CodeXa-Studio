@@ -32,7 +32,7 @@ export interface PriorityRule {
 }
 
 export interface CoverSearchResult {
-  source: "netease" | "qq";
+  source: "netease" | "qq" | "itunes";
   title: string;
   artist: string;
   album: string;
@@ -128,6 +128,7 @@ export interface ElectronAPI {
     searchLyrics: (title: string, artist?: string) => Promise<{ lyrics_text: string | null; source: string; error?: string }>;
     searchCoverNetease: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
     searchCoverQQ: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
+    searchCoverITunes: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
     downloadCoverImage: (url: string) => Promise<{ data: string | null; error: string | null }>;
   };
   settings: {

@@ -277,39 +277,178 @@ function setupIPC() {
 
 
 // ── Fuzzy matching helper ──
+// ── Chinese normalization: Traditional → Simplified (lightweight, ~150 pairs) ──
+const CN_S2T_MAP = {
+  '張':'张','學':'学','陳':'陈','劉':'刘','鄧':'邓','麗':'丽','後':'后','來':'来',
+  '說':'说','愛':'爱','夢':'梦','聽':'听','見':'见','體':'体','會':'会','過':'过',
+  '爲':'为','麼':'么','這':'这','樣':'样','對':'对','時':'时','間':'间',
+  '國':'国','風':'风','開':'开','關':'关','機':'机','電':'电','無':'无','線':'线',
+  '頭':'头','髮':'发','門':'门','馬':'马','魚':'鱼','鳥':'鸟','龍':'龙','鳳':'凤',
+  '紅':'红','綠':'绿','藍':'蓝','長':'长','飛':'飞','聲':'声','響':'响','輕':'轻',
+  '萬':'万','與':'与','書':'书','畫':'画','話':'话','讀':'读','寫':'写','買':'买',
+  '賣':'卖','隻':'只','雙':'双','條':'条','塊':'块','點':'点','帶':'带','幫':'帮',
+  '動':'动','處':'处','實':'实','寶':'宝','邊':'边','變':'变','讓':'让','認':'认',
+  '識':'识','還':'还','給':'给','從':'从','當':'当','將':'将','總':'总','別':'别',
+  '卻':'却','設':'设','計':'计','問':'问','題':'题','進':'进','發':'发','現':'现',
+  '離':'离','結':'结','束':'束','始':'始','繼':'继','續':'续','爾':'尔','羅':'罗',
+  '亞':'亚','歐':'欧','蘇':'苏','葉':'叶','雲':'云','陽':'阳','陰':'阴','樂':'乐',
+  '節':'节','歡':'欢','舊':'旧','歷':'历','歸':'归','樹':'树','藥':'药','衛':'卫',
+  '選':'选','險':'险','靜':'静','領':'领','顧':'顾','顯':'显','滿':'满','準':'准',
+  '剛':'刚','歲':'岁','戰':'战','戲':'戏','擊':'击','權':'权','數':'数','轉':'转',
+  '達':'达','運':'运','遠':'远','連':'连','臺':'台','灣':'湾','龍':'龙','聖':'圣',
+  '園':'园','圓':'圆','團':'团','圖':'图','場':'场','報':'报','夠':'够',
+};
+
+function normalizeChinese(s) {
+  if (!s) return "";
+  let out = "";
+  for (const ch of s) {
+    out += CN_S2T_MAP[ch] || ch;
+  }
+  return out;
+}
+
+// ── Strip parenthetical/bracket content (feat., remix, live, etc.) ──
+function stripBrackets(s) {
+  if (!s) return "";
+  return s.replace(/[\(\)()\[\]]/g, " ")
+    .replace(/\bfeat\.?\s+[^ ]+/gi, "")
+    .replace(/\bft\.?\s+[^ ]+/gi, "")
+    .replace(/\bremix\b/gi, "")
+    .replace(/\blive\b/gi, "")
+    .replace(/\bacoustic\b/gi, "")
+    .replace(/\bversion\b/gi, "")
+    .replace(/\bver\.?\b/gi, "")
+    .replace(/\bedit\b/gi, "")
+    .replace(/\bradio\s+edit\b/gi, "")
+    .replace(/\boriginal\s+mix\b/gi, "")
+    .replace(/\bextended\b/gi, "")
+    .replace(/\binstrumental\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// ── Levenshtein distance ──
+function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1];
+      else dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+// ── Chinese 2-gram character overlap (for CJK-heavy strings) ──
+function chinese2gramOverlap(a, b) {
+  if (a.length < 2 || b.length < 2) return 0;
+  const bigrams = new Set();
+  for (let i = 0; i < b.length - 1; i++) bigrams.add(b.slice(i, i + 2));
+  let hits = 0, total = 0;
+  for (let i = 0; i < a.length - 1; i++) {
+    total++;
+    if (bigrams.has(a.slice(i, i + 2))) hits++;
+  }
+  return total > 0 ? hits / total : 0;
+}
+
 function scoreMatch(songName, songArtists, queryTitle, queryArtist) {
   const toLower = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
-  const sn = toLower(songName);
-  const qt = toLower(queryTitle);
-  const qa = toLower(queryArtist || "");
+
+  // Normalize: strip brackets + normalize Chinese
+  const snRaw = toLower(normalizeChinese(stripBrackets(songName || "")));
+  const qtRaw = toLower(normalizeChinese(stripBrackets(queryTitle || "")));
+  const sn = toLower(normalizeChinese(songName || ""));
+  const qt = toLower(normalizeChinese(queryTitle || ""));
+  const qa = toLower(normalizeChinese(queryArtist || ""));
 
   let score = 0;
 
-  // Title exact match
-  if (sn === qt) score += 0.5;
+  // Title exact match (raw or stripped)
+  if (sn === qt || snRaw === qtRaw) score += 0.5;
   // Title contains query or vice versa
-  else if (sn.includes(qt) || qt.includes(sn)) score += 0.35;
-  // Word overlap on title
+  else if (sn.includes(qt) || qt.includes(sn) || snRaw.includes(qtRaw) || qtRaw.includes(snRaw)) score += 0.38;
+  // Levenshtein + Chinese 2-gram + word overlap
   else {
+    const maxLen = Math.max(sn.length, qt.length);
+    if (maxLen > 3) {
+      const dist = levenshteinDistance(sn, qt);
+      const ratio = 1 - dist / maxLen;
+      if (ratio > 0.8) score += 0.25;
+      else if (ratio > 0.6) score += 0.12;
+    }
+    // Chinese 2-gram overlap
+    const c2g = chinese2gramOverlap(sn, qt);
+    if (c2g > 0.4) score += 0.18 * c2g;
+    // Word overlap (Latin languages)
     const snWords = new Set(sn.split(" "));
     const qtWords = new Set(qt.split(" "));
     let overlap = 0;
     for (const w of qtWords) { if (snWords.has(w)) overlap++; }
-    if (overlap > 0) score += 0.15 * (overlap / Math.max(qtWords.size, 1));
+    if (overlap > 0) score += 0.12 * (overlap / Math.max(qtWords.size, 1));
   }
 
-  // Artist matching
+  // Artist matching (with Chinese normalization)
   if (qa && songArtists && songArtists.length > 0) {
-    const artistNames = songArtists.map(a => toLower(typeof a === "string" ? a : a.name || ""));
+    const artistNames = songArtists.map(a => toLower(normalizeChinese(typeof a === "string" ? a : a.name || "")));
     for (const an of artistNames) {
       if (an === qa) { score += 0.4; break; }
-      else if (an.includes(qa) || qa.includes(an)) { score += 0.25; break; }
+      else if (an.includes(qa) || qa.includes(an)) { score += 0.28; break; }
     }
   } else if (!qa) {
     score += 0.2;
   }
 
   return score;
+}
+
+// ── General HTTPS request helper (for non-QQ services) ──
+function httpRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = typeof url === "string" ? new URL(url) : url;
+    const req = https.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname + (parsed.search || ""),
+      method: options.method || "GET",
+      headers: {
+        "User-Agent": options.userAgent || "CodeXaStudio/1.3",
+        "Accept": "application/json",
+        ...(options.headers || {}),
+        "Content-Type": options.body ? "application/json" : undefined,
+      },
+      timeout: options.timeout || 12000,
+    }, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        if ((options._redirectDepth || 0) > 2) {
+          reject(new Error("Too many redirects"));
+          return;
+        }
+        resolve(httpRequest(res.headers.location, { ...options, _redirectDepth: (options._redirectDepth || 0) + 1 }));
+        return;
+      }
+      const chunks = [];
+      res.on("data", (d) => chunks.push(d));
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks);
+        const encoding = res.headers["content-encoding"];
+        let body;
+        if (encoding === "gzip" || encoding === "deflate") {
+          try { body = require("zlib").gunzipSync(raw).toString("utf-8"); } catch { body = raw.toString("utf-8"); }
+        } else {
+          body = raw.toString("utf-8");
+        }
+        resolve(body);
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Request timeout")); });
+    if (options.body) req.write(typeof options.body === "string" ? options.body : JSON.stringify(options.body));
+    req.end();
+  });
 }
 
 // ── QQ Music helper: simple HTTPS request ──
@@ -389,60 +528,155 @@ async function searchQQMusicLyrics(title, artist) {
   return lrc;
 }
 
-// ── Music: Online Lyrics Search (Netease + QQ fallback) ──
-ipcMain.handle("music:searchLyrics", async (_event, title, artist) => {
+
+// ── LRCLIB lyrics search ──
+async function searchLrclibLyrics(title, artist, album, duration) {
   try {
-    const keywords = artist ? `${title} ${artist}` : title;
-    const searchRes = await cloudsearch({ keywords, type: 1, limit: 20 });
-    const songs = searchRes?.body?.result?.songs;
-    if (!songs || songs.length === 0) {
-      // Netease empty, try QQ
-      console.log("[Lyrics] Netease: no results, trying QQ...");
-      const qqLrc = await searchQQMusicLyrics(title, artist);
-      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
-      return { lyrics_text: null, source: "netease" };
+    // Build search URL with track_name + artist_name
+    const params = new URLSearchParams();
+    params.set("track_name", title);
+    if (artist) params.set("artist_name", artist);
+    if (album) params.set("album_name", album);
+    if (duration && duration > 0) params.set("duration", String(Math.round(duration)));
+
+    const url = `https://lrclib.net/api/search?${params.toString()}`;
+    const respText = await httpRequest(url, {
+      userAgent: "CodeXaStudio/1.3 (https://github.com/YOU5A/CodeXa-Studio)",
+      timeout: 10000,
+    });
+
+    const results = JSON.parse(respText);
+    if (!Array.isArray(results) || results.length === 0) {
+      console.log("[Lyrics:LRCLIB] No results for", title, "-", artist);
+      return null;
     }
 
-    // Score results
+    // Score results to find best match
     let best = null;
     let bestScore = -1;
-    for (const s of songs) {
-      const score = scoreMatch(s.name, s.ar, title, artist);
-      if (score > bestScore) { bestScore = score; best = s; }
+    for (const r of results) {
+      const artists = r.artistName ? [{ name: r.artistName }] : [];
+      const score = scoreMatch(r.trackName, artists, title, artist);
+      if (score > bestScore) { bestScore = score; best = r; }
     }
 
-    if (!best || bestScore < 0.3) {
-      // No good Netease match, try QQ
-      console.log(`[Lyrics] Netease best score ${bestScore.toFixed(2)} < 0.3, trying QQ...`);
-      const qqLrc = await searchQQMusicLyrics(title, artist);
-      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
-      // Fallback to best Netease result anyway if QQ fails
-      if (best && bestScore >= 0.15) {
-        const lyricRes = await lyric({ id: best.id });
-        const lrc = lyricRes?.body?.lrc?.lyric;
-        if (lrc) return { lyrics_text: lrc, source: "netease" };
+    if (!best || bestScore < 0.25) {
+      console.log(`[Lyrics:LRCLIB] Best score ${bestScore.toFixed(2)} < 0.25`);
+      return null;
+    }
+
+    // Prefer synced lyrics, fallback to plain
+    const lrc = best.syncedLyrics || best.plainLyrics;
+    if (lrc) {
+      console.log(`[Lyrics:LRCLIB] Found lyrics (${best.syncedLyrics ? "synced" : "plain"}), score=${bestScore.toFixed(2)}`);
+      return lrc;
+    }
+    return null;
+  } catch (e) {
+    console.log("[Lyrics:LRCLIB] Error:", e.message);
+    return null;
+  }
+}
+
+// ── Multi-query lyrics search helper: try different query formulations ──
+async function searchLyricsMultiQuery(title, artist, searchFn) {
+  // Build query variants: stripped versions without brackets/feat
+  const strippedTitle = stripBrackets(title);
+  const strippedArtist = artist ? stripBrackets(artist) : "";
+
+  const queries = [];
+  if (artist) queries.push({ title, artist });
+  queries.push({ title, artist: "" });
+  if (strippedTitle !== title && artist) queries.push({ title: strippedTitle, artist: strippedArtist || artist });
+  if (strippedTitle !== title) queries.push({ title: strippedTitle, artist: "" });
+
+  // Deduplicate queries
+  const seen = new Set();
+  const unique = [];
+  for (const q of queries) {
+    const key = q.title + "|" + (q.artist || "");
+    if (!seen.has(key)) { seen.add(key); unique.push(q); }
+  }
+
+  for (const q of unique) {
+    try {
+      const result = await searchFn(q.title, q.artist);
+      if (result) return result;
+    } catch {}
+  }
+  return null;
+}
+
+// ── Music: Online Lyrics Search (LRCLIB → Netease → QQ) ──
+ipcMain.handle("music:searchLyrics", async (_event, title, artist) => {
+  const searchNetease = async (t, a) => {
+    try {
+      const keywords = a ? `${t} ${a}` : t;
+      const searchRes = await cloudsearch({ keywords, type: 1, limit: 20 });
+      const songs = searchRes?.body?.result?.songs;
+      if (!songs || songs.length === 0) return null;
+
+      let best = null;
+      let bestScore = -1;
+      for (const s of songs) {
+        const score = scoreMatch(s.name, s.ar, t, a);
+        if (score > bestScore) { bestScore = score; best = s; }
       }
-      return { lyrics_text: null, source: "netease" };
-    }
 
-    const lyricRes = await lyric({ id: best.id });
-    const lrc = lyricRes?.body?.lrc?.lyric;
-    if (!lrc) {
-      // Netease has match but no lyrics, try QQ
-      console.log("[Lyrics] Netease matched but no lyrics, trying QQ...");
-      const qqLrc = await searchQQMusicLyrics(title, artist);
-      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
-      return { lyrics_text: null, source: "netease" };
+      if (!best || bestScore < 0.3) return null;
+
+      const lyricRes = await lyric({ id: best.id });
+      const lrc = lyricRes?.body?.lrc?.lyric;
+      if (lrc) {
+        console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}`);
+        return { text: lrc, source: "netease" };
+      }
+      return null;
+    } catch (e) {
+      console.log("[Lyrics:Netease] Error:", e.message);
+      return null;
     }
-    return { lyrics_text: lrc, source: "netease" };
+  };
+
+  const searchQQ = async (t, a) => {
+    const lrc = await searchQQMusicLyrics(t, a);
+    return lrc ? { text: lrc, source: "qq" } : null;
+  };
+
+  const searchLrclib = async (t, a) => {
+    const lrc = await searchLrclibLyrics(t, a);
+    return lrc ? { text: lrc, source: "lrclib" } : null;
+  };
+
+  try {
+    // 1. LRCLIB (multi-query)
+    console.log("[Lyrics] Trying LRCLIB...");
+    const lrclibResult = await searchLyricsMultiQuery(title, artist, searchLrclib);
+    if (lrclibResult) return { lyrics_text: lrclibResult.text, source: lrclibResult.source };
+
+    // 2. Netease (multi-query)
+    console.log("[Lyrics] LRCLIB failed, trying Netease...");
+    const neteaseResult = await searchLyricsMultiQuery(title, artist, searchNetease);
+    if (neteaseResult) return { lyrics_text: neteaseResult.text, source: neteaseResult.source };
+
+    // 3. QQ (multi-query)
+    console.log("[Lyrics] Netease failed, trying QQ...");
+    const qqResult = await searchLyricsMultiQuery(title, artist, searchQQ);
+    if (qqResult) return { lyrics_text: qqResult.text, source: qqResult.source };
+
+    // 4. Last-ditch: try single queries without multi-query to be sure
+    console.log("[Lyrics] All multi-query failed, trying single fallback...");
+    const lrclibDirect = await searchLrclib(title, artist);
+    if (lrclibDirect) return { lyrics_text: lrclibDirect.text, source: lrclibDirect.source };
+    const neteaseDirect = await searchNetease(title, artist);
+    if (neteaseDirect) return { lyrics_text: neteaseDirect.text, source: neteaseDirect.source };
+    const qqDirect = await searchQQ(title, artist);
+    if (qqDirect) return { lyrics_text: qqDirect.text, source: qqDirect.source };
+
+    return { lyrics_text: null, source: "none" };
   } catch (e) {
     console.error("[Music:SearchLyrics]", e.message);
-    // Try QQ on error
-    try {
-      const qqLrc = await searchQQMusicLyrics(title, artist);
-      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
-    } catch {}
-    return { lyrics_text: null, source: "netease", error: e.message };
+    return { lyrics_text: null, source: "none", error: e.message };
   }
 });
 
@@ -459,17 +693,24 @@ ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) 
     for (const s of songs) {
       const picUrl = s?.al?.picUrl;
       if (!picUrl || seen.has(picUrl)) continue;
+      const songArtists = (s.ar || []).map(a => a.name || "");
+      const score = scoreMatch(s.name, songArtists, title, artist);
+      if (score < 0.3) continue;
       seen.add(picUrl);
       results.push({
         source: "netease",
         title: s.name || "",
-        artist: (s.ar || []).map(a => a.name || "").join(", "),
+        artist: songArtists.join(", "),
         album: s?.al?.name || "",
         coverUrl: picUrl,
         songId: s.id,
+        _score: score,
       });
     }
-    return { results: results.slice(0, 15) };
+    // Sort by score descending and limit to 10
+    results.sort((a, b) => b._score - a._score);
+    const clean = results.slice(0, 10).map(({ _score, ...r }) => r);
+    return { results: clean };
   } catch (e) {
     console.error("[Cover:Netease]", e.message);
     return { results: [], error: e.message };
@@ -497,20 +738,68 @@ ipcMain.handle("music:searchCoverQQ", async (_event, title, artist, album) => {
     for (const s of songList) {
       const albumMid = s?.album?.mid;
       if (!albumMid || seen.has(albumMid)) continue;
+      const songArtists = (s.singer || []).map(si => si.name || "");
+      const score = scoreMatch(s.name || s.title, songArtists, title, artist);
+      if (score < 0.3) continue;
       seen.add(albumMid);
       const coverUrl = `https://y.qq.com/music/photo_new/T002R800x800M000${albumMid}.jpg`;
       results.push({
         source: "qq",
         title: s.name || s.title || "",
-        artist: (s.singer || []).map(si => si.name || "").join(", "),
+        artist: songArtists.join(", "),
         album: s?.album?.name || "",
         coverUrl,
         albumMid,
+        _score: score,
       });
     }
-    return { results: results.slice(0, 15) };
+    results.sort((a, b) => b._score - a._score);
+    const clean = results.slice(0, 10).map(({ _score, ...r }) => r);
+    return { results: clean };
   } catch (e) {
     console.error("[Cover:QQ]", e.message);
+    return { results: [], error: e.message };
+  }
+});
+
+// ── Cover Search: iTunes ──
+ipcMain.handle("music:searchCoverITunes", async (_event, title, artist, album) => {
+  try {
+    const query = encodeURIComponent([title, artist, album].filter(Boolean).join(" "));
+    const url = `https://itunes.apple.com/search?term=${query}&entity=song&limit=20`;
+    const respText = await httpRequest(url, {
+      userAgent: "CodeXaStudio/1.3",
+      timeout: 10000,
+    });
+    const data = JSON.parse(respText);
+    if (!data?.results || data.results.length === 0) return { results: [] };
+
+    const seen = new Set();
+    const results = [];
+    for (const r of data.results) {
+      const artUrl = r.artworkUrl100;
+      if (!artUrl || seen.has(artUrl)) continue;
+      const songArtists = [{ name: r.artistName || "" }];
+      const score = scoreMatch(r.trackName, songArtists, title, artist);
+      if (score < 0.25) continue;
+      seen.add(artUrl);
+      // Replace 100x100 with 600x600 for higher quality
+      const coverUrl = artUrl.replace(/100x100bb/, "600x600bb");
+      results.push({
+        source: "itunes",
+        title: r.trackName || "",
+        artist: r.artistName || "",
+        album: r.collectionName || "",
+        coverUrl,
+        trackId: r.trackId,
+        _score: score,
+      });
+    }
+    results.sort((a, b) => b._score - a._score);
+    const clean = results.slice(0, 10).map(({ _score, ...r }) => r);
+    return { results: clean };
+  } catch (e) {
+    console.error("[Cover:iTunes]", e.message);
     return { results: [], error: e.message };
   }
 });

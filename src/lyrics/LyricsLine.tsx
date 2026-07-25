@@ -75,7 +75,26 @@ const LyricsLine = memo(function LyricsLine({
   const pressStartTime = useRef(0);
   const { enableScale, enableBlur, enableGlow, enableStagger, fontSize } = settings;
 
-  // ── 间奏行 ──
+
+  // ── 普通歌词行 ──
+  const scale = enableScale ? scaleByOffset(offset) : 1;
+  const blur = enableBlur ? blurByOffset(offset) : 0;
+  const opacity = opacityByOffset(offset);
+  const staggerDelay = enableStagger ? absOffset * 50 : 0;
+
+  const baseFont = FONT_MAP[fontSize];
+  const currentFontBase = CURRENT_FONT_MAP[fontSize];
+
+  // 当前行动态字号：短文本放大，长文本缩小（基于 LyricWindow 280px 宽度）
+  const currentFont = useMemo(() => {
+    if (!isCurrent) return currentFontBase;
+    const charUnits = estimateCharUnits(line.text);
+    const maxUnits = 248 / currentFontBase; // 可用像素宽度 ÷ 单字宽
+    const scale = maxUnits / Math.max(charUnits, 1);
+    return Math.min(18, Math.round(currentFontBase * Math.max(0.8, Math.min(1.4, scale))));
+  }, [isCurrent, currentFontBase, line.text]);
+
+  // ?? ??? ??
   if (line.isInterlude) {
     return (
       <div
@@ -96,24 +115,6 @@ const LyricsLine = memo(function LyricsLine({
       </div>
     );
   }
-
-  // ── 普通歌词行 ──
-  const scale = enableScale ? scaleByOffset(offset) : 1;
-  const blur = enableBlur ? blurByOffset(offset) : 0;
-  const opacity = opacityByOffset(offset);
-  const staggerDelay = enableStagger ? absOffset * 50 : 0;
-
-  const baseFont = FONT_MAP[fontSize];
-  const currentFontBase = CURRENT_FONT_MAP[fontSize];
-
-  // 当前行动态字号：短文本放大，长文本缩小（基于 LyricWindow 280px 宽度）
-  const currentFont = useMemo(() => {
-    if (!isCurrent) return currentFontBase;
-    const charUnits = estimateCharUnits(line.text);
-    const maxUnits = 248 / currentFontBase; // 可用像素宽度 ÷ 单字宽
-    const scale = maxUnits / Math.max(charUnits, 1);
-    return Math.min(18, Math.round(currentFontBase * Math.max(0.8, Math.min(1.4, scale))));
-  }, [isCurrent, currentFontBase, line.text]);
 
   return (
     <div
