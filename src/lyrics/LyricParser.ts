@@ -111,6 +111,17 @@ function isDominantlyLatin(text: string): boolean {
   return latin > cjk && latin > 0;
 }
 
+/** Check if text contains Japanese kana (hiragana or katakana) */
+function hasJapaneseKana(text: string): boolean {
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if ((cp >= 0x3040 && cp <= 0x309F) || (cp >= 0x30A0 && cp <= 0x30FF)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Check if a single line contains mixed bilingual content */
 function isMixedBilingual(text: string): boolean {
   const { cjk, latin } = countCharTypes(text);
@@ -557,12 +568,21 @@ export function parseLyricData(
   const lines = parseLyric(raw, translatedRaw || "", romanRaw || "", dynamicRaw || "");
 
   // Suppress same-script translations (e.g., Chinese original + Chinese "translation")
+  // Allow cross-CJK translations (e.g., Japanese original + Chinese translation)
   for (const line of lines) {
     if (line.translatedLyric && line.originalLyric) {
       const origIsCJK = isDominantlyCJK(line.originalLyric);
       const transIsCJK = isDominantlyCJK(line.translatedLyric);
       if (origIsCJK === transIsCJK) {
-        line.translatedLyric = undefined;
+        if (origIsCJK) {
+          // Both CJK: only suppress if same language sub-family
+          if (hasJapaneseKana(line.originalLyric) === hasJapaneseKana(line.translatedLyric)) {
+            line.translatedLyric = undefined;
+          }
+        } else {
+          // Both non-CJK (e.g., both Latin): suppress
+          line.translatedLyric = undefined;
+        }
       }
     }
   }
