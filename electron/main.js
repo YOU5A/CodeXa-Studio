@@ -608,7 +608,7 @@ async function searchLyricsMultiQuery(title, artist, searchFn) {
 }
 
 // ── Music: Online Lyrics Search (LRCLIB → Netease → QQ) ──
-ipcMain.handle("music:searchLyrics", async (_event, title, artist) => {
+ipcMain.handle("music:searchLyrics", async (_event, title, artist, lyricSource) => {
   const searchNetease = async (t, a) => {
     try {
       const keywords = a ? `${t} ${a}` : t;
@@ -649,22 +649,49 @@ ipcMain.handle("music:searchLyrics", async (_event, title, artist) => {
   };
 
   try {
+    const src = lyricSource || "auto";
+    console.log("[Lyrics] Source mode:", src);
+
+    // Helper: try a specific source with multi-query
+    const trySource = async (name, fn) => {
+      console.log("[Lyrics] Trying " + name + "...");
+      const result = await searchLyricsMultiQuery(title, artist, fn);
+      if (result) return result;
+      // Single-query fallback
+      const direct = await fn(title, artist);
+      return direct ? { text: direct.text, source: direct.source } : null;
+    };
+
+    if (src === "lrclib") {
+      const r = await trySource("LRCLIB", searchLrclib);
+      if (r) return { lyrics_text: r.text, source: r.source };
+      return { lyrics_text: null, source: "none" };
+    }
+    if (src === "netease") {
+      const r = await trySource("Netease", searchNetease);
+      if (r) return { lyrics_text: r.text, source: r.source };
+      return { lyrics_text: null, source: "none" };
+    }
+    if (src === "qq") {
+      const r = await trySource("QQ", searchQQ);
+      if (r) return { lyrics_text: r.text, source: r.source };
+      return { lyrics_text: null, source: "none" };
+    }
+
+    // "auto" — try all sources in priority order
     // 1. LRCLIB (multi-query)
-    console.log("[Lyrics] Trying LRCLIB...");
     const lrclibResult = await searchLyricsMultiQuery(title, artist, searchLrclib);
     if (lrclibResult) return { lyrics_text: lrclibResult.text, source: lrclibResult.source };
 
     // 2. Netease (multi-query)
-    console.log("[Lyrics] LRCLIB failed, trying Netease...");
     const neteaseResult = await searchLyricsMultiQuery(title, artist, searchNetease);
     if (neteaseResult) return { lyrics_text: neteaseResult.text, source: neteaseResult.source };
 
     // 3. QQ (multi-query)
-    console.log("[Lyrics] Netease failed, trying QQ...");
     const qqResult = await searchLyricsMultiQuery(title, artist, searchQQ);
     if (qqResult) return { lyrics_text: qqResult.text, source: qqResult.source };
 
-    // 4. Last-ditch: try single queries without multi-query to be sure
+    // 4. Last-ditch single queries
     console.log("[Lyrics] All multi-query failed, trying single fallback...");
     const lrclibDirect = await searchLrclib(title, artist);
     if (lrclibDirect) return { lyrics_text: lrclibDirect.text, source: lrclibDirect.source };

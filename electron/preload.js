@@ -38,7 +38,7 @@ const api = {
   },
 
   music: {
-    searchLyrics: (title, artist) => ipcRenderer.invoke("music:searchLyrics", title, artist),
+    searchLyrics: (title, artist, source) => ipcRenderer.invoke("music:searchLyrics", title, artist, source || "auto"),
     searchCoverNetease: (title, artist, album) => ipcRenderer.invoke("music:searchCoverNetease", title, artist, album),
     searchCoverQQ: (title, artist, album) => ipcRenderer.invoke("music:searchCoverQQ", title, artist, album),
     searchCoverITunes: (title, artist, album) => ipcRenderer.invoke("music:searchCoverITunes", title, artist, album),

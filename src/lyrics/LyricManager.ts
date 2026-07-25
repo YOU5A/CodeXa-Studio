@@ -14,6 +14,17 @@ import type { LyricData, LyricLine } from "./types";
 
 /** 歌词缓存: key = 文件路径 */
 const lyricCache = new Map<string, LyricData>();
+/** 从 localStorage 读取词库源设置 */
+function getLyricSource(): "auto" | "lrclib" | "netease" | "qq" {
+  try {
+    const raw = localStorage.getItem("lyricsSettings");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.lyricSource) return parsed.lyricSource;
+    }
+  } catch {}
+  return "auto";
+}
 
 export interface LyricManagerState {
   /** 当前歌词数据，null 表示未加载 */
@@ -98,7 +109,7 @@ export function useLyricManager() {
       }
 
       if (window.electronAPI?.music?.searchLyrics) {
-        const onlineResult = await window.electronAPI.music.searchLyrics(title, artist || undefined);
+        const onlineResult = await window.electronAPI.music.searchLyrics(title, artist || undefined, getLyricSource());
 
         if (onlineResult?.lyrics_text) {
           const data = parseLyrics(onlineResult.lyrics_text);
@@ -135,6 +146,18 @@ export function useLyricManager() {
       setCurrentLineIndex(-1);
     }
   }, [playingFile, fetchLyrics]);
+
+  /** 歌词设置变更时清除缓存并刷新（例如切换词库源） */
+  useEffect(() => {
+    const handler = () => {
+      lyricCache.clear();
+      if (lastFileRef.current) {
+        fetchLyrics(lastFileRef.current);
+      }
+    };
+    window.addEventListener("lyricsSettingsChanged", handler);
+    return () => window.removeEventListener("lyricsSettingsChanged", handler);
+  }, [fetchLyrics]);
 
   /** rAF 驱动时间同步，避免 React 批量更新延迟 */
   const currentTimeRef = useRef(0);

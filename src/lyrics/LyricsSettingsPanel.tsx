@@ -20,8 +20,7 @@ export interface LyricsSettingsValues {
   fontSize: "small" | "medium" | "large";
   alignment: "center" | "top" | "bottom";
   lineSpacing: number;
-  showTranslation: boolean;
-  showRoman: boolean;
+  lyricSource: "auto" | "lrclib" | "netease" | "qq";
 }
 
 export const DEFAULT_LYRICS_SETTINGS: LyricsSettingsValues = {
@@ -32,8 +31,7 @@ export const DEFAULT_LYRICS_SETTINGS: LyricsSettingsValues = {
   fontSize: "medium",
   alignment: "center",
   lineSpacing: 24,
-  showTranslation: false,
-  showRoman: false,
+  lyricSource: "auto",
 };
 
 const LYRICS_SETTINGS_KEY = "lyricsSettings";
@@ -66,6 +64,14 @@ const FONT_SIZE_OPTIONS: { id: LyricsSettingsValues["fontSize"]; label: { zh: st
   { id: "small", label: { zh: "小", en: "S" } },
   { id: "medium", label: { zh: "中", en: "M" } },
   { id: "large", label: { zh: "大", en: "L" } },
+];
+
+
+const SOURCE_OPTIONS: { id: LyricsSettingsValues["lyricSource"]; label: { zh: string; en: string } }[] = [
+  { id: "auto", label: { zh: "自动", en: "Auto" } },
+  { id: "lrclib", label: { zh: "LRCLIB", en: "LRCLIB" } },
+  { id: "netease", label: { zh: "网易云", en: "Netease" } },
+  { id: "qq", label: { zh: "QQ音乐", en: "QQ" } },
 ];
 
 const ALIGN_OPTIONS: { id: LyricsSettingsValues["alignment"]; label: { zh: string; en: string } }[] = [
@@ -119,9 +125,11 @@ const t: Record<Language, Record<string, string>> = {
     fontSize: "字号",
     alignment: "当前行位置",
     lineSpacing: "行间距",
-    translation: "翻译",
-    showTranslation: "显示翻译",
-    showRoman: "显示罗马音",
+    lyricSource: "词库源",
+    auto: "自动",
+    lrclib: "LRCLIB",
+    netease: "网易云",
+    qq: "QQ音乐",
     reset: "恢复默认",
   },
   en: {
@@ -135,9 +143,11 @@ const t: Record<Language, Record<string, string>> = {
     fontSize: "Font Size",
     alignment: "Line Position",
     lineSpacing: "Line Spacing",
-    translation: "Translation",
-    showTranslation: "Show Translation",
-    showRoman: "Show Romanization",
+    lyricSource: "Lyrics Source",
+    auto: "Auto",
+    lrclib: "LRCLIB",
+    netease: "Netease",
+    qq: "QQ Music",
     reset: "Reset Defaults",
   },
 };
@@ -253,18 +263,21 @@ const LyricsSettingsPanel: FC<LyricsSettingsPanelProps> = ({ open, onClose, valu
 
         <div style={separatorStyle} />
 
-        {/* ── 翻译 ── */}
+        {/* ── 词库源 ── */}
         <div style={sectionStyle}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
-            {tx.translation}
+            {tx.lyricSource}
           </div>
-          <div style={rowStyle}>
-            <span style={labelStyle}>{tx.showTranslation}</span>
-            <GlassToggle active={values.showTranslation} onChange={(v) => set("showTranslation", v)} />
-          </div>
-          <div style={rowStyle}>
-            <span style={labelStyle}>{tx.showRoman}</span>
-            <GlassToggle active={values.showRoman} onChange={(v) => set("showRoman", v)} />
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
+            {SOURCE_OPTIONS.map((opt) => (
+              <GlassPillButton
+                key={opt.id}
+                active={values.lyricSource === opt.id}
+                onClick={() => set("lyricSource", opt.id)}
+              >
+                {opt.label[lang]}
+              </GlassPillButton>
+            ))}
           </div>
         </div>
       </div>

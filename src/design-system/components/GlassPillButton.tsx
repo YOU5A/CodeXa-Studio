@@ -59,6 +59,7 @@ export function GlassPillButton({
         opacity: disabled ? 0.4 : 1,
         transition: "all var(--transition-fast)",
         boxShadow: active ? "0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "none",
+        whiteSpace: "nowrap",
         fontFamily: "inherit",
         outline: "none",
         ...style,
