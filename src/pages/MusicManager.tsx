@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
   SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
-  Volume2, Trash2, Music, Edit3, ChevronUp
+  Volume2, Trash2, Music, Edit3, ChevronUp, Globe
 } from "lucide-react";
 import {
   GlassCard,
@@ -30,6 +30,7 @@ import { getAnimDuration, EASE_OUT } from "@/utils/animations";
 
 import { extractDominantColorAsync, type RGB } from "@/utils/colorExtractor";
 import FluidSettingsPanel, { DEFAULT_FLUID_SETTINGS, loadFluidSettings, saveFluidSettings, type FluidSettingsValues } from "@/components/FluidSettingsPanel";
+import CoverSearchPanel from "@/components/CoverSearchPanel";
 
 const t = {
   zh: {
@@ -51,6 +52,7 @@ const t = {
     applyCover: "应用到选中",
     saveCover: "保存封面",
     removeCover: "删除封面",
+    searchCover: "搜索网络封面",
     renameSelected: "重命名选中",
     renameAll: "全部重命名",
     noFiles: "选择文件夹并扫描",
@@ -103,6 +105,7 @@ const t = {
     applyCover: "Apply",
     saveCover: "Save",
     removeCover: "Remove",
+    searchCover: "Search Cover",
     renameSelected: "Rename",
     renameAll: "Rename All",
     noFiles: "Select a folder and scan",
@@ -153,6 +156,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [coverPreviewB64, setCoverPreviewB64] = useState<string | null>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
   const [coverMenuHover, setCoverMenuHover] = useState(false);
+  const [coverSearchOpen, setCoverSearchOpen] = useState(false);
 
   const [tagTitle, setTagTitle] = useState("");
   const [tagArtist, setTagArtist] = useState("");
@@ -495,6 +499,58 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     if (r?.success) selectFile(selectedFile);
   };
 
+  // ?? Cover from URL (for CoverSearchPanel) ??
+  const handleApplyCoverFromUrl = async (urlOrDataUrl: string) => {
+    if (!selectedFile) throw new Error(lang === "zh" ? "?????" : "No file selected");
+    let coverPath = urlOrDataUrl;
+    if (urlOrDataUrl.startsWith("data:")) {
+      const base64 = urlOrDataUrl.split(",")[1];
+      const ext = urlOrDataUrl.includes("image/png") ? ".png" : ".jpg";
+      const tmpDir = await window.electronAPI?.app.getPath("temp");
+      coverPath = tmpDir + "\codexa_cover_dl_" + Date.now() + ext;
+      const r = await window.electronAPI?.python.call("music.save_cover_file", {
+        filepath: coverPath, base64, ext,
+      });
+      if (r?.error) throw new Error(r.error);
+    }
+    const r = await window.electronAPI?.python.call("music.apply_cover", {
+      filepath: selectedFile, cover_path: coverPath,
+    });
+    if (!r?.success) throw new Error(r?.error || "Apply failed");
+    selectFile(selectedFile);
+  };
+
+  const handleSaveCoverFromUrl = async (urlOrDataUrl: string) => {
+    if (urlOrDataUrl.startsWith("data:")) {
+      const base64 = urlOrDataUrl.split(",")[1];
+      const ext = urlOrDataUrl.includes("image/png") ? "png" : "jpg";
+      const savePath = await window.electronAPI?.dialog.saveFile({
+        defaultPath: `cover.${ext}`,
+        filters: [{ name: "Images", extensions: [ext] }],
+      });
+      if (!savePath) return;
+      await window.electronAPI?.python.call("music.save_cover_file", {
+        filepath: savePath, base64, ext,
+      });
+    } else {
+      const savePath = await window.electronAPI?.dialog.saveFile({
+        defaultPath: "cover.jpg",
+        filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }],
+      });
+      if (!savePath) return;
+      if (window.electronAPI?.music?.downloadCoverImage) {
+        const dl = await window.electronAPI.music.downloadCoverImage(urlOrDataUrl);
+        if (dl?.data) {
+          const b64 = dl.data.split(",")[1];
+          const ext = dl.data.includes("image/png") ? "png" : "jpg";
+          await window.electronAPI?.python.call("music.save_cover_file", {
+            filepath: savePath, base64: b64, ext,
+          });
+        }
+      }
+    }
+  };
+
   // ── Rename ──
   const renameOne = async () => {
     if (!selectedFile) { showToast(tx.noFileSelected, "warning"); return; }
@@ -634,6 +690,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                     transition={{ duration: 0.25, ease: "easeInOut" }}
                     style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: space[1] }}
                   >
+                    <GlassButton variant="secondary" size="sm" inline={false} onClick={() => setCoverSearchOpen(true)}
+                      style={{ justifyContent: "center" }}>
+                      <Globe size={12} /> {tx.searchCover}
+                    </GlassButton>
                     <GlassButton variant="secondary" size="sm" inline={false} onClick={pickCover}
                       style={{ justifyContent: "center" }}>
                       <Image size={12} /> {tx.selectCover}
@@ -1138,6 +1198,16 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
           settings={lyricsSettings}
         />
       </LyricWindow>
+
+      <CoverSearchPanel
+        open={coverSearchOpen}
+        onClose={() => setCoverSearchOpen(false)}
+        title={tagTitle || (selectedFile ? (selectedFile.split("\\").pop() || "").replace(/\.[^.]+$/, "") : "")}
+        artist={tagArtist}
+        album={tagAlbum}
+        onApplyCover={handleApplyCoverFromUrl}
+        onSaveCover={handleSaveCoverFromUrl}
+      />
 
       <FluidSettingsPanel
         open={fluidSettingsOpen}

@@ -1,7 +1,8 @@
-﻿const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeTheme } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { execSync, spawnSync } = require("child_process");
+const https = require("https");
 const { PythonBridge } = require("./python-bridge");
 const { cloudsearch, lyric } = require("NeteaseCloudMusicApi");
 
@@ -274,27 +275,321 @@ function setupIPC() {
   ipcMain.handle("app:getPath", async (_event, name) => app.getPath(name));
 }
 
-  // ---- Music: Online Lyrics Search (Netease) ----
-  ipcMain.handle("music:searchLyrics", async (_event, title, artist) => {
+
+// ── Fuzzy matching helper ──
+function scoreMatch(songName, songArtists, queryTitle, queryArtist) {
+  const toLower = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const sn = toLower(songName);
+  const qt = toLower(queryTitle);
+  const qa = toLower(queryArtist || "");
+
+  let score = 0;
+
+  // Title exact match
+  if (sn === qt) score += 0.5;
+  // Title contains query or vice versa
+  else if (sn.includes(qt) || qt.includes(sn)) score += 0.35;
+  // Word overlap on title
+  else {
+    const snWords = new Set(sn.split(" "));
+    const qtWords = new Set(qt.split(" "));
+    let overlap = 0;
+    for (const w of qtWords) { if (snWords.has(w)) overlap++; }
+    if (overlap > 0) score += 0.15 * (overlap / Math.max(qtWords.size, 1));
+  }
+
+  // Artist matching
+  if (qa && songArtists && songArtists.length > 0) {
+    const artistNames = songArtists.map(a => toLower(typeof a === "string" ? a : a.name || ""));
+    for (const an of artistNames) {
+      if (an === qa) { score += 0.4; break; }
+      else if (an.includes(qa) || qa.includes(an)) { score += 0.25; break; }
+    }
+  } else if (!qa) {
+    score += 0.2;
+  }
+
+  return score;
+}
+
+// ── QQ Music helper: simple HTTPS request ──
+function qqRequest(urlOrOptions, postData) {
+  return new Promise((resolve, reject) => {
+    const opts = typeof urlOrOptions === "string" ? new URL(urlOrOptions) : urlOrOptions;
+    const req = https.request({
+      hostname: opts.hostname,
+      path: opts.pathname + (opts.search || ""),
+      method: postData ? "POST" : "GET",
+      headers: {
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Referer": "https://i.y.qq.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Content-Type": postData ? "application/json" : undefined,
+      },
+      timeout: 15000,
+    }, (res) => {
+      const chunks = [];
+      res.on("data", (d) => chunks.push(d));
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks);
+        // Gunzip if needed
+        const encoding = res.headers["content-encoding"];
+        let body;
+        if (encoding === "gzip" || encoding === "deflate") {
+          try { body = require("zlib").gunzipSync(raw).toString("utf-8"); } catch { body = raw.toString("utf-8"); }
+        } else {
+          body = raw.toString("utf-8");
+        }
+        resolve(body);
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Request timeout")); });
+    if (postData) req.write(JSON.stringify(postData));
+    req.end();
+  });
+}
+
+// ── QQ Music lyrics search & fetch ──
+async function searchQQMusicLyrics(title, artist) {
+  const query = artist ? `${title} ${artist}` : title;
+  const searchBody = {
+    req_0: {
+      module: "music.search.SearchCgiService",
+      method: "DoSearchForQQMusicDesktop",
+      param: { search_type: 0, query, page_num: 1, num_per_page: 20 },
+    },
+  };
+
+  const searchText = await qqRequest("https://u.y.qq.com/cgi-bin/musicu.fcg", searchBody);
+  const searchJson = JSON.parse(searchText);
+  const songList = searchJson?.req_0?.data?.body?.song?.list;
+  if (!songList || songList.length === 0) return null;
+
+  // Score and pick best match
+  let best = null;
+  let bestScore = -1;
+  for (const s of songList) {
+    const score = scoreMatch(s.name, s.singer, title, artist);
+    if (score > bestScore) { bestScore = score; best = s; }
+  }
+  if (!best || bestScore < 0.25) return null;
+
+  const songmid = best.mid || best.songmid;
+  if (!songmid) return null;
+
+  // Fetch lyrics
+  const lyricUrl = `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${songmid}&g_tk=5381&format=json&inCharset=utf8&outCharset=utf-8`;
+  let lyricText = await qqRequest(lyricUrl);
+  // Strip JSONP wrapper
+  lyricText = lyricText.replace(/^\s*\w+\(/, "").replace(/\)\s*;?\s*$/, "");
+  const lyricJson = JSON.parse(lyricText);
+  const lrc = lyricJson?.lyric;
+  if (!lrc) return null;
+  return lrc;
+}
+
+// ── Music: Online Lyrics Search (Netease + QQ fallback) ──
+ipcMain.handle("music:searchLyrics", async (_event, title, artist) => {
+  try {
+    const keywords = artist ? `${title} ${artist}` : title;
+    const searchRes = await cloudsearch({ keywords, type: 1, limit: 20 });
+    const songs = searchRes?.body?.result?.songs;
+    if (!songs || songs.length === 0) {
+      // Netease empty, try QQ
+      console.log("[Lyrics] Netease: no results, trying QQ...");
+      const qqLrc = await searchQQMusicLyrics(title, artist);
+      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
+      return { lyrics_text: null, source: "netease" };
+    }
+
+    // Score results
+    let best = null;
+    let bestScore = -1;
+    for (const s of songs) {
+      const score = scoreMatch(s.name, s.ar, title, artist);
+      if (score > bestScore) { bestScore = score; best = s; }
+    }
+
+    if (!best || bestScore < 0.3) {
+      // No good Netease match, try QQ
+      console.log(`[Lyrics] Netease best score ${bestScore.toFixed(2)} < 0.3, trying QQ...`);
+      const qqLrc = await searchQQMusicLyrics(title, artist);
+      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
+      // Fallback to best Netease result anyway if QQ fails
+      if (best && bestScore >= 0.15) {
+        const lyricRes = await lyric({ id: best.id });
+        const lrc = lyricRes?.body?.lrc?.lyric;
+        if (lrc) return { lyrics_text: lrc, source: "netease" };
+      }
+      return { lyrics_text: null, source: "netease" };
+    }
+
+    const lyricRes = await lyric({ id: best.id });
+    const lrc = lyricRes?.body?.lrc?.lyric;
+    if (!lrc) {
+      // Netease has match but no lyrics, try QQ
+      console.log("[Lyrics] Netease matched but no lyrics, trying QQ...");
+      const qqLrc = await searchQQMusicLyrics(title, artist);
+      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
+      return { lyrics_text: null, source: "netease" };
+    }
+    return { lyrics_text: lrc, source: "netease" };
+  } catch (e) {
+    console.error("[Music:SearchLyrics]", e.message);
+    // Try QQ on error
     try {
-      const keywords = artist ? `${title} ${artist}` : title;
-      const searchRes = await cloudsearch({ keywords, type: 1, limit: 5 });
-      const songs = searchRes?.body?.result?.songs;
-      if (!songs || songs.length === 0) {
-        return { lyrics_text: null, source: "netease" };
-      }
-      const songId = songs[0].id;
-      const lyricRes = await lyric({ id: songId });
-      const lrc = lyricRes?.body?.lrc?.lyric;
-      if (!lrc) {
-        return { lyrics_text: null, source: "netease" };
-      }
-      return { lyrics_text: lrc, source: "netease" };
+      const qqLrc = await searchQQMusicLyrics(title, artist);
+      if (qqLrc) return { lyrics_text: qqLrc, source: "qq" };
+    } catch {}
+    return { lyrics_text: null, source: "netease", error: e.message };
+  }
+});
+
+// ── Cover Search: Netease ──
+ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) => {
+  try {
+    const keywords = [title, artist, album].filter(Boolean).join(" ");
+    const searchRes = await cloudsearch({ keywords, type: 1, limit: 20 });
+    const songs = searchRes?.body?.result?.songs;
+    if (!songs || songs.length === 0) return { results: [] };
+
+    const seen = new Set();
+    const results = [];
+    for (const s of songs) {
+      const picUrl = s?.al?.picUrl;
+      if (!picUrl || seen.has(picUrl)) continue;
+      seen.add(picUrl);
+      results.push({
+        source: "netease",
+        title: s.name || "",
+        artist: (s.ar || []).map(a => a.name || "").join(", "),
+        album: s?.al?.name || "",
+        coverUrl: picUrl,
+        songId: s.id,
+      });
+    }
+    return { results: results.slice(0, 15) };
+  } catch (e) {
+    console.error("[Cover:Netease]", e.message);
+    return { results: [], error: e.message };
+  }
+});
+
+// ── Cover Search: QQ Music ──
+ipcMain.handle("music:searchCoverQQ", async (_event, title, artist, album) => {
+  try {
+    const query = [title, artist, album].filter(Boolean).join(" ");
+    const searchBody = {
+      req_0: {
+        module: "music.search.SearchCgiService",
+        method: "DoSearchForQQMusicDesktop",
+        param: { search_type: 0, query, page_num: 1, num_per_page: 20 },
+      },
+    };
+    const searchText = await qqRequest("https://u.y.qq.com/cgi-bin/musicu.fcg", searchBody);
+    const searchJson = JSON.parse(searchText);
+    const songList = searchJson?.req_0?.data?.body?.song?.list;
+    if (!songList || songList.length === 0) return { results: [] };
+
+    const seen = new Set();
+    const results = [];
+    for (const s of songList) {
+      const albumMid = s?.album?.mid;
+      if (!albumMid || seen.has(albumMid)) continue;
+      seen.add(albumMid);
+      const coverUrl = `https://y.qq.com/music/photo_new/T002R800x800M000${albumMid}.jpg`;
+      results.push({
+        source: "qq",
+        title: s.name || s.title || "",
+        artist: (s.singer || []).map(si => si.name || "").join(", "),
+        album: s?.album?.name || "",
+        coverUrl,
+        albumMid,
+      });
+    }
+    return { results: results.slice(0, 15) };
+  } catch (e) {
+    console.error("[Cover:QQ]", e.message);
+    return { results: [], error: e.message };
+  }
+});
+
+// ── Download image helper ──
+function _downloadImage(url, depth = 0) {
+  if (depth > 2) return Promise.resolve({ data: null, error: "Too many redirects" });
+  return new Promise((resolve) => {
+    try {
+      const parsed = new URL(url);
+      https.get({
+        hostname: parsed.hostname,
+        path: parsed.pathname + (parsed.search || ""),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Referer": parsed.origin,
+        },
+        timeout: 20000,
+      }, (res) => {
+        if ([301, 302, 307, 308].includes(res.statusCode)) {
+          const redirectUrl = res.headers.location;
+          if (redirectUrl) {
+            resolve(_downloadImage(redirectUrl, depth + 1));
+            return;
+          }
+        }
+        const chunks = [];
+        res.on("data", (d) => chunks.push(d));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const b64 = buf.toString("base64");
+          const ct = res.headers["content-type"] || "image/jpeg";
+          resolve({ data: `data:${ct};base64,${b64}`, error: null });
+        });
+      }).on("error", (e) => resolve({ data: null, error: e.message }))
+        .on("timeout", function() { this.destroy(); resolve({ data: null, error: "timeout" }); });
     } catch (e) {
-      console.error("[Music:SearchLyrics]", e.message);
-      return { lyrics_text: null, source: "netease", error: e.message };
+      resolve({ data: null, error: e.message });
     }
   });
+}
+
+// ── Download image as base64 (in main process to avoid CORS) ──
+ipcMain.handle("music:downloadCoverImage", async (_event, url) => {
+  return new Promise((resolve) => {
+    try {
+      const parsed = new URL(url);
+      https.get({
+        hostname: parsed.hostname,
+        path: parsed.pathname + (parsed.search || ""),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Referer": parsed.origin,
+        },
+        timeout: 20000,
+      }, (res) => {
+        // Follow redirects (up to 3)
+        if ([301, 302, 307, 308].includes(res.statusCode)) {
+          const redirectUrl = res.headers.location;
+          if (redirectUrl) {
+            resolve(_downloadImage(redirectUrl).then(resolve));
+            return;
+          }
+        }
+        const chunks = [];
+        res.on("data", (d) => chunks.push(d));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const b64 = buf.toString("base64");
+          const ct = res.headers["content-type"] || "image/jpeg";
+          resolve({ data: `data:${ct};base64,${b64}`, error: null });
+        });
+      }).on("error", (e) => resolve({ data: null, error: e.message }))
+        .on("timeout", function() { this.destroy(); resolve({ data: null, error: "timeout" }); });
+    } catch (e) {
+      resolve({ data: null, error: e.message });
+    }
+  });
+});
 
 
 // ---- Python Bridge ----

@@ -31,6 +31,16 @@ export interface PriorityRule {
   io_priority: string;
 }
 
+export interface CoverSearchResult {
+  source: "netease" | "qq";
+  title: string;
+  artist: string;
+  album: string;
+  coverUrl: string;
+  songId?: number;
+  albumMid?: string;
+}
+
 export interface MusicMetadata {
   title: string;
   artist: string;
@@ -116,6 +126,9 @@ export interface ElectronAPI {
 
   music: {
     searchLyrics: (title: string, artist?: string) => Promise<{ lyrics_text: string | null; source: string; error?: string }>;
+    searchCoverNetease: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
+    searchCoverQQ: (title: string, artist?: string, album?: string) => Promise<{ results: CoverSearchResult[]; error?: string }>;
+    downloadCoverImage: (url: string) => Promise<{ data: string | null; error: string | null }>;
   };
   settings: {
     get: (key: string) => Promise<any>;

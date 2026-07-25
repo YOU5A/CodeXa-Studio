@@ -536,6 +536,23 @@ def handle_music_read_cover_file(params):
     except Exception as e:
         return {"error": str(e), "cover": None}
 
+def handle_music_save_cover_file(params):
+    """Save base64 cover image data to a file on disk"""
+    filepath = params.get("filepath", "")
+    base64_data = params.get("base64", "")
+    ext = params.get("ext", "jpg")
+
+    if not filepath or not base64_data:
+        return {"error": "Missing parameters"}
+
+    try:
+        data = base64.b64decode(base64_data)
+        with open(filepath, "wb") as f:
+            f.write(data)
+        return {"success": True}
+    except Exception as e:
+        return {"error": str(e)}
+
 def handle_music_get_lyrics(params):
     """Get lyrics for a music file.
     Looks for .lrc file alongside audio, then falls back to embedded lyrics."""
@@ -656,6 +673,7 @@ METHODS = {
     "music.apply_cover": handle_music_apply_cover,
     "music.remove_cover": handle_music_remove_cover,
     "music.read_cover_file": handle_music_read_cover_file,
+    "music.save_cover_file": handle_music_save_cover_file,
     "music.rename": handle_music_rename,
     "music.get_lyrics": handle_music_get_lyrics,
 

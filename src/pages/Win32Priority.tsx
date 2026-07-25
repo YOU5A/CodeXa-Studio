@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { RefreshCw, Save, RotateCcw, Trash2, FolderOpen } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
+import { BottomNotice } from "@/components/BottomNotice";
 import {
   GlassButton,
   GlassInput,
@@ -150,7 +150,6 @@ export default function Win32Priority(_props: Props) {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [presetTooltip, setPresetTooltip] = useState<string | null>(null);
-  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -168,7 +167,7 @@ export default function Win32Priority(_props: Props) {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { return () => { if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current); }; }, []);
+
 
   const applyValue = async () => {
     const ok = await confirm({ title: tx.confirmSet, danger: false });
@@ -233,11 +232,6 @@ export default function Win32Priority(_props: Props) {
     fetchData();
   };
 
-  const showPresetTooltip = useCallback((hex: string) => {
-    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-    setPresetTooltip(hex);
-    tooltipTimerRef.current = setTimeout(() => setPresetTooltip(null), 2000);
-  }, []);
   // 光标跟随白色光晕（匹配 GlassButton）
   const setPillGlow = useCallback((el: HTMLElement, cx: number, cy: number) => {
     const r = el.getBoundingClientRect();
@@ -308,7 +302,7 @@ export default function Win32Priority(_props: Props) {
               <motion.button
                 key={p.hex}
                 className="theme-pill"
-                onClick={() => { setCustomValue(p.hex); showPresetTooltip(p.hex); }}
+                onClick={() => { setCustomValue(p.hex); setPresetTooltip(p.hex); }}
                 onMouseMove={handlePillMove}
                 onMouseEnter={handlePillMove}
                 onMouseLeave={handlePillLeave}
@@ -453,44 +447,12 @@ export default function Win32Priority(_props: Props) {
       </GlassCard>
 
       {/* ─── Preset Tooltip ─── */}
-      {presetTooltip && createPortal(
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30, mass: 0.8 }}
-            style={{
-              position: "fixed",
-              bottom: 24,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 99999,
-              pointerEvents: "none",
-              backdropFilter: "blur(32px) saturate(2.2)",
-              WebkitBackdropFilter: "blur(32px) saturate(2.2)",
-              background: "rgba(18,18,28,0.40)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 20,
-              padding: "8px 20px",
-              fontSize: 14,
-              fontWeight: 500,
-              color: "rgba(255,255,255,0.92)",
-              whiteSpace: "nowrap",
-              boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span style={{ color: "var(--accent)", fontFamily: "monospace", fontWeight: 600 }}>
-              0x{presetTooltip}
-            </span>
-            <span>{tx.presetFilled}</span>
-          </motion.div>
-        </AnimatePresence>,
-        document.body
-      )}
+      <BottomNotice show={presetTooltip !== null} onDone={() => setPresetTooltip(null)}>
+        <span style={{ color: "var(--accent)", fontFamily: "monospace", fontWeight: 600 }}>
+          0x{presetTooltip}
+        </span>
+        <span>{tx.presetFilled}</span>
+      </BottomNotice>
     </motion.div>
   );
 }
