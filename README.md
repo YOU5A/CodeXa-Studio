@@ -26,7 +26,7 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 
 ## 📸 预览
 
-<p align="center">
+<p align="left">
   <b>🎵 音乐管理器</b><br/>
   <img src="Screenshot1.png" width="85%" alt="音乐管理器" />
 </p>
