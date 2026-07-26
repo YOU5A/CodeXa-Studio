@@ -1,4 +1,3 @@
-````markdown
 <p align="center">
   <img src="public/icon.png" width="120" alt="CodeXa Studio" />
 </p>
@@ -25,7 +24,7 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 
 ---
 
-# 📸 预览
+## 📸 预览
 
 <p align="center">
   <b>🎵 音乐管理器</b><br/>
@@ -39,9 +38,9 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 
 ---
 
-# ✨ 功能
+## ✨ 功能
 
-## 🎵 音乐管理
+### 🎵 音乐管理
 
 - 🎼 MP3 / FLAC / OGG / M4A 标签编辑
 - 🏷 标题、艺术家、专辑、年份等元数据编辑
@@ -54,7 +53,7 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 - 📂 批量管理音乐文件
 - 🎧 高质量本地音乐浏览体验
 
-## ⚙ Windows 系统工具
+### ⚙ Windows 系统工具
 
 - Win32 优先级分离
 - 应用 CPU 优先级（IFEO）
@@ -62,24 +61,18 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 - 系统仪表盘
 - 操作历史记录
 
----
+### 🎨 设计亮点
 
-# 🌟 项目特色
-
-- 🎵 专注于本地音乐管理体验
-- 🍎 Apple Music 风格歌词动画
-- 🎨 Liquid Glass 设计语言
-- 🌈 多主题切换
-- ⚡ Electron + React 高性能桌面应用
-- 🪟 Fluent Design 风格界面
-- 💾 本地数据存储，不上传用户音乐
-- 🔥 持续更新更多音乐管理功能
+- Liquid Glass 设计语言，多主题切换
+- Apple Music 风格歌词动画
+- 本地数据存储，不上传用户音乐
+- 持续更新更多音乐管理功能
 
 ---
 
-# 📂 项目结构
+## 📂 项目结构
 
-```text
+```
 CodeXa Studio
 ├── Music Manager
 │   ├── Audio Player
@@ -96,11 +89,13 @@ CodeXa Studio
 │   └── Dashboard
 │
 └── Shared Components
-````
+```
+
+> 完整源码结构见仓库 [AGENTS.md](AGENTS.md)。
 
 ---
 
-# 🚀 快速开始
+## 🚀 快速开始
 
 ```bash
 # 安装依赖
@@ -122,7 +117,7 @@ npm run build
 
 ---
 
-# 🛠 技术栈
+## 🛠 技术栈
 
 * React 19
 * TypeScript 6
@@ -135,7 +130,7 @@ npm run build
 
 ---
 
-# ❤️ 鸣谢
+## ❤️ 鸣谢
 
 本项目使用、参考或受到以下优秀开源项目启发：
 
@@ -144,38 +139,12 @@ npm run build
 | amll-dev/applemusic-like-lyrics          | Apple Music 风格歌词组件 |
 | SUlTlUS/refined-now-playing-netease-next | 网易云 Now Playing UI |
 | Binaryify/NeteaseCloudMusicApi           | 网易云音乐第三方 API       |
-| React                                    | 前端框架               |
-| Electron                                 | 桌面应用框架             |
-| .NET                                     | 系统工具模块             |
-| Tailwind CSS                             | UI 样式              |
-| Framer Motion                            | 动画框架               |
 
 感谢所有开源作者以及社区贡献者。
 
 ---
 
-# 📡 第三方服务说明
-
-CodeXa Studio 部分功能依赖第三方公开接口，仅用于提升用户体验。
-
-目前包括但不限于：
-
-* **NeteaseCloudMusicApi**
-
-  * 歌曲搜索
-  * 歌词获取
-  * 专辑封面获取
-  * 歌曲信息查询
-
-本项目不会保存、上传或分享任何用户音乐文件。
-
-第三方接口的版权及数据所有权归对应服务提供方所有。
-
-若第三方接口停止维护、变更或失效，相关功能可能无法正常使用。
-
----
-
-# 📄 开源协议
+## 📄 开源协议
 
 本项目采用 **GNU Affero General Public License v3.0（AGPL-3.0）**。
 
@@ -198,11 +167,11 @@ CodeXa Studio 部分功能依赖第三方公开接口，仅用于提升用户体
 
 ---
 
-# ⚠️ 免责声明
+## ⚠️ 免责声明
 
 CodeXa Studio 是一个开源软件，仅供学习、研究及个人合法用途使用。
 
-## 关于音乐功能
+### 关于音乐功能
 
 * 本项目不会破解任何音乐平台版权保护。
 * 本项目不提供任何盗版音乐资源。
@@ -211,7 +180,7 @@ CodeXa Studio 是一个开源软件，仅供学习、研究及个人合法用途
 * 网易云音乐相关功能依赖第三方公开 API，仅用于获取公开可访问的信息。
 * 请遵守所在地法律法规及相关平台用户协议。
 
-## 关于系统功能
+### 关于系统功能
 
 本项目包含部分 Windows 系统配置及注册表修改功能。
 
@@ -236,4 +205,3 @@ Made with ❤️ by <a href="https://github.com/YOU5A">YOU5A</a>
 <br/>
 如果觉得项目不错，欢迎 ⭐ Star 支持一下！
 </p>
-```
