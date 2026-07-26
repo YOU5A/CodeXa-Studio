@@ -42,6 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           height: "100%", minHeight: 300, padding: 24,
         }}>
           <GlassEmptyState
+            style={{ borderRadius: "var(--radius)" }}
             icon={<AlertTriangle size={40} style={{ color: "var(--color-warning)" }} />}
             title={"页面加载失败"}
             description={this.state.error?.message ?? "发生了未知错误，请重试。"}

@@ -1,6 +1,6 @@
 import { Globe } from "lucide-react";
 import { GlassToggle, GlassPillButton } from "@/design-system/components";
-import { sectionLabelStyle, rowStyle, labelStyle, sectionStyle, separatorStyle, pillActiveStyle } from "./shared";
+import { sectionLabelStyle, rowStyle, labelStyle, sectionStyle, separatorStyle } from "./shared";
 import type { AppSettings, Language } from "@/types";
 
 interface InterfaceSectionProps {
@@ -36,7 +36,7 @@ export default function InterfaceSection({
               <GlassPillButton
                 key={opt.value}
                 onClick={() => updateSettings({ sidebarWidth: Number(opt.value) })}
-                style={pillActiveStyle(active)}
+                active={active}
               >
                 {opt.label}
               </GlassPillButton>
@@ -60,7 +60,7 @@ export default function InterfaceSection({
               <GlassPillButton
                 key={opt.value}
                 onClick={() => updateSettings({ fontScale: Number(opt.value) })}
-                style={pillActiveStyle(active)}
+                active={active}
               >
                 {opt.label}
               </GlassPillButton>
@@ -90,11 +90,11 @@ export default function InterfaceSection({
             <GlassPillButton
               key={lng}
               onClick={() => setLang(lng)}
+              active={active}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                ...pillActiveStyle(active),
               }}
             >
               <Globe size={13} />

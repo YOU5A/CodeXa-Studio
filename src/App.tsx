@@ -41,7 +41,7 @@ function PageLoader() {
       height: "100%", minHeight: 300, padding: 24,
     }}>
       <GlassEmptyState
-        style={{ minWidth: 320 }}
+        style={{ minWidth: 320, borderRadius: "var(--radius)" }}
         icon={
           <motion.div
             animate={{ rotate: 360 }}

@@ -1,18 +1,5 @@
 import type React from "react";
 
-/** Pill button glow helpers — reused across section components */
-export function setPillGlow(el: HTMLElement, cx: number, cy: number) {
-  const r = el.getBoundingClientRect();
-  if (r.width === 0 || r.height === 0) return;
-  el.style.setProperty("--pill-gx", ((cx - r.left) / r.width) * 100 + "%");
-  el.style.setProperty("--pill-gy", ((cy - r.top) / r.height) * 100 + "%");
-  el.style.setProperty("--pill-go", "1");
-}
-
-export function clearPillGlow(el: HTMLElement) {
-  el.style.setProperty("--pill-go", "0");
-}
-
 export const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 500,

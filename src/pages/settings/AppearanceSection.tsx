@@ -1,6 +1,6 @@
 import { Palette } from "lucide-react";
 import { GlassPillButton, GlassSlider } from "@/design-system/components";
-import { sectionLabelStyle, rowStyle, labelStyle, sectionStyle, separatorStyle, pillActiveStyle } from "./shared";
+import { sectionLabelStyle, rowStyle, labelStyle, sectionStyle, separatorStyle } from "./shared";
 import type { AppSettings } from "@/types";
 
 interface AppearanceSectionProps {
@@ -86,7 +86,7 @@ export default function AppearanceSection({
               <GlassPillButton
                 key={opt.value}
                 onClick={() => updateSettings({ animationSpeed: opt.value as typeof settings.animationSpeed })}
-                style={pillActiveStyle(active)}
+                active={active}
               >
                 {tx[opt.key]}
               </GlassPillButton>

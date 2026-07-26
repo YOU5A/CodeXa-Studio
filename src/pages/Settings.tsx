@@ -59,7 +59,7 @@ const t: Record<Language, Record<string, string>> = {
     aboutAuthor: "作者: Y0USA",
     aboutTech: "Electron + React + Python",
     github: "GitHub",
-    bilibli: "B站",
+    bilibili: "B站",
     usertool: "UserTool",
     language: "语言",
     aboutVersion: `版本 ${APP_VERSION}`,
@@ -103,7 +103,7 @@ const t: Record<Language, Record<string, string>> = {
     aboutAuthor: "Author: Y0USA",
     aboutTech: "Electron + React + Python",
     github: "GitHub",
-    bilibli: "Bilibili",
+    bilibili: "Bilibili",
     usertool: "UserTool",
     language: "Language",
     aboutVersion: `Version ${APP_VERSION}`,
@@ -282,6 +282,7 @@ export default function Settings() {
             return (
               <GlassPillButton
                 key={opt.value}
+                active={active}
                 onClick={() => { setTheme(opt.value); setThemePickerOpen(false); }}
                 style={{
                   display: "flex",
@@ -289,11 +290,7 @@ export default function Settings() {
                   gap: 8,
                   padding: "8px 16px",
                   borderRadius: 20,
-                  border: `1.5px solid ${active ? "var(--accent)" : "var(--border-color)"}`,
-                  background: active ? "var(--accent-bg)" : "transparent",
-                  color: active ? "var(--accent)" : "var(--text-secondary)",
                   fontSize: 13,
-                  fontWeight: active ? 600 : 400,
                   cursor: "pointer",
                   transition: "all var(--transition-fast)",
                   lineHeight: 1,

@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { recordActivity } from "@/hooks/useActivityLog";
+import PageLayout from "@/components/PageLayout";
 import type { RegistryValue, BackupEntry } from "@/types";
 
 interface Props {}
@@ -16,6 +17,7 @@ interface Props {}
 const t = {
   zh: {
     title: "Win32 PrioritySeparation",
+    subtitle: "管理系统 CPU 调度优先级",
     currentValue: "当前值",
     decimal: "十进制",
     hex: "十六进制",
@@ -44,6 +46,7 @@ const t = {
   },
   en: {
     title: "Win32 PrioritySeparation",
+    subtitle: "Manage system CPU scheduling priority",
     currentValue: "Current Value",
     decimal: "Decimal",
     hex: "Hexadecimal",
@@ -246,11 +249,11 @@ export default function Win32Priority(_props: Props) {
   }, [clearPillGlow]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      style={{ ...stackGap, height: "100%" }}
-    >
+    <PageLayout title={tx.title} subtitle={tx.subtitle} actions={
+      <GlassButton variant="secondary" size="sm" onClick={fetchData}>
+        <RefreshCw size={14} /> {tx.refresh}
+      </GlassButton>
+    }>
       {/* ─── Current Value ─── */}
       <GlassCard>
         <h3 style={sectionTitle}>{tx.currentValue}</h3>
@@ -445,6 +448,6 @@ export default function Win32Priority(_props: Props) {
         </span>
         <span>{tx.presetFilled}</span>
       </BottomNotice>
-    </motion.div>
+    </PageLayout>
   );
 }

@@ -53,3 +53,6 @@ publish2/
 
 # Dev temp files
 .tmp-dev-*
+
+# Runtime data (user config)
+data/config.json
