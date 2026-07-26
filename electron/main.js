@@ -10,7 +10,7 @@ const quittingRef = { current: false };
 
 const isDev = !app.isPackaged;
 
-// ?? Electron ?????webSecurity / allowRunningInsecureContent / CSP?
+// 禁用 Electron 安全警告（webSecurity / allowRunningInsecureContent / CSP）
 process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
 
 // Fix GPU cache permission errors by setting a custom cache path

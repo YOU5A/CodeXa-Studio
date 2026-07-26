@@ -2,7 +2,7 @@
 const path = require("path");
 const { PythonBridge } = require("./python-bridge");
 
-// ---- .NET Bridge (???) ----
+// ---- .NET Bridge (主桥接) ----
 function startDotNetBridge(isDev, dotnetBridge) {
   const exePath = isDev
     ? path.join(__dirname, "..", "dotnet-bridge", "publish", "CodeXaBridge.exe")
@@ -65,7 +65,7 @@ function startDotNetBridge(isDev, dotnetBridge) {
   }
 }
 
-// ---- Python Bridge (????) ----
+// ---- Python Bridge (回退桥接) ----
 function startPythonBridge(isDev, pythonBridge) {
   const bridgePath = isDev
     ? path.join(__dirname, "..", "bridge", "server.py")
@@ -111,12 +111,12 @@ function startPythonBridgeWithRetry(isDev, pythonBridge, maxRetries, delayMs) {
   return () => { if (timer) clearTimeout(timer); };
 }
 
-// ---- Setup: ???? ----
+// ---- Setup: 按需回退 ----
 function setupBridges({ isDev, dotnetBridge, pythonBridge, app }) {
   const dotnetOk = startDotNetBridge(isDev, dotnetBridge);
 
   if (!dotnetOk) {
-    // .NET ??? ? ?? 3 ???? Python ????? 3 ???
+    // .NET 不可用 → 延迟 3 秒后尝试 Python 回退，最多 3 次重试
     console.log("[Bridge] .NET bridge unavailable, falling back to Python in 3s...");
     setTimeout(() => {
       startPythonBridgeWithRetry(isDev, pythonBridge, 3, 3000);
