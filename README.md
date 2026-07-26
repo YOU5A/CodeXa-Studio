@@ -119,7 +119,6 @@ npm run build
 | ---------------------------------------- | ------------------ |
 | amll-dev/applemusic-like-lyrics          | Apple Music 风格歌词组件 |
 | SUlTlUS/refined-now-playing-netease-next | 网易云 Now Playing UI |
-| Binaryify/NeteaseCloudMusicApi           | 网易云音乐第三方 API       |
 
 感谢所有开源作者以及社区贡献者。
 
@@ -131,11 +130,11 @@ npm run build
 
 你可以：
 
-* - Fork 本项目
-* - 学习源码
-* - 修改源码
-* - 二次开发
-* - 提交 Pull Request
+* Fork 本项目
+* 学习源码
+* 修改源码
+* 二次开发
+* 提交 Pull Request
 
 但必须遵守 AGPL-3.0 协议，包括但不限于：
 
