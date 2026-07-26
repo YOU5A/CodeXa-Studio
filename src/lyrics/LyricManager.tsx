@@ -183,8 +183,10 @@ export function useLyricManager() {
   useEffect(() => {
     if (playingFile && playingFile !== lastFileRef.current) {
       lastFileRef.current = playingFile;
-      setCurrentLineIndex(-1);
+      setLyricData(null);
+      setCurrentLineIndex(0);
       setCurrentTime(0);
+      lastIndexRef.current = -1;
       fetchLyrics(playingFile);
     }
     if (!playingFile) {

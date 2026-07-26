@@ -1,7 +1,7 @@
-﻿<!--
+<!--
   AGENTS.md — CodeXa Studio
-  重构于 2026-07-25
-  精简版：面向 AI Agent 的操作指令
+  重构于 2026-07-26
+  面向 AI Agent 的操作指令
 -->
 
 # AGENTS.md — CodeXa Studio
@@ -70,61 +70,119 @@
 
 ```
 CodeXa-Studio/
-├── bridge/                     # Python JSON-RPC 服务端
-│   ├── server.py               # RPC 入口（29 个方法路由）
-│   └── config.json             # Bridge 语言配置
+├── bridge/                     # Python JSON-RPC 桥接（已废弃，仅 __pycache__）
 ├── data/                       # 运行时数据（配置、备份索引）
+├── diag-cpu/                   # CPU 诊断工具 (.NET)
+│   ├── CpuDiag.csproj
+│   └── Program.cs
+├── dotnet-bridge/              # ★ .NET 10 JSON-RPC 桥接（主桥接）
+│   ├── CodeXaBridge.csproj
+│   ├── Program.cs              # JSON-RPC over stdin/stdout 入口
+│   └── Services/               # 7 个服务实现
+│       ├── AdminService.cs     # 管理员检测/提权重启
+│       ├── BackupService.cs    # 注册表备份管理
+│       ├── ConfigService.cs    # 配置读写
+│       ├── MusicService.cs     # 音乐标签/封面/歌词
+│       ├── PriorityService.cs  # 进程优先级规则
+│       ├── RegistryService.cs  # 注册表读写
+│       └── SystemInfoService.cs # 系统信息
 ├── electron/                   # Electron 主进程
 │   ├── main.js                 # 窗口、IPC、托盘、提权、在线歌词搜索
 │   ├── preload.js              # contextBridge → window.electronAPI
-│   └── python-bridge.js        # Python 子进程管理器（JSON-RPC over stdin/stdout）
-├── resources/                  # Python 核心业务 (.pyw)
+│   ├── python-bridge.js        # Python 子进程管理器（回退桥接）
+│   └── rpc/                    # RPC 路由分发层（8 个模块）
+│       ├── index.js            # 路由注册入口
+│       ├── admin.js            # admin.check / restart
+│       ├── backup.js           # backup.* 方法
+│       ├── config.js           # config.get / set
+│       ├── music.js            # music.* 方法
+│       ├── priority.js         # priority.* 方法
+│       ├── registry.js         # registry.* 方法
+│       └── system.js           # system.info
+├── embed-python/               # 嵌入式 Python 运行时
+├── resources/                  # Python 核心业务 (.pyw, 回退用)
 │   ├── Win32PrioritySeparation.pyw   # 注册表读写、备份管理
 │   ├── AppCpuPriorityTools.pyw       # 进程优先级规则
 │   └── File_Music.pyw                # 音乐文件标签/封面操作
 ├── src/                        # React 前端
 │   ├── App.tsx                 # 根组件（路由、布局、Provider 嵌套）
 │   ├── main.tsx                # ReactDOM 入口
-│   ├── version.ts              # 统一版本号常量
+│   ├── version.ts              # 统一版本号常量 (2.0.0)
 │   ├── components/             # 应用级组件
-│   │   ├── FluidBackground/    # Canvas 2D 流体背景子系统
-│   │   │   ├── index.tsx       # FluidBackground 组件
-│   │   │   ├── renderer.ts     # WebGL/Canvas 渲染器
-│   │   │   ├── presets.ts      # 7 套预设定义
-│   │   │   └── config.ts       # 配置持久化
+│   │   ├── BottomNotice.tsx    # 底部通知栏
+│   │   ├── ConfirmDialog.tsx   # 确认对话框
+│   │   ├── CoverSearchPanel.tsx # 封面搜索面板
 │   │   ├── FluidSettingsPanel.tsx  # 流体背景设置面板
+│   │   ├── GlassCard.tsx       # 应用级 Glass 卡片封装
+│   │   ├── PageLayout.tsx      # 页面通用布局
 │   │   ├── Sidebar.tsx         # 侧边导航栏
 │   │   ├── TitleBar.tsx        # 自定义标题栏
 │   │   ├── Toast.tsx           # Toast 通知容器
-│   │   ├── ConfirmDialog.tsx   # 确认对话框
-│   │   ├── GlassCard.tsx       # 应用级 Glass 卡片封装
-│   │   └── PageLayout.tsx      # 页面通用布局
+│   │   └── FluidBackground/    # Canvas/SVG 流体背景子系统
+│   │       ├── index.tsx       # FluidBackground 组件
+│   │       ├── renderer.ts     # Canvas 2D 渲染器
+│   │       ├── presets.ts      # 7 套预设定义
+│   │       ├── config.ts       # 配置持久化
+│   │       ├── SvgFluidRenderer.tsx  # SVG 流体渲染器
+│   │       └── SvgFluidRenderer.css  # SVG 流体样式
 │   ├── contexts/               # 4 个 Context
-│   │   ├── LanguageContext.tsx       # 中英文切换（同步 Python Bridge）
+│   │   ├── ConfirmContext.tsx        # 全局确认对话框
+│   │   ├── LanguageContext.tsx       # 中英文切换（同步 Bridge）
 │   │   ├── MusicPlayerContext.tsx    # HTML5 Audio 播放器状态
-│   │   ├── ToastContext.tsx          # 全局 Toast
-│   │   └── ConfirmContext.tsx        # 全局确认对话框
+│   │   └── ToastContext.tsx          # 全局 Toast
 │   ├── design-system/          # ★ Liquid Glass 核心（禁止自创样式）
+│   │   ├── index.ts            # 统一导出
 │   │   ├── tokens/             # colors / blur / spacing
+│   │   │   ├── colors.ts       # 8 套主题 CSS 变量，4 级 glass 表面色
+│   │   │   ├── blur.ts         # glass(24px) → surface(16px) → subtle(8px) → none(0px)
+│   │   │   ├── spacing.ts      # 4px 基准 · 圆角 · z-index 层级
+│   │   │   └── index.ts
 │   │   ├── materials/          # 4 级玻璃材质
-│   │   ├── components/         # 15 个 Glass 组件
-│   │   ├── layouts/            # GlassBackground / GlassLayout / GlassMain
-│   │   └── animations/         # springs / glass / 基础变体 + pageTransition
+│   │   │   ├── materials.ts    # ultraThin → regular → thick → elevated
+│   │   │   └── index.ts
+│   │   ├── components/         # 17 个 Glass 组件
+│   │   │   ├── index.ts
+│   │   │   ├── GlassSurface.tsx      # 基础玻璃表面
+│   │   │   ├── GlassCard.tsx         # 玻璃卡片
+│   │   │   ├── GlassPanel.tsx        # 玻璃面板
+│   │   │   ├── GlassButton.tsx       # 玻璃按钮
+│   │   │   ├── GlassPillButton.tsx   # 胶囊按钮
+│   │   │   ├── GlassInput.tsx        # 玻璃输入框
+│   │   │   ├── GlassModal.tsx        # 玻璃模态框
+│   │   │   ├── GlassSelect.tsx       # 玻璃选择器
+│   │   │   ├── GlassToggle.tsx       # 玻璃开关
+│   │   │   ├── GlassProgressBar.tsx  # 玻璃进度条
+│   │   │   ├── GlassBadge.tsx        # 玻璃徽章
+│   │   │   ├── GlassEmptyState.tsx   # 空状态占位
+│   │   │   ├── GlassGlow.tsx         # 光晕效果
+│   │   │   ├── GlassFloat.tsx        # 浮动容器
+│   │   │   ├── GlassTooltip.tsx      # 工具提示
+│   │   │   ├── GlassScrollArea.tsx   # 滚动区域
+│   │   │   └── GlassSlider.tsx       # 滑块控件
+│   │   ├── layouts/            # 布局组件
+│   │   │   ├── index.ts
+│   │   │   ├── GlassBackground.tsx   # 全局玻璃背景
+│   │   │   ├── GlassLayout.tsx       # 页面布局容器
+│   │   │   └── GlassMain.tsx         # 主内容区
+│   │   └── animations/         # 动画预设
+│   │       ├── index.ts
+│   │       ├── springs.ts      # Spring 物理参数
+│   │       └── glass.ts        # 玻璃材质动画变体 + pageTransition
 │   ├── hooks/                  # 4 个 Hook
 │   │   ├── useTheme.tsx        # 8 套主题切换 + localStorage 持久化
-│   │   ├── usePythonBridge.ts  # Python JSON-RPC 调用封装
+│   │   ├── usePythonBridge.ts  # Bridge JSON-RPC 调用封装
 │   │   ├── useMouseGlow.ts     # 鼠标光晕追踪
 │   │   └── useActivityLog.ts   # 操作历史记录
 │   ├── lyrics/                 # 歌词子系统
-│   │   ├── LyricDisplay.tsx    # 歌词展示容器
-│   │   ├── LyricsLine.tsx      # 单行歌词渲染
-│   │   ├── LyricWindow.tsx     # 歌词悬浮窗
-│   │   ├── LyricManager.ts     # 歌词状态管理
-│   │   ├── LyricParser.ts      # LRC 解析器
-│   │   ├── InterludeDots.tsx   # 间奏动画
-│   │   ├── LyricsSettingsPanel.tsx  # 歌词设置面板
+│   │   ├── index.ts            # 统一导出
 │   │   ├── types.ts            # 歌词类型定义
-│   │   └── index.ts            # 统一导出
+│   │   ├── LyricParser.ts      # LRC 格式解析（多时间标签、偏移量）
+│   │   ├── LyricManager.tsx    # 歌词状态管理（当前行、滚动、播放同步）
+│   │   ├── LyricDisplay.tsx    # 主展示容器（动态模糊背景、逐行高亮）
+│   │   ├── LyricBlock.tsx      # 单行动画渲染（卡拉 OK 逐字着色）
+│   │   ├── LyricWindow.tsx     # 独立悬浮歌词窗口
+│   │   ├── InterludeDots.tsx   # 间奏等待动画
+│   │   └── LyricsSettingsPanel.tsx  # 歌词样式调节面板
 │   ├── pages/                  # 6 个页面 (React.lazy 懒加载)
 │   │   ├── Dashboard.tsx       # 仪表盘
 │   │   ├── Win32Priority.tsx   # Win32 优先级分离
@@ -141,34 +199,54 @@ CodeXa-Studio/
 ├── icon.ico                    # Windows 图标
 ├── package.json                # 依赖 + electron-builder 配置
 ├── vite.config.ts              # Vite 配置
-└── tsconfig.json               # TypeScript 配置
+├── tsconfig.json               # TypeScript 配置
+├── tsconfig.electron.json      # Electron TypeScript 配置
+├── start-dev.bat               # 开发模式启动脚本
+└── stop-dev.bat                # 开发模式停止脚本
 ```
 
-### 四层架构
+### 桥接架构（双桥回退）
 
 ```
-React 19 (TypeScript)  ←IPC→  Electron 42  ←JSON-RPC→  .NET 10 (dotnet-bridge/CodeXaBridge.exe)
+React 19 (TypeScript)  ←IPC→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Python (回退)
+                                │
+                    ┌───────────┴───────────┐
+                    │   electron/rpc/        │
+                    │   (路由分发层, 8 模块)  │
+                    └───────────┬───────────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              ▼                                    ▼
+    .NET 10 Bridge (主)                  Python Bridge (回退)
+    dotnet-bridge/publish/              resources/*.pyw
+    CodeXaBridge.exe                    (Win32PrioritySeparation.pyw,
+    Services/ (7 个 .cs)                 AppCpuPriorityTools.pyw,
+                                        File_Music.pyw)
 ```
 
-Electron 主进程额外集成 NeteaseCloudMusicApi 实现在线歌词搜索。
+- **主桥接:** .NET 10 `CodeXaBridge.exe`，JSON-RPC over stdin/stdout，7 个服务类。
+- **回退桥接:** Python `.pyw` 脚本，当 .NET Bridge 不可用时自动切换。
+- **路由层:** `electron/rpc/` 目录 8 个模块，统一分发 29 个 RPC 方法。
+- Electron 主进程额外集成 NeteaseCloudMusicApi 实现在线歌词搜索。
 
 ### 关键 Context 与 Hook
 
 | 名称 | 类型 | 用途 |
 |------|------|------|
 | useTheme | Hook | 8 套主题切换 + localStorage 持久化 |
-| LanguageContext | Context | 中英文切换，同步到 Python Bridge |
+| LanguageContext | Context | 中英文切换，同步到 Bridge |
 | ToastContext | Context | 全局 Toast (success/warning/error/info) |
 | ConfirmContext | Context | 全局确认对话框 |
 | MusicPlayerContext | Context | HTML5 Audio 播放器状态 |
-| usePythonBridge | Hook | Python JSON-RPC 调用封装 |
+| usePythonBridge | Hook | Bridge JSON-RPC 调用封装 |
 | useMouseGlow | Hook | 鼠标光晕追踪 |
 | useActivityLog | Hook | 操作历史记录 |
 
 ### 流体背景系统
 
-位于 `src/components/FluidBackground/`，Canvas 2D 流体动态背景：
+位于 `src/components/FluidBackground/`，Canvas 2D + SVG 流体动态背景：
 - 7 套预设: aurora / ocean / ember / nebula / plasma / forest / cover
+- 双渲染器: Canvas 2D (`renderer.ts`) + SVG (`SvgFluidRenderer.tsx`)
 - 支持 auto（主题自适应）和 custom 模式
 - 鼠标交互（光晕跟随）、速度/强度/模糊调节
 - 配置独立持久化到 localStorage key `fluid-background-config`
@@ -180,24 +258,26 @@ Electron 主进程额外集成 NeteaseCloudMusicApi 实现在线歌词搜索。
 - **LyricParser** — LRC 格式解析（支持多时间标签、偏移量）
 - **LyricManager** — 歌词状态管理（当前行、滚动、播放同步）
 - **LyricDisplay** — 主展示容器（含动态模糊背景、逐行高亮）
-- **LyricsLine** — 单行动画渲染（卡拉 OK 逐字着色）
+- **LyricBlock** — 单行动画渲染（卡拉 OK 逐字着色）
 - **LyricWindow** — 独立悬浮歌词窗口
 - **InterludeDots** — 间奏等待动画
 - **LyricsSettingsPanel** — 歌词样式调节面板
 
 ---
 
-## RPC 方法列表（bridge/server.py）
+## RPC 方法列表
 
-| 类别 | 方法数 | 方法 |
-|------|--------|------|
-| 系统信息 | 1 | `system.info` |
-| 注册表 | 3 | `registry.read` / `write` / `backup` |
-| 管理员 | 2 | `admin.check` / `restart` |
-| 优先级规则 | 6 | `priority.list` / `add` / `edit` / `delete` / `export` / `import_config` |
-| 音乐管理 | 9 | `music.scan` / `get_metadata` / `save_tags` / `extract_cover` / `apply_cover` / `remove_cover` / `read_cover_file` / `rename` / `get_lyrics` |
-| 备份管理 | 6 | `backup.list` / `dir` / `export` / `restore` / `delete` / `clear_all` |
-| 配置 | 2 | `config.get` / `set` |
+**路由分发:** `electron/rpc/` → .NET Bridge (主) 或 Python Bridge (回退)
+
+| 类别 | 方法数 | 方法 | 实现 (C#) |
+|------|--------|------|-----------|
+| 系统信息 | 1 | `system.info` | SystemInfoService.cs |
+| 注册表 | 3 | `registry.read` / `write` / `backup` | RegistryService.cs |
+| 管理员 | 2 | `admin.check` / `restart` | AdminService.cs |
+| 优先级规则 | 6 | `priority.list` / `add` / `edit` / `delete` / `export` / `import_config` | PriorityService.cs |
+| 音乐管理 | 9 | `music.scan` / `get_metadata` / `save_tags` / `extract_cover` / `apply_cover` / `remove_cover` / `read_cover_file` / `rename` / `get_lyrics` | MusicService.cs |
+| 备份管理 | 6 | `backup.list` / `dir` / `export` / `restore` / `delete` / `clear_all` | BackupService.cs |
+| 配置 | 2 | `config.get` / `set` | ConfigService.cs |
 
 **总计: 29 个 RPC 方法**
 
@@ -212,9 +292,9 @@ Electron 主进程额外集成 NeteaseCloudMusicApi 实现在线歌词搜索。
 | 间距 | `tokens/spacing.ts` | 4px 基准 · 圆角 sm/md/lg/xl · z-index base→tooltip |
 | 材质 | `materials/materials.ts` | ultraThin → regular → thick → elevated |
 
-### Glass 组件清单（15 个）
+### Glass 组件清单（17 个）
 
-`GlassSurface` / `GlassCard` / `GlassPanel` / `GlassButton` / `GlassPillButton` / `GlassInput` / `GlassModal` / `GlassSelect` / `GlassToggle` / `GlassProgressBar` / `GlassBadge` / `GlassEmptyState` / `GlassGlow` / `GlassFloat` / `GlassTooltip`
+`GlassSurface` / `GlassCard` / `GlassPanel` / `GlassButton` / `GlassPillButton` / `GlassInput` / `GlassModal` / `GlassSelect` / `GlassToggle` / `GlassProgressBar` / `GlassBadge` / `GlassEmptyState` / `GlassGlow` / `GlassFloat` / `GlassTooltip` / `GlassScrollArea` / `GlassSlider`
 
 ---
 

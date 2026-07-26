@@ -1,155 +1,239 @@
+````markdown
 <p align="center">
-  <picture>
-    <img src="public/icon.png" width="140" alt="CodeXa Studio" />
-  </picture>
+  <img src="public/icon.png" width="120" alt="CodeXa Studio" />
 </p>
 
 <h1 align="center">CodeXa Studio</h1>
 
 <p align="center">
-  <b>Windows 系统调优，从未如此优雅</b>
+  <b>现代化 Windows 音乐管理器 & 系统工具箱</b>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.3.8-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Windows-11-0078D6?style=for-the-badge&logo=windows11" />
-  <img src="https://img.shields.io/badge/Electron-42-47848F?style=for-the-badge&logo=electron" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react" />
+CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows 桌面应用，专注于本地音乐管理体验，同时集成常用 Windows 系统优化工具。
+<br/>
+提供音频标签编辑、歌词同步显示、专辑封面管理、播放器、网易云歌曲信息辅助以及系统优化等功能。
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript" />
-  <img src="https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss" />
-  <img src="https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python" />
-  <img src="https://img.shields.io/badge/Framer_Motion-12-0055FF?style=flat-square&logo=framer" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react" />
+  <img src="https://img.shields.io/badge/Electron-42-47848F?style=flat-square&logo=electron" />
+  <img src="https://img.shields.io/badge/.NET-10-512BD4?style=flat-square&logo=dotnet" />
   <img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square" />
 </p>
 
 ---
 
-## 这是什么
+# 📸 预览
 
-**CodeXa Studio** 是一款 Windows 系统调优一体化工具箱。融合 **Apple Liquid Glass 设计语言** 与 **Framer Motion** 动效引擎，把注册表编辑、CPU 调度、音乐标签管理这些硬核操作装进一块玻璃面板里。
+<p align="center">
+  <b>🎵 音乐管理器</b><br/>
+  <img src="Screenshot1.png" width="85%" alt="音乐管理器" />
+</p>
 
-### 亮点
-
-- **Liquid Glass 设计系统** — 4 级模糊景深、12 个 Glass 组件、30+ 动画预设
-- **Canvas 流体背景** — 7 套动态预设 + 鼠标交互 + 封面颜色提取
-- **8 套主题** — 明暗自动切换，石墨 / 午夜 / 海洋 / 翡翠 / 深红
-- **Spring 物理动画** — 一切交互都有质感，framer-motion 驱动
-- **无边框透明窗口** — Electron 42，管理员权限自动提权
-
----
-
-## 功能模块
-
-| 模块 | 功能 | 技术要点 |
-|------|------|----------|
-| **Win32 优先级分离** | CPU 调度注册表读写，内置预设方案与备份管理 | HKLM\SYSTEM\...\Win32PrioritySeparation |
-| **应用 CPU 优先级** | IFEO 注册表级规则 CRUD，JSON 导入/导出 | HKLM\SOFTWARE\...\Image File Execution Options |
-| **音乐管理器** | MP3/FLAC/OGG/M4A 标签编辑 + 封面提取 + 内置播放器 | mutagen · Pillow · HTML5 Audio |
-| **备份中心** | 注册表快照管理：查看、恢复、导出、清理 | JSON-RPC 注册表 batch 操作 |
-| **系统仪表盘** | CPU/内存/磁盘实时轮询 + 操作历史 | psutil · Python Bridge |
-| **深度定制** | 主题、透明度、圆角、动画速度、紧凑模式、字体缩放、流体背景 | CSS 变量 · localStorage 持久化 |
+<p align="center">
+  <b>⚙ Win32 优先级分离</b><br/>
+  <img src="Screenshot2.png" width="85%" alt="Win32 优先级分离" />
+</p>
 
 ---
 
-## 架构
+# ✨ 功能
 
-`
-React 19 (TypeScript)  ←→  Electron 42 (IPC)  ←→  Python 3.13 (JSON-RPC)
-`
+## 🎵 音乐管理
 
-| 层 | 技术 | 说明 |
-|----|------|------|
-| **前端** | React 19 · TypeScript 6 · Tailwind CSS 4 · Framer Motion 12 | 6 页面懒加载 · 5 个 Context · 设计系统 |
-| **桌面** | Electron 42 | 无边框透明窗口 · 系统托盘 · 单实例锁 · 自动提权 |
-| **桥接** | JSON-RPC stdin/stdout | 30s 超时 · 自动重连 · 26 个 RPC 方法 |
-| **后端** | Python 3.13 | psutil · mutagen · Pillow · 注册表操作 |
+- 🎼 MP3 / FLAC / OGG / M4A 标签编辑
+- 🏷 标题、艺术家、专辑、年份等元数据编辑
+- 🖼 专辑封面查看、替换、提取
+- 📝 LRC 歌词解析与同步显示
+- 🍎 Apple Music 风格歌词动画
+- ▶️ 内置音乐播放器
+- 🔍 本地音乐快速搜索
+- ☁️ 网易云歌曲信息匹配
+- 📂 批量管理音乐文件
+- 🎧 高质量本地音乐浏览体验
 
-### 项目结构
+## ⚙ Windows 系统工具
 
-`
-CodeXa-Studio/
-├── bridge/server.py          # Python JSON-RPC 服务端
-├── electron/                 # Electron 主进程
-│   ├── main.js               # 窗口、IPC、托盘、提权
-│   ├── preload.js            # contextBridge API
-│   └── python-bridge.js      # Python 子进程管理
-├── resources/                # Python 业务脚本 (.pyw)
-├── src/                      # React 前端
-│   ├── design-system/        # Liquid Glass 设计系统
-│   ├── components/           # FluidBackground、Sidebar、TitleBar
-│   ├── contexts/             # Theme / Language / Toast / Confirm / MusicPlayer
-│   ├── pages/                # 6 个功能页面
-│   └── hooks/                # usePythonBridge / useMouseGlow / useActivityLog
-├── package.json
-├── vite.config.ts
-└── tsconfig.json
-`
+- Win32 优先级分离
+- 应用 CPU 优先级（IFEO）
+- 注册表备份与恢复
+- 系统仪表盘
+- 操作历史记录
 
 ---
 
-## 安装与运行
+# 🌟 项目特色
+
+- 🎵 专注于本地音乐管理体验
+- 🍎 Apple Music 风格歌词动画
+- 🎨 Liquid Glass 设计语言
+- 🌈 多主题切换
+- ⚡ Electron + React 高性能桌面应用
+- 🪟 Fluent Design 风格界面
+- 💾 本地数据存储，不上传用户音乐
+- 🔥 持续更新更多音乐管理功能
+
+---
+
+# 📂 项目结构
+
+```text
+CodeXa Studio
+├── Music Manager
+│   ├── Audio Player
+│   ├── Tag Editor
+│   ├── Lyrics
+│   ├── Album Art
+│   ├── Search
+│   └── Music Library
+│
+├── Windows Tools
+│   ├── Win32 Priority
+│   ├── IFEO
+│   ├── Backup Center
+│   └── Dashboard
+│
+└── Shared Components
+````
+
+---
+
+# 🚀 快速开始
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式
+npm run dev
+
+# 构建
+npm run build
+```
 
 ### 环境要求
 
-- **Windows 11**（管理员权限）
-- **Node.js** 22+
-- **Python** 3.13
-
-### 安装依赖
-
-`ash
-# Python 依赖
-pip install psutil mutagen Pillow
-
-# 前端依赖
-npm install
-`
-
-### 开发
-
-`ash
-npm run dev          # 同时启动 Vite + Electron
-npm run vite:dev     # 仅启动 Vite 开发服务器
-npm run electron:dev # 仅启动 Electron 窗口
-`
-
-### 构建
-
-`ash
-npm run build        # Vite 构建 + electron-builder 打包
-`
-
-构建产物:
-- dist/ — Vite 前端产物
-- dist-electron/ — Portable .exe + NSIS 安装包
-
-> **下载:** [github.com/YOU5A/CodeXa-Studio/releases](https://github.com/YOU5A/CodeXa-Studio/releases)
+* Windows 11
+* Node.js 22+
+* .NET 10 SDK
+* 管理员权限（部分系统功能需要）
 
 ---
 
-## 主题
+# 🛠 技术栈
 
-☀️ 浅色 · 🌙 深色 · 🔄 自动 · 🩶 石墨 · 🌑 午夜 · 🌊 海洋 · 🟢 翡翠 · 🔴 深红
+* React 19
+* TypeScript 6
+* Electron 42
+* .NET 10
+* Tailwind CSS 4
+* Framer Motion
+* C#
+* Python（部分工具模块）
 
 ---
 
-## 贡献
+# ❤️ 鸣谢
 
-AI Agent 请先阅读 [AGENTS.md](./AGENTS.md)。
+本项目使用、参考或受到以下优秀开源项目启发：
 
-欢迎提交 Issue 和 Pull Request。
+| 项目                                       | 用途                 |
+| ---------------------------------------- | ------------------ |
+| amll-dev/applemusic-like-lyrics          | Apple Music 风格歌词组件 |
+| SUlTlUS/refined-now-playing-netease-next | 网易云 Now Playing UI |
+| Binaryify/NeteaseCloudMusicApi           | 网易云音乐第三方 API       |
+| React                                    | 前端框架               |
+| Electron                                 | 桌面应用框架             |
+| .NET                                     | 系统工具模块             |
+| Tailwind CSS                             | UI 样式              |
+| Framer Motion                            | 动画框架               |
+
+感谢所有开源作者以及社区贡献者。
 
 ---
 
-## 许可
+# 📡 第三方服务说明
 
-AGPL-3.0 © 2025 YOU5A
+CodeXa Studio 部分功能依赖第三方公开接口，仅用于提升用户体验。
+
+目前包括但不限于：
+
+* **NeteaseCloudMusicApi**
+
+  * 歌曲搜索
+  * 歌词获取
+  * 专辑封面获取
+  * 歌曲信息查询
+
+本项目不会保存、上传或分享任何用户音乐文件。
+
+第三方接口的版权及数据所有权归对应服务提供方所有。
+
+若第三方接口停止维护、变更或失效，相关功能可能无法正常使用。
+
+---
+
+# 📄 开源协议
+
+本项目采用 **GNU Affero General Public License v3.0（AGPL-3.0）**。
+
+你可以：
+
+* ✅ Fork 本项目
+* ✅ 学习源码
+* ✅ 修改源码
+* ✅ 二次开发
+* ✅ 提交 Pull Request
+
+但必须遵守 AGPL-3.0 协议，包括但不限于：
+
+* 保留原始版权声明
+* 保留 License 文件
+* 修改后的版本同样采用 AGPL-3.0
+* 基于本项目提供网络服务时，应公开对应源码
+
+详细内容请查看仓库中的 **LICENSE** 文件。
+
+---
+
+# ⚠️ 免责声明
+
+CodeXa Studio 是一个开源软件，仅供学习、研究及个人合法用途使用。
+
+## 关于音乐功能
+
+* 本项目不会破解任何音乐平台版权保护。
+* 本项目不提供任何盗版音乐资源。
+* 本项目不内置任何音乐下载服务。
+* 所有歌曲、歌词、封面及相关资源版权均归原版权所有者所有。
+* 网易云音乐相关功能依赖第三方公开 API，仅用于获取公开可访问的信息。
+* 请遵守所在地法律法规及相关平台用户协议。
+
+## 关于系统功能
+
+本项目包含部分 Windows 系统配置及注册表修改功能。
+
+请在操作前做好必要的数据及注册表备份。
+
+开发者不对因误操作、系统环境差异、第三方软件冲突等原因导致的：
+
+* 数据丢失
+* 系统异常
+* 软件冲突
+* 硬件损坏
+* 其他直接或间接损失
+
+承担任何责任。
+
+使用本软件即表示你已阅读并同意上述声明。
 
 ---
 
 <p align="center">
-  <sub>Crafted with ❤️ by <a href="https://github.com/YOU5A">YOU5A</a></sub>
+Made with ❤️ by <a href="https://github.com/YOU5A">YOU5A</a>
+<br/>
+如果觉得项目不错，欢迎 ⭐ Star 支持一下！
 </p>
+```

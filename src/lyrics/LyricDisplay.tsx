@@ -183,6 +183,7 @@ export default function LyricDisplay({
   // This ensures the interim render (before lyicGen kicks in) has correct estimates
   useLayoutEffect(() => {
     heightOfItems.current = [];
+    setHeightVersion(0);
   }, [lyricData]);
 
   // ── Manual scroll state ──
@@ -265,14 +266,15 @@ const manualBaseRef = useRef(0);
     }
 
     // Position current line at alignment percentage (auto) or free-range (manual)
+    const currentH = heightOfItems.current[current] || (settings.fontSize * 1.5);
     if (isManual) {
       // In manual mode, center on the scrolled-to line with full viewport range
       const rawCenter = effectiveContainerHeight * (settings.alignmentPercentage * 0.01);
-      t[current].top = rawCenter - heightOfItems.current[current] / 2;
+      t[current].top = rawCenter - currentH / 2;
     } else {
       t[current].top =
         effectiveContainerHeight * (settings.alignmentPercentage * 0.01) -
-        heightOfItems.current[current] / 2;
+        currentH / 2;
     }
     t[current].scale = 1;
     t[current].blur = bByOffset(0);
@@ -292,7 +294,8 @@ const manualBaseRef = useRef(0);
       t[i].scale = sByOffset(offset);
       t[i].blur = bByOffset(offset);
       t[i].opacity = oByOffset(offset);
-      const scaledH = heightOfItems.current[i] * t[i].scale;
+      const itemH = heightOfItems.current[i] || (settings.fontSize * 1.5);
+      const scaledH = itemH * t[i].scale;
       t[i].top = t[i + 1].top - scaledH - space;
       t[i].delay = delayByOffset(offset);
     }
@@ -303,7 +306,8 @@ const manualBaseRef = useRef(0);
       t[i].scale = sByOffset(offset);
       t[i].blur = bByOffset(offset);
       t[i].opacity = oByOffset(offset);
-      const prevScaledH = heightOfItems.current[i - 1] * t[i - 1].scale;
+      const prevItemH = heightOfItems.current[i - 1] || (settings.fontSize * 1.5);
+      const prevScaledH = prevItemH * t[i - 1].scale;
       t[i].top = t[i - 1].top + prevScaledH + space;
       t[i].delay = delayByOffset(offset);
     }
