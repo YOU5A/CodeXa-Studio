@@ -80,6 +80,10 @@ export default function LyricDisplay({
   const [containerWidth, setContainerWidth] = useState(0);
   const containerHeightRef = useRef(0);
 
+  // Opacity gate: keep lyrics hidden until both containerHeight & line heights are measured.
+  // Prevents visible flash of wrong centering / collapsed heights on song switch.
+  const [isVisible, setIsVisible] = useState(false);
+
   const heightOfItems = useRef<number[]>([]);
   const shouldTransit = useRef(true);
   const previousFocusedLineRef = useRef(0);
@@ -97,6 +101,26 @@ export default function LyricDisplay({
       containerHeightRef.current = h;
       setContainerHeight(h);
       setContainerWidth(containerRef.current.clientWidth);
+      // Measure actual lyric block heights synchronously (before first paint).
+      // This prevents the "collapsed" look caused by inaccurate height estimates.
+      const items = containerRef.current.querySelectorAll("[data-lyric-index]");
+      if (items.length > 0) {
+        const n = allLines.length;
+        const fresh = new Array(n) as number[];
+        for (let i = 0; i < n; i++) {
+          fresh[i] = heightOfItems.current[i] || estimateBlockHeight(allLines[i], settings);
+        }
+        items.forEach((el) => {
+          const idx = Number((el as HTMLElement).dataset.lyricIndex);
+          if (!isNaN(idx) && idx >= 0 && idx < n) {
+            fresh[idx] = (el as HTMLElement).offsetHeight || fresh[idx];
+          }
+        });
+        heightOfItems.current = fresh;
+        setHeightVersion((v) => v + 1);
+      }
+      // Reveal once container height is known
+      if (h > 0) setIsVisible(true);
     };
     measure();
     const ro = new ResizeObserver(() => {
@@ -470,6 +494,8 @@ const manualBaseRef = useRef(0);
           height: "100%",
           overflow: "hidden",
           position: "relative",
+          opacity: isVisible ? 1 : 0,
+          transition: "opacity 0.2s ease",
           display: "flex",
           justifyContent: "center",
           textAlign: "center",
@@ -508,6 +534,7 @@ const manualBaseRef = useRef(0);
           return (
             <div
               key={i}
+              data-lyric-index={i}
               style={{
                 position: "absolute",
                 top: tf.top,

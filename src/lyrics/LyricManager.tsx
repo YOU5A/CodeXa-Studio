@@ -78,7 +78,14 @@ export function useLyricManager() {
     if (!filePath) return;
 
     if (lyricCache.has(filePath)) {
-      setLyricData(lyricCache.get(filePath)!);
+      const data = lyricCache.get(filePath)!;
+      setLyricData(data);
+      // Sync current line index immediately so first visible frame centers correctly
+      const rawTime = audioState.pos ?? 0;
+      const idx = computeLineIndex(rawTime, data.lines);
+      lastIndexRef.current = idx;
+      setCurrentLineIndex(idx);
+      setCurrentTime(rawTime);
       setError(null);
       return;
     }
@@ -136,6 +143,11 @@ export function useLyricManager() {
         if (data) {
           lyricCache.set(filePath, data);
           setLyricData(data);
+          const rt = audioState.pos ?? 0;
+          const idx = computeLineIndex(rt, data.lines);
+          lastIndexRef.current = idx;
+          setCurrentLineIndex(idx);
+          setCurrentTime(rt);
           setLoading(false);
           return;
         }
@@ -147,6 +159,11 @@ export function useLyricManager() {
         if (data) {
           lyricCache.set(filePath, data);
           setLyricData(data);
+          const rt = audioState.pos ?? 0;
+          const idx = computeLineIndex(rt, data.lines);
+          lastIndexRef.current = idx;
+          setCurrentLineIndex(idx);
+          setCurrentTime(rt);
           setLoading(false);
           return;
         }
@@ -158,6 +175,11 @@ export function useLyricManager() {
         if (neteaseData) {
           lyricCache.set(filePath, neteaseData);
           setLyricData(neteaseData);
+          const rawTime3 = audioState.pos ?? 0;
+          const idx3 = computeLineIndex(rawTime3, neteaseData.lines);
+          lastIndexRef.current = idx3;
+          setCurrentLineIndex(idx3);
+          setCurrentTime(rawTime3);
           setLoading(false);
           return;
         }
@@ -165,6 +187,11 @@ export function useLyricManager() {
         if (localData) {
           lyricCache.set(filePath, localData);
           setLyricData(localData);
+          const rawTime4 = audioState.pos ?? 0;
+          const idx4 = computeLineIndex(rawTime4, localData.lines);
+          lastIndexRef.current = idx4;
+          setCurrentLineIndex(idx4);
+          setCurrentTime(rawTime4);
           setLoading(false);
           return;
         }
