@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { springSnappy, GlassSurface, GlassButton } from "@/design-system";
 import {
-  LayoutDashboard, Cpu, Gauge, Music, Database, Settings,
+  LayoutDashboard, Cpu, Gauge, Music, Database, Settings, FileAudio,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -21,6 +21,7 @@ const navLabels: Record<Language, Record<Page, string>> = {
     appcpupriority: "应用 CPU 优先级",
     musicmanager: "音乐管理器",
     backupcenter: "备份中心",
+    ncmstudio: "NCM 解码",
     settings: "设置",
   },
   en: {
@@ -29,6 +30,7 @@ const navLabels: Record<Language, Record<Page, string>> = {
     appcpupriority: "App CPU Priority",
     musicmanager: "Music Manager",
     backupcenter: "Backup Center",
+    ncmstudio: "NCM Studio",
     settings: "Settings",
   },
 };
@@ -38,6 +40,7 @@ const navItems: { id: Page; icon: React.ReactNode }[] = [
   { id: "win32priority", icon: <Cpu size={18} /> },
   { id: "appcpupriority", icon: <Gauge size={18} /> },
   { id: "musicmanager", icon: <Music size={18} /> },
+  { id: "ncmstudio", icon: <FileAudio size={18} /> },
   { id: "backupcenter", icon: <Database size={18} /> },
   { id: "settings", icon: <Settings size={18} /> },
 ];

@@ -24,6 +24,7 @@ const pageLoaders: Record<Page, () => Promise<{ default: React.ComponentType<any
   appcpupriority: () => import("./pages/AppCpuPriority"),
   musicmanager: () => import("./pages/MusicManager"),
   backupcenter: () => import("./pages/BackupCenter"),
+  ncmstudio: () => import("./pages/NcmStudio"),
   settings: () => import("./pages/Settings"),
 };
 const preloadPage = (page: Page) => { pageLoaders[page](); };
@@ -32,6 +33,7 @@ const Win32Priority = lazy(pageLoaders.win32priority);
 const AppCpuPriority = lazy(pageLoaders.appcpupriority);
 const MusicManager = lazy(pageLoaders.musicmanager);
 const BackupCenter = lazy(pageLoaders.backupcenter);
+const NcmStudio = lazy(pageLoaders.ncmstudio);
 const Settings = lazy(pageLoaders.settings);
 
 function PageLoader() {
@@ -53,7 +55,7 @@ function PageLoader() {
             }}
           />
         }
-        title={"加载中…"}
+        title={"\u52a0\u8f7d\u4e2d\u2026"}
       />
     </div>
   );
@@ -145,6 +147,7 @@ function AppContent() {
     appcpupriority: <AppCpuPriority />,
     musicmanager: <MusicManager onNavigate={handleNavigate} fluidSettings={fluidSettings} onFluidSettingsChange={setFluidSettings} />,
     backupcenter: <BackupCenter />,
+    ncmstudio: <NcmStudio />,
     settings: <Settings />,
   };
 

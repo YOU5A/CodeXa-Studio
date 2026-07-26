@@ -1,10 +1,11 @@
-﻿const system = require("./system");
+const system = require("./system");
 const registry = require("./registry");
 const admin = require("./admin");
 const priority = require("./priority");
 const music = require("./music");
 const backup = require("./backup");
 const config = require("./config");
+const ncm = require("./ncm");
 
 /**
  * Route an RPC method call and return the result.
@@ -80,6 +81,16 @@ async function callMethod(method, params = {}) {
       return await music.renameFile(params);
     case "music.get_lyrics":
       return await music.getLyrics(params);
+
+    // ── NCM ──
+    case "ncm.list":
+      return await ncm.listNcm(params);
+    case "ncm.get_info":
+      return await ncm.getInfo(params);
+    case "ncm.decode":
+      return await ncm.decode(params);
+    case "ncm.batch_decode":
+      return await ncm.batchDecode(params);
 
     // ── Backups ──
     case "backup.list":

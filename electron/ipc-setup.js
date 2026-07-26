@@ -318,15 +318,50 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
     return { ...electronSettings };
   });
 
-  // All 29 RPC methods routed to .NET bridge (Phase 3)
+  // All RPC methods routed to .NET bridge, with Python + JS fallback
+  let _callMethod = null;
+  function getCallMethod() {
+    if (!_callMethod) {
+      try { _callMethod = require("./rpc/index").callMethod; }
+      catch (e) { console.warn("[RPC] Failed to load JS routing:", e.message); }
+    }
+    return _callMethod;
+  }
+
   ipcMain.handle("python:call", async (_event, method, params) => {
+    // NCM methods handled natively (no bridge needed)
+    if (method === "ncm.list") {
+      const { listNcm } = require("./rpc/ncm");
+      return await listNcm(params);
+    }
+    if (method === "ncm.get_info") {
+      const { getInfo } = require("./rpc/ncm");
+      return await getInfo(params);
+    }
+    if (method === "ncm.decode") {
+      const { decode } = require("./rpc/ncm");
+      return await decode(params);
+    }
+    if (method === "ncm.batch_decode") {
+      const { batchDecode } = require("./rpc/ncm");
+      return await batchDecode(params);
+    }
+
     if (dotnetBridge.current?.isRunning) {
       try { return await dotnetBridge.current.call(method, params); }
       catch (e) { console.warn("[.NET Bridge]", method, "failed:", e.message); }
     }
-    if (!pythonBridge.current) return { error: "Python bridge not ready" };
-    try { return await pythonBridge.current.call(method, params); }
-    catch (e) { return { error: e.message }; }
+    if (pythonBridge.current?.isRunning) {
+      try { return await pythonBridge.current.call(method, params); }
+      catch (e) { console.warn("[Python Bridge]", method, "failed:", e.message); }
+    }
+    // Fallback to Node.js routing (electron/rpc/)
+    const callMethod = getCallMethod();
+    if (callMethod) {
+      try { return await callMethod(method, params); }
+      catch (e) { return { error: e.message }; }
+    }
+    return { error: "No bridge or JS fallback available" };
   });
   ipcMain.handle("python:status", () => pythonBridge.current?.isRunning ?? false);
 

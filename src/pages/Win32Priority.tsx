@@ -254,6 +254,7 @@ export default function Win32Priority(_props: Props) {
         <RefreshCw size={14} /> {tx.refresh}
       </GlassButton>
     }>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
       {/* ─── Current Value ─── */}
       <GlassCard>
         <h3 style={sectionTitle}>{tx.currentValue}</h3>
@@ -440,6 +441,7 @@ export default function Win32Priority(_props: Props) {
           </div>
         )}
       </GlassCard>
+      </div>
 
       {/* ─── Preset Tooltip ─── */}
       <BottomNotice show={presetTooltip !== null} onDone={() => setPresetTooltip(null)}>

@@ -71,6 +71,63 @@ export interface PlaybackState {
   is_open: boolean;
 }
 
+// ── NCM types ──
+
+export interface NcmFileInfo {
+  filepath: string;
+  filename: string;
+  size: number;
+  musicId?: number;
+  title?: string;
+  artist?: string;
+  album?: string;
+  format?: string;
+  bitrate?: number;
+  duration?: number;
+  hasCover?: boolean;
+  coverBase64?: string | null;
+}
+
+export interface NcmMetadata {
+  musicId: number;
+  title: string;
+  artist: string;
+  album: string;
+  albumPicUrl?: string;
+  format: string;
+  bitrate: number;
+  duration: number;
+  hasCover: boolean;
+  coverData?: number[] | null;
+}
+
+export interface DecodeProgress {
+  current: number;
+  total: number;
+  currentFile: string;
+  percent: number;
+  status: "scanning" | "decoding" | "writing_tags" | "verifying" | "done" | "error";
+}
+
+export interface DecodeResult {
+  success: boolean;
+  outputPath?: string | null;
+  errorMessage?: string | null;
+  audioFormat: string;
+  md5?: string | null;
+  sha256?: string | null;
+  originalSize: number;
+  decryptedSize: number;
+  title?: string;
+  artist?: string;
+}
+
+export interface BatchDecodeResult {
+  results: DecodeResult[];
+  successCount: number;
+  failCount: number;
+}
+
 export type Theme = "light" | "dark" | "auto" | "graphite" | "midnight" | "ocean" | "emerald" | "crimson";
 export type Language = "zh" | "en";
 export type Page =
@@ -79,9 +136,10 @@ export type Page =
   | "appcpupriority"
   | "musicmanager"
   | "backupcenter"
+  | "ncmstudio"
   | "settings";
 
-/** All 29 JSON-RPC methods routed through electron/rpc ? .NET Bridge (or Python fallback). */
+/** All JSON-RPC methods routed through electron/rpc -> .NET Bridge (or Python fallback). */
 export type RpcMethod =
   | "system.info"
   | "registry.read" | "registry.write" | "registry.backup"
@@ -89,6 +147,7 @@ export type RpcMethod =
   | "priority.list" | "priority.add" | "priority.edit" | "priority.delete" | "priority.export" | "priority.import_config"
   | "music.scan" | "music.get_metadata" | "music.save_tags" | "music.extract_cover" | "music.apply_cover"
   | "music.remove_cover" | "music.read_cover_file" | "music.rename" | "music.get_lyrics" | "music.save_cover_file"
+  | "ncm.list" | "ncm.get_info" | "ncm.decode" | "ncm.batch_decode"
   | "backup.list" | "backup.dir" | "backup.export" | "backup.restore" | "backup.delete" | "backup.clear_all"
   | "config.get" | "config.set";
 

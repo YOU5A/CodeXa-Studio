@@ -1,6 +1,7 @@
-import { Component, type ReactNode } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
-import { GlassEmptyState, GlassButton } from "@/design-system";
+import { Component, type ReactNode } from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { GlassEmptyState, GlassButton } from '@/design-system';
+import { DevLogPanel } from './DevLogPanel';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -12,7 +13,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-const isDev = typeof import.meta !== "undefined" && (import.meta as any).env?.DEV;
+const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV;
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -25,7 +26,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, _errorInfo: React.ErrorInfo): void {
-    console.error("[ErrorBoundary]", error);
+    console.error('[ErrorBoundary]', error);
   }
 
   handleRetry = () => {
@@ -38,37 +39,22 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
       return (
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          height: "100%", minHeight: 300, padding: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '100%', minHeight: 300, padding: 24,
         }}>
           <GlassEmptyState
-            style={{ borderRadius: "var(--radius)" }}
-            icon={<AlertTriangle size={40} style={{ color: "var(--color-warning)" }} />}
-            title={"页面加载失败"}
-            description={this.state.error?.message ?? "发生了未知错误，请重试。"}
+            style={{ borderRadius: 'var(--radius)' }}
+            icon={<AlertTriangle size={40} style={{ color: 'var(--color-warning)' }} />}
+            title={'\u9875\u9762\u52a0\u8f7d\u5931\u8d25'}
+            description={this.state.error?.message ?? '\u53d1\u751f\u4e86\u672a\u77e5\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5\u3002'}
             action={
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <GlassButton onClick={this.handleRetry}>
                   <RefreshCw size={16} style={{ marginRight: 6 }} />
-                  {"重试"}
+                  {'\u91cd\u8bd5'}
                 </GlassButton>
                 {isDev && this.state.error?.stack && (
-                  <details style={{
-                    maxWidth: 500, textAlign: "left", fontSize: 12,
-                    color: "var(--text-tertiary)", cursor: "pointer",
-                    padding: "8px 12px", borderRadius: 8,
-                    background: "var(--glass-surface-1)",
-                  }}>
-                    <summary style={{ fontWeight: 600, marginBottom: 4 }}>
-                      {"开发者日志 (Dev)"}
-                    </summary>
-                    <pre style={{
-                      whiteSpace: "pre-wrap", wordBreak: "break-all",
-                      margin: 0, fontFamily: "var(--font-mono, monospace)",
-                    }}>
-                      {this.state.error.stack}
-                    </pre>
-                  </details>
+                  <DevLogPanel errorStack={this.state.error.stack} />
                 )}
               </div>
             }

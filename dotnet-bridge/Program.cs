@@ -34,6 +34,7 @@ class Program
         var admin = new AdminService();
         var priority = new PriorityService();
         var config = new ConfigService(dataDir);
+        var ncm = new NcmService();
 
         // JSON-RPC main loop
         string? line;
@@ -65,7 +66,7 @@ class Program
             object? result = null;
             string? error = null;
 
-            try { result = HandleMethod(method, reqParams, systemInfo, music, registry, backup, admin, priority, config); }
+            try { result = HandleMethod(method, reqParams, systemInfo, music, registry, backup, admin, priority, config, ncm); }
             catch (Exception ex) { error = ex.Message; }
 
             var response = new Dictionary<string, object?> { ["id"] = reqId };
@@ -79,7 +80,7 @@ class Program
 
     private static object? HandleMethod(string method, Dictionary<string, object?> p,
         SystemInfoService sys, MusicService music, RegistryService reg, BackupService bak,
-        AdminService adm, PriorityService pri, ConfigService cfg)
+        AdminService adm, PriorityService pri, ConfigService cfg, NcmService ncm)
     {
         return method switch
         {
@@ -115,6 +116,12 @@ class Program
             "music.save_cover_file" => music.SaveCoverFile(p),
             "music.rename" => music.Rename(p),
             "music.get_lyrics" => music.GetLyrics(p),
+
+            // NCM
+            "ncm.list" => ncm.List(p),
+            "ncm.get_info" => ncm.GetInfo(p),
+            "ncm.decode" => ncm.Decode(p),
+            "ncm.batch_decode" => ncm.BatchDecode(p),
 
             // Backup
             "backup.list" => bak.List(p),

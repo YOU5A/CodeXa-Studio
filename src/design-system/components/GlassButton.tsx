@@ -7,7 +7,7 @@
  * Variants: primary | secondary | danger | ghost | input
  */
 
-import { forwardRef, type ReactNode, useCallback } from "react";
+import { forwardRef, type ReactNode, useCallback, useEffect, useRef } from "react";
 import { motion, type HTMLMotionProps, type TargetAndTransition } from "framer-motion";
 import { springSnappy, glassPress, glassGhostHover } from "../animations";
 import { space, radii, fontSizes } from "../tokens";
@@ -110,13 +110,22 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
     }, [noGlow, disabled]);
 
     const onLeave = useCallback((e: React.MouseEvent) => {
-      if (noGlow || disabled) return;
+      if (noGlow) return;
       clearBtnGlow(e.currentTarget as HTMLElement);
-    }, [noGlow, disabled]);
+    }, [noGlow]);
+
+    const btnRef = useRef<HTMLButtonElement | null>(null);
+
+    // Clear glow when button becomes disabled
+    useEffect(() => {
+      if (disabled && btnRef.current) {
+        clearBtnGlow(btnRef.current);
+      }
+    }, [disabled]);
 
     return (
       <motion.button
-        ref={ref}
+        ref={(node) => { btnRef.current = node; if (typeof ref === "function") ref(node); else if (ref) ref.current = node; }}
         disabled={disabled}
         style={composedStyle}
         onMouseMove={onMove}
