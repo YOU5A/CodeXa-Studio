@@ -28,11 +28,13 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 
 <p align="left">
   <b>🎵 音乐管理器</b><br/>
+  <b> </b><br/>
   <img src="Screenshot1.png" width="85%" alt="音乐管理器" />
 </p>
 
-<p align="center">
+<p align="left">
   <b>⚙ Win32 优先级分离</b><br/>
+  <b> </b><br/>
   <img src="Screenshot2.png" width="85%" alt="Win32 优先级分离" />
 </p>
 
@@ -69,27 +71,6 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 - 持续更新更多音乐管理功能
 
 ---
-
-## 📂 项目结构
-
-```
-CodeXa Studio
-├── Music Manager
-│   ├── Audio Player
-│   ├── Tag Editor
-│   ├── Lyrics
-│   ├── Album Art
-│   ├── Search
-│   └── Music Library
-│
-├── Windows Tools
-│   ├── Win32 Priority
-│   ├── IFEO
-│   ├── Backup Center
-│   └── Dashboard
-│
-└── Shared Components
-```
 
 > 完整源码结构见仓库 [AGENTS.md](AGENTS.md)。
 
@@ -150,11 +131,11 @@ npm run build
 
 你可以：
 
-* ✅ Fork 本项目
-* ✅ 学习源码
-* ✅ 修改源码
-* ✅ 二次开发
-* ✅ 提交 Pull Request
+* - Fork 本项目
+* - 学习源码
+* - 修改源码
+* - 二次开发
+* - 提交 Pull Request
 
 但必须遵守 AGPL-3.0 协议，包括但不限于：
 
