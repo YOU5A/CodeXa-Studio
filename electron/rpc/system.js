@@ -1,9 +1,35 @@
-﻿const { execSync } = require("child_process");
+const { execSync } = require("child_process");
 const os = require("os");
 
-// System info is now served by the .NET Bridge SystemInfoService (via IPC python:call).
-// This module retains a lightweight os-based fallback for when no bridge is available.
-async function systemInfo() {
+// Cached previous CPU times for delta calculation across calls
+let prevCpuIdle = 0;
+let prevCpuTotal = 0;
+
+/** Compute CPU percentage via os.cpus() delta between successive calls. */
+function getCpuPercent() {
+  const cpus = os.cpus();
+  let idle = 0;
+  let total = 0;
+  for (const cpu of cpus) {
+    idle += cpu.times.idle;
+    total += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
+  }
+
+  if (prevCpuTotal > 0 && total > prevCpuTotal) {
+    const idleDelta = idle - prevCpuIdle;
+    const totalDelta = total - prevCpuTotal;
+    prevCpuIdle = idle;
+    prevCpuTotal = total;
+    return Math.round((1 - idleDelta / totalDelta) * 100);
+  }
+
+  // First call after module load: no delta yet
+  prevCpuIdle = idle;
+  prevCpuTotal = total;
+  return 0;
+}
+
+function systemInfo() {
   let isAdmin = false;
   try {
     execSync("net session", { stdio: "ignore" });
@@ -11,7 +37,7 @@ async function systemInfo() {
   } catch {}
 
   return {
-    cpu_percent: 0,
+    cpu_percent: getCpuPercent(),
     cpu_count: os.cpus().length,
     cpu_count_physical: os.cpus().length,
     memory_total: os.totalmem(),

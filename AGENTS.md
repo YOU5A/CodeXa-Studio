@@ -1,6 +1,6 @@
 <!--
   AGENTS.md — CodeXa Studio
-  重构于 2026-07-26
+  重构于 2026-07-27
 -->
 
 # AGENTS.md — CodeXa Studio
@@ -83,29 +83,42 @@ CodeXa-Studio/
 │   ├── ipc-setup.js             # IPC 处理器 + 在线歌词/封面搜索
 │   ├── window.js                # 窗口创建与持久化
 │   ├── tray.js                  # 系统托盘
-│   └── rpc/                     # RPC 路由分发层（8 模块）
+│   └── rpc/                     # RPC 路由分发层（9 模块）
 │       ├── index.js             # callMethod() 入口
 │       ├── system.js            # system.info
 │       ├── registry.js          # registry.* (3)
 │       ├── admin.js             # admin.* (2)
 │       ├── priority.js          # priority.* (6)
 │       ├── music.js             # music.* (10)
+│       ├── ncm.js               # ncm.* (4)
 │       ├── backup.js            # backup.* (6)
 │       └── config.js            # config.* (2)
 │
 ├── dotnet-bridge/               # .NET 10 JSON-RPC 主桥接
 │   ├── CodeXaBridge.csproj
-│   ├── Program.cs               # JSON-RPC over stdin/stdout · 31 方法分发
+│   ├── Program.cs               # JSON-RPC over stdin/stdout · 34 方法分发
 │   ├── publish/                 # 开发构建输出
 │   ├── publish-sc/              # 自包含发布（生产打包）
-│   └── Services/                # 7 个服务实现 (.cs)
+│   └── Services/                # 8 个服务实现 (.cs)
 │       ├── SystemInfoService.cs     # CPU/内存/磁盘/OS
 │       ├── RegistryService.cs       # 注册表读写
 │       ├── AdminService.cs          # 管理员检测/提权
 │       ├── PriorityService.cs       # 进程优先级规则
 │       ├── MusicService.cs          # 音乐标签/封面/歌词 (TagLibSharp)
+│       ├── NcmService.cs            # NCM 文件解码
 │       ├── BackupService.cs         # 备份管理
 │       └── ConfigService.cs         # 配置读写
+│
+├── ncm-studio/                  # NCM 解码器（.NET 类库 + CLI + 测试）
+│   ├── NcmStudio.Core.csproj    # 核心类库
+│   ├── Audio/                   # 音频格式检测/流提取/封装
+│   ├── Crypto/                  # AES-ECB/RC4/密钥派生
+│   ├── Decoder/                 # NCM 文件解析/流读取/解码
+│   ├── Metadata/                # 元数据解析/封面提取/标签
+│   ├── Models/                  # 数据模型
+│   ├── Utils/                   # 哈希校验
+│   ├── NcmStudio.Cli/           # 命令行工具
+│   └── NcmStudio.Tests/         # 单元测试（xUnit）
 │
 ├── resources/                   # Python 回退脚本
 │   ├── Win32PrioritySeparation.pyw
@@ -140,8 +153,9 @@ CodeXa-Studio/
     │   ├── layouts/              # GlassBackground · GlassLayout · GlassMain
     │   └── animations/           # springs · glass variants
     │
-    ├── components/               # 应用级组件
+├── components/               # 应用级组件（12 个）
     │   ├── TitleBar.tsx          # 自定义标题栏
+    │   ├── DevLogPanel.tsx       # 开发日志面板
     │   ├── Sidebar.tsx           # 侧边导航 + 预加载
     │   ├── PageLayout.tsx
     │   ├── GlassCard.tsx
@@ -168,13 +182,15 @@ CodeXa-Studio/
     ├── hooks/                    # 3 个 Hook
     │   ├── useTheme.tsx          # 8 套主题 + CSS 变量注入
     │   ├── useBridge.ts          # Bridge RPC 封装
-    │   └── useMouseGlow.ts       # 鼠标光晕
+    │   ├── useMouseGlow.ts       # 鼠标光晕
+    │   └── useActivityLog.ts     # 活动日志
     │
     ├── pages/                    # 6 页面 (React.lazy)
     │   ├── Dashboard.tsx
     │   ├── Win32Priority.tsx
     │   ├── AppCpuPriority.tsx
     │   ├── MusicManager.tsx
+    │   ├── NcmStudio.tsx         # NCM 解码工作室
     │   ├── BackupCenter.tsx
     │   ├── Settings.tsx
     │   ├── music/                # 音乐子模块
@@ -183,13 +199,20 @@ CodeXa-Studio/
     │   │   ├── TagEditor.tsx
     │   │   ├── CoverManager.tsx
     │   │   └── RenamePanel.tsx
+    ├── ncm/                  # NCM 子模块
+    │   ├── types.ts
+    │   ├── FileList.tsx
+    │   ├── DecodeBar.tsx
+    │   └── MetadataPanel.tsx
     │   └── settings/             # 设置子模块
     │       ├── AppearanceSection.tsx
     │       ├── BehaviorSection.tsx
     │       ├── InterfaceSection.tsx
     │       └── AboutSection.tsx
     │
-    ├── lyrics/                   # 歌词子系统
+    ├── lyrics/                   # 歌词子系统（9 个文件）
+    │   ├── index.ts
+    │   ├── types.ts
     │   ├── LyricParser.ts
     │   ├── LyricManager.tsx
     │   ├── LyricDisplay.tsx
@@ -212,7 +235,7 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
                                 │
                ┌────────────────┼────────────────┐
                │  electron/rpc/ (路由分发)         │
-               │  callMethod() 31 方法              │
+               │  callMethod() 34 方法              │
                └────────────────┬────────────────┘
                                 │
               ┌─────────────────┼─────────────────┐
@@ -220,7 +243,7 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
     .NET 10 Bridge (主)                  Python Bridge (回退)
     dotnet-bridge/publish-sc/           resources/*.pyw
     CodeXaBridge.exe                    3 个 .pyw 脚本
-    7 个 .cs 服务
+    8 个 .cs 服务
 ```
 
 - **主桥接:** .NET 10 `CodeXaBridge.exe`，JSON-RPC over stdin/stdout，7 个 C# 服务类。
@@ -231,7 +254,7 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 
 ---
 
-## RPC 方法表（31 个）
+## RPC 方法表（34 个）
 
 | 类别 | 数量 | 方法 | .NET 实现 |
 |------|------|------|-----------|
@@ -240,6 +263,7 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 | 管理员 | 2 | `admin.check` / `restart` | AdminService.cs |
 | 优先级 | 6 | `priority.list` / `add` / `edit` / `delete` / `export` / `import_config` | PriorityService.cs |
 | 音乐 | 10 | `music.scan` / `get_metadata` / `save_tags` / `extract_cover` / `apply_cover` / `remove_cover` / `read_cover_file` / `save_cover_file` / `rename` / `get_lyrics` | MusicService.cs |
+| NCM | 4 | `ncm.list` / `get_info` / `decode` / `batch_decode` | NcmService.cs |
 | 备份 | 6 | `backup.list` / `dir` / `export` / `restore` / `delete` / `clear_all` | BackupService.cs |
 | 配置 | 2 | `config.get` / `set` | ConfigService.cs |
 
@@ -247,7 +271,7 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 
 ## Context · Hook · 关键组件
 
-### Context（5 个）
+### Context（4 个）
 
 | 名称 | 用途 |
 |------|------|
@@ -257,13 +281,15 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 | `ConfirmContext` | 全局确认对话框 |
 | `MusicPlayerContext` | HTML5 Audio 播放器 + 播放列表管理 |
 
-### Hook（3 个）
+### Hook（4 个）
 
 | 名称 | 用途 |
 |------|------|
 | `useTheme` | 主题读写 · updateSettings · resetSettings · toggleTheme |
 | `useBridge` | RPC 调用 · 文件夹/文件对话框 · 文件保存 |
 | `useMouseGlow` | 鼠标光晕追踪 |
+| `useActivityLog` | 活动日志记录与导出 |
+
 
 ### 流体背景系统
 
@@ -285,9 +311,20 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 - `InterludeDots` — 间奏等待动画
 - `LyricsSettingsPanel` — 样式调节
 
+### NCM 解码子系统
+
+
+cm-studio/ — 独立 .NET 类库，负责网易云音乐 .ncm 文件解码：
+- **Crypto:** AES-128-ECB 解密（无填充）、RC4 流密码、密钥派生（PBKDF2 → RC4 key）
+- **Decoder:** NCM 文件头解析 → 流解密 → 音频数据提取
+- **Audio:** 自动检测原始格式（MP3/FLAC），分别封装输出
+- **Metadata:** 内嵌 JSON 元数据解析（标题/艺术家/专辑）+ 封面提取 + ID3v2/FLAC VorbisComment 标签写入
+- **CLI:** NcmStudio.Cli 提供命令行批量转换
+- **测试:** xUnit 单元测试覆盖核心密码学、解析器和格式检测
+
 ---
 
-## 页面路由（6 个）
+## 页面路由（7 个）
 
 | Page key | 组件 | 功能 |
 |----------|------|------|
@@ -295,6 +332,7 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 | `win32priority` | Win32Priority.tsx | Win32 优先级分离 |
 | `appcpupriority` | AppCpuPriority.tsx | 进程 CPU 优先级规则 |
 | `musicmanager` | MusicManager.tsx | 音乐标签/封面/播放 |
+| `ncmstudio` | NcmStudio.tsx | NCM 文件解码/格式转换 |
 | `backupcenter` | BackupCenter.tsx | 备份浏览/恢复/导出 |
 | `settings` | Settings.tsx | 外观/行为/界面设置 |
 
@@ -340,7 +378,7 @@ npm run build        # 生产构建 (Vite + electron-builder)
 
 ## 非项目文件（忽略）
 
-`node_modules/` · `dist/` · `dist-electron/` · `build-support/` · `__pycache__/` · `*.pyc` · `docs/` · `.env*` · `.vscode/` · `main.js`（临时）· `*.diff` / `*.patch` · `.tmp-dev-*` · `data/config.json` · .NET `bin/` `obj/` `publish/` `publish2/`
+`node_modules/` · `dist/` · `dist-electron/` · `build-support/` · `__pycache__/` · `*.pyc` · `docs/` · `.env*` · `.vscode/` · `main.js`（临时）· `*.diff` / `*.patch` · `.tmp-dev-*` · `data/config.json` · .NET `bin/` `obj/` `publish/` `publish2/` · `ncm-studio/bin/` `ncm-studio/obj/`
 
 ---
 

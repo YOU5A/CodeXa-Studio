@@ -249,11 +249,7 @@ export default function Win32Priority(_props: Props) {
   }, [clearPillGlow]);
 
   return (
-    <PageLayout title={tx.title} subtitle={tx.subtitle} actions={
-      <GlassButton variant="secondary" size="sm" onClick={fetchData}>
-        <RefreshCw size={14} /> {tx.refresh}
-      </GlassButton>
-    }>
+    <PageLayout title={tx.title} subtitle={tx.subtitle}>
       <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
       {/* ─── Current Value ─── */}
       <GlassCard>

@@ -1,28 +1,41 @@
-﻿const fs = require("fs");
+const fs = require("fs");
 const path = require("path");
 const { PythonBridge } = require("./python-bridge");
 
-// ---- .NET Bridge (主桥接) ----
+// Resolve the x64 dotnet CLI path explicitly.
+// When spawned from a 32-bit process (e.g. x86 Electron), PATH resolution
+// can pick up the x86 dotnet which won't run x64 assemblies.
+const DOTNET_EXE = (() => {
+  const prog = process.env["ProgramW6432"] || process.env["PROGRAMFILES"] || "C:\Program Files";
+  return path.join(prog, "dotnet", "dotnet.exe");
+})();
+
+// ---- .NET Bridge (main bridge) ----
 function startDotNetBridge(isDev, dotnetBridge) {
-  const exePath = isDev
-    ? path.join(__dirname, "..", "dotnet-bridge", "publish", "CodeXaBridge.exe")
-    : path.join(process.resourcesPath, "dotnet-bridge", "CodeXaBridge.exe");
+  const publishDir = isDev
+    ? path.join(__dirname, "..", "dotnet-bridge", "publish")
+    : path.join(process.resourcesPath, "dotnet-bridge");
+  const dllPath = path.join(publishDir, "CodeXaBridge.dll");
   const dataDir = isDev
     ? path.join(__dirname, "..", "data")
     : path.join(process.resourcesPath, "data");
 
-  if (!fs.existsSync(exePath)) {
-    console.warn("[.NET Bridge] Executable not found at", exePath, "- will use Python fallback");
+  if (!fs.existsSync(dllPath)) {
+    console.warn("[.NET Bridge] DLL not found at", dllPath, "- will use Python fallback");
     return false;
   }
 
   try {
     const { spawn } = require("child_process");
-    dotnetBridge.current = new PythonBridge(exePath);
+
+    // Use dotnet exec to let the CLI handle framework resolution and architecture matching.
+    dotnetBridge.current = new PythonBridge(dllPath);
 
     const originalStart = dotnetBridge.current.start.bind(dotnetBridge.current);
     dotnetBridge.current.start = () => {
-      const proc = spawn(exePath, [dataDir], { stdio: ["pipe", "pipe", "pipe"] });
+      const proc = spawn(DOTNET_EXE, ["exec", dllPath, dataDir], {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
       dotnetBridge.current.process = proc;
       dotnetBridge.current._isRunning = true;
 
@@ -57,7 +70,7 @@ function startDotNetBridge(isDev, dotnetBridge) {
     };
 
     dotnetBridge.current.start();
-    console.log("[.NET Bridge] Started successfully");
+    console.log("[.NET Bridge] Started via dotnet exec (" + DOTNET_EXE + ")");
     return true;
   } catch (err) {
     console.warn("[.NET Bridge] Init failed:", err.message);
@@ -65,7 +78,7 @@ function startDotNetBridge(isDev, dotnetBridge) {
   }
 }
 
-// ---- Python Bridge (回退桥接) ----
+// ---- Python Bridge (fallback bridge) ----
 function startPythonBridge(isDev, pythonBridge) {
   const bridgePath = isDev
     ? path.join(__dirname, "..", "bridge", "server.py")
@@ -107,16 +120,14 @@ function startPythonBridgeWithRetry(isDev, pythonBridge, maxRetries, delayMs) {
 
   tryStart();
 
-  // Return a cancel function for cleanup
   return () => { if (timer) clearTimeout(timer); };
 }
 
-// ---- Setup: 按需回退 ----
+// ---- Setup: fallback on demand ----
 function setupBridges({ isDev, dotnetBridge, pythonBridge, app }) {
   const dotnetOk = startDotNetBridge(isDev, dotnetBridge);
 
   if (!dotnetOk) {
-    // .NET 不可用 → 延迟 3 秒后尝试 Python 回退，最多 3 次重试
     console.log("[Bridge] .NET bridge unavailable, falling back to Python in 3s...");
     setTimeout(() => {
       startPythonBridgeWithRetry(isDev, pythonBridge, 3, 3000);

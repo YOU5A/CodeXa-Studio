@@ -17,6 +17,30 @@ public class SystemInfoService
     [DllImport("kernel32.dll")]
     private static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEMORYSTATUSEX
+    {
+        public uint dwLength;
+        public uint dwMemoryLoad;
+        public ulong ullTotalPhys;
+        public ulong ullAvailPhys;
+        public ulong ullTotalPageFile;
+        public ulong ullAvailPageFile;
+        public ulong ullTotalVirtual;
+        public ulong ullAvailVirtual;
+        public ulong ullAvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetDiskFreeSpaceEx(
+        string lpDirectoryName,
+        out ulong lpFreeBytesAvailableToCaller,
+        out ulong lpTotalNumberOfBytes,
+        out ulong lpFreeBytesOnDisk);
+
     public SystemInfoService(string dataDir)
     {
         _dataDir = dataDir;
@@ -27,8 +51,28 @@ public class SystemInfoService
 
     public Dictionary<string, object?> GetSystemInfo()
     {
-        var memTotal = GetTotalMemory();
-        var memAvailable = GetAvailableMemory();
+        // Memory via GlobalMemoryStatusEx (kernel32) ??? ullAvailPhys matches Task Manager
+        var memStatus = new MEMORYSTATUSEX();
+        memStatus.dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>();
+        long memTotal = 0;
+        long memAvailable = 0;
+        if (GlobalMemoryStatusEx(ref memStatus))
+        {
+            memTotal = (long)memStatus.ullTotalPhys;
+            memAvailable = (long)memStatus.ullAvailPhys;
+        }
+
+        // Disk via GetDiskFreeSpaceEx (kernel32) ??? consistent with memory approach
+        long diskTotal = 0;
+        long diskUsed = 0;
+        double diskPercent = 0;
+        var root = Path.GetPathRoot(_dataDir) ?? "C:\\";
+        if (GetDiskFreeSpaceEx(root, out _, out var diskTotalBytes, out var diskFreeBytes))
+        {
+            diskTotal = (long)diskTotalBytes;
+            diskUsed = diskTotal - (long)diskFreeBytes;
+            diskPercent = diskTotal > 0 ? Math.Round((double)diskUsed / diskTotal * 100, 1) : 0;
+        }
 
         return new Dictionary<string, object?>
         {
@@ -39,9 +83,9 @@ public class SystemInfoService
             ["memory_used"] = memTotal - memAvailable,
             ["memory_available"] = memAvailable,
             ["memory_percent"] = memTotal > 0 ? Math.Round((double)(memTotal - memAvailable) / memTotal * 100, 1) : 0,
-            ["disk_total"] = GetDiskTotal(),
-            ["disk_used"] = GetDiskUsed(),
-            ["disk_percent"] = GetDiskPercent(),
+            ["disk_total"] = diskTotal,
+            ["disk_used"] = diskUsed,
+            ["disk_percent"] = diskPercent,
             ["windows_version"] = GetWindowsVersion(),
             ["windows_release"] = GetWindowsReleaseNumber(),
             ["windows_build"] = GetWindowsBuild(),
@@ -55,23 +99,21 @@ public class SystemInfoService
     {
         if (!GetSystemTimes(out var idleTime, out var kernelTime, out var userTime))
         {
-            // Fallback: try WMI
             return GetCpuPercentWmi();
         }
 
-        var now = DateTime.UtcNow;
         var idleDelta = idleTime - _prevIdleTime;
         var kernelDelta = kernelTime - _prevKernelTime;
         var userDelta = userTime - _prevUserTime;
         var totalDelta = kernelDelta + userDelta;
 
-        // Update cache for next call
         _prevIdleTime = idleTime;
         _prevKernelTime = kernelTime;
         _prevUserTime = userTime;
-        _prevSampleTime = now;
+        _prevSampleTime = DateTime.UtcNow;
 
-        if (totalDelta <= 0) return 0;
+        // Sampling window < 500ms ??? fall back to WMI LoadPercentage
+        if (totalDelta < 5_000_000) return GetCpuPercentWmi();
 
         return (1.0 - (double)idleDelta / totalDelta) * 100.0;
     }
@@ -108,72 +150,6 @@ public class SystemInfoService
         {
             return Environment.ProcessorCount;
         }
-    }
-
-    private static long GetTotalMemory()
-    {
-        try
-        {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT TotalVisibleMemorySize FROM Win32_OperatingSystem");
-            foreach (var obj in searcher.Get())
-            {
-                return Convert.ToInt64(obj["TotalVisibleMemorySize"]) * 1024;
-            }
-        }
-        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetTotalMemory] {ex.Message}"); }
-        return 0;
-    }
-
-    private static long GetAvailableMemory()
-    {
-        try
-        {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT FreePhysicalMemory FROM Win32_OperatingSystem");
-            foreach (var obj in searcher.Get())
-            {
-                return Convert.ToInt64(obj["FreePhysicalMemory"]) * 1024;
-            }
-        }
-        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetAvailableMemory] {ex.Message}"); }
-        return 0;
-    }
-
-    private long GetDiskTotal()
-    {
-        try
-        {
-            var root = Path.GetPathRoot(_dataDir) ?? "C:\\";
-            var drive = new DriveInfo(root);
-            return drive.TotalSize;
-        }
-        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetDiskTotal] {ex.Message}"); return 0; }
-    }
-
-    private long GetDiskUsed()
-    {
-        var total = GetDiskTotal();
-        var free = GetDiskFree();
-        return total > 0 ? total - free : 0;
-    }
-
-    private long GetDiskFree()
-    {
-        try
-        {
-            var root = Path.GetPathRoot(_dataDir) ?? "C:\\";
-            var drive = new DriveInfo(root);
-            return drive.TotalFreeSpace;
-        }
-        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetDiskFree] {ex.Message}"); return 0; }
-    }
-
-    private double GetDiskPercent()
-    {
-        var total = GetDiskTotal();
-        if (total <= 0) return 0;
-        return Math.Round((double)(total - GetDiskFree()) / total * 100, 1);
     }
 
     private static string GetWindowsVersion()
