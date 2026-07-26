@@ -583,7 +583,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         }
       } catch {}
     }
-    showToast(lang === "zh" ? `???? ${c} ???` : `Renamed ${c} files`, c > 0 ? "success" : "warning");
+    showToast(lang === "zh" ? `已重命名 ${c} 个文件` : `Renamed ${c} files`, c > 0 ? "success" : "warning");
     doScan();
   };
 
@@ -610,7 +610,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         <h1 style={{ fontSize: fontSizes["2xl"], fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
           {tx.title}
         </h1>
-        <GlassBadge variant="accent" size="sm">{files.length} {lang === "zh" ? "??" : "files"}</GlassBadge>
+        <GlassBadge variant="accent" size="sm">{files.length} {lang === "zh" ? "个文件" : "files"}</GlassBadge>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: space[2], marginRight: space[4] }}>
           <GlassButton variant="primary" onClick={browse} size="md">
