@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System.Text.Json;
 
 namespace CodeXaBridge.Services;
@@ -36,7 +36,7 @@ public class PriorityService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[PriorityService.List] {ex.Message}"); }
         return new Dictionary<string, object?> { ["applications"] = apps };
     }
 
@@ -93,8 +93,8 @@ public class PriorityService
             {
                 if (perfKey != null)
                 {
-                    try { perfKey.DeleteValue("CpuPriorityClass"); } catch { }
-                    try { perfKey.DeleteValue("IoPriority"); } catch { }
+                    try { perfKey.DeleteValue("CpuPriorityClass"); } catch (Exception ex) { Console.Error.WriteLine($"[PriorityService.Delete] {ex.Message}"); }
+                    try { perfKey.DeleteValue("IoPriority"); } catch (Exception ex) { Console.Error.WriteLine($"[PriorityService.Delete] {ex.Message}"); }
                 }
             }
 
@@ -102,7 +102,7 @@ public class PriorityService
             var appKeyPath = $@"{IfeoBase}\{name}";
             using (var appKey = Registry.LocalMachine.OpenSubKey(appKeyPath, true))
             {
-                try { appKey?.DeleteSubKey("PerfOptions"); } catch { }
+                try { appKey?.DeleteSubKey("PerfOptions"); } catch (Exception ex) { Console.Error.WriteLine($"[PriorityService.Delete] {ex.Message}"); }
             }
 
             return new Dictionary<string, object?> { ["success"] = true };

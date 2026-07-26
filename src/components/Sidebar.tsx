@@ -11,6 +11,7 @@ import { APP_VERSION } from "@/version";
 interface SidebarProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
+  onPreload?: (page: Page) => void;
 }
 
 const navLabels: Record<Language, Record<Page, string>> = {
@@ -41,7 +42,7 @@ const navItems: { id: Page; icon: React.ReactNode }[] = [
   { id: "settings", icon: <Settings size={18} /> },
 ];
 
-export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export default function Sidebar({ currentPage, onNavigate, onPreload }: SidebarProps) {
   const { lang } = useLanguage();
   const { settings } = useTheme();
 
@@ -74,6 +75,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             size="sm"
             inline={false}
             onClick={() => onNavigate(item.id)}
+            onMouseEnter={() => onPreload?.(item.id)}
             whileHover={isActive ? { background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)" } : undefined}
             style={{
               justifyContent: "flex-start",

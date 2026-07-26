@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 
 namespace CodeXaBridge.Services;
 
@@ -34,7 +34,7 @@ public class BackupService
             var hexStr = match.Groups[3].Value;
 
             long size = 0;
-            try { size = new FileInfo(filename).Length; } catch { }
+            try { size = new FileInfo(filename).Length; } catch (Exception ex) { Console.Error.WriteLine($"[BackupService.List] {ex.Message}"); }
 
             int.TryParse(decimalStr, out var decVal);
             int.TryParse(timestampStr[..4], out var year);
@@ -138,7 +138,7 @@ public class BackupService
         {
             foreach (var f in System.IO.Directory.GetFiles(_backupDir))
             {
-                try { System.IO.File.Delete(f); deleted++; } catch { }
+                try { System.IO.File.Delete(f); deleted++; } catch (Exception ex) { Console.Error.WriteLine($"[BackupService.ClearAll] {ex.Message}"); }
             }
         }
         return new Dictionary<string, object?> { ["deleted"] = deleted };

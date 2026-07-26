@@ -3,6 +3,8 @@
  * 独立存储，不与 AppSettings 耦合
  */
 
+import { STORAGE_FLUID_CONFIG } from "@/constants/storage-keys";
+
 export interface FluidConfig {
   preset: FluidPresetId | "auto";
   intensity: number;          // 0-1，整体不透明度
@@ -36,11 +38,9 @@ export const DEFAULT_CONFIG: FluidConfig = {
   colorMode: "auto",
 };
 
-const STORAGE_KEY = "fluid-background-config";
-
 export function loadConfig(): FluidConfig {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_FLUID_CONFIG);
     if (raw) {
       const parsed = JSON.parse(raw);
       return { ...DEFAULT_CONFIG, ...parsed };
@@ -53,7 +53,7 @@ export function loadConfig(): FluidConfig {
 
 export function saveConfig(config: FluidConfig): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    localStorage.setItem(STORAGE_FLUID_CONFIG, JSON.stringify(config));
   } catch {
     console.warn("[FluidBackground] 配置保存失败");
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
 import { getCssTransitionValues, type AnimationSpeed } from "@/utils/animations";
-
+import type { Theme, AppSettings } from "@/types";
+import { STORAGE_SETTINGS } from "@/constants/storage-keys";
 
 // Dynamic theme CSS injection for non-default themes (light/dark stay in globals.css)
 const THEME_CSS_FILES: Record<string, string> = {
@@ -40,21 +41,8 @@ function injectThemeCss(theme: string) {
     })
     .catch(() => {});
 }
-export type Theme = "light" | "dark" | "auto" | "graphite" | "midnight" | "ocean" | "emerald" | "crimson";
 
-export interface AppSettings {
-  windowOpacity: number;
-  borderRadius: number;
-  animationSpeed: "fast" | "normal" | "off";
-  rememberSize: boolean;
-  rememberPosition: boolean;
-  sidebarWidth: number;
-  fontScale: number;
-  compactMode: boolean;
-  theme: Theme;
-}
 
-const SETTINGS_KEY = "codexa-studio-settings";
 const THEME_KEY = "codexa-studio-theme";
 
 export const defaultSettings: AppSettings = {
@@ -76,14 +64,14 @@ function getSystemTheme(): "light" | "dark" {
 
 function loadSettings(): AppSettings {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = localStorage.getItem(STORAGE_SETTINGS);
     if (raw) return { ...defaultSettings, ...JSON.parse(raw) };
   } catch {}
   return { ...defaultSettings };
 }
 
 function saveSettings(s: AppSettings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(s));
 }
 
 function resolveThemeToLightDark(theme: Theme): "light" | "dark" {

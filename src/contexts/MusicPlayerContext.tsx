@@ -1,5 +1,5 @@
-﻿import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
-
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
+import { STORAGE_PLAYMODE, STORAGE_VOLUME } from "@/constants/storage-keys";
 export type PlayMode = "sequential" | "loop-all" | "shuffle" | "stop-after";
 
 interface AudioState {
@@ -74,7 +74,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   // Play mode & playlist
   const [playMode, setPlayModeState] = useState<PlayMode>(() => {
     try {
-      const saved = localStorage.getItem("music_playmode");
+      const saved = localStorage.getItem(STORAGE_PLAYMODE);
       return (saved as PlayMode) || "sequential";
     } catch {
       return "sequential";
@@ -96,7 +96,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   const [volume, setVolumeState] = useState(() => {
     try {
-      const saved = localStorage.getItem("music_volume");
+      const saved = localStorage.getItem(STORAGE_VOLUME);
       return saved ? parseInt(saved) : 40;
     } catch {
       return 40;
@@ -201,7 +201,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const setPlayMode = useCallback((mode: PlayMode) => {
     setPlayModeState(mode);
     playModeRef.current = mode;
-    localStorage.setItem("music_playmode", mode);
+    localStorage.setItem(STORAGE_PLAYMODE, mode);
   }, []);
 
   const playFile = useCallback((fp: string) => {
@@ -319,7 +319,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   const setVolume = useCallback((v: number) => {
     setVolumeState(v);
-    localStorage.setItem("music_volume", String(v));
+    localStorage.setItem(STORAGE_VOLUME, String(v));
   }, []);
 
   const fmtTime = useCallback((ms: number) => {

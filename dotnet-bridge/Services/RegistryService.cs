@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32;
 
@@ -26,7 +26,7 @@ public class RegistryService
                 };
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[RegistryService.Read] {ex.Message}"); }
         return new Dictionary<string, object?> { ["error"] = "Failed to read registry", ["value"] = null };
     }
 

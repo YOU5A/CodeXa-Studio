@@ -1,4 +1,4 @@
-﻿using System.Management;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 
@@ -87,7 +87,7 @@ public class SystemInfoService
                 return Convert.ToDouble(obj["LoadPercentage"]);
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetCpuPercentWmi] {ex.Message}"); }
         return 0;
     }
 
@@ -121,7 +121,7 @@ public class SystemInfoService
                 return Convert.ToInt64(obj["TotalVisibleMemorySize"]) * 1024;
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetTotalMemory] {ex.Message}"); }
         return 0;
     }
 
@@ -136,7 +136,7 @@ public class SystemInfoService
                 return Convert.ToInt64(obj["FreePhysicalMemory"]) * 1024;
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetAvailableMemory] {ex.Message}"); }
         return 0;
     }
 
@@ -148,7 +148,7 @@ public class SystemInfoService
             var drive = new DriveInfo(root);
             return drive.TotalSize;
         }
-        catch { return 0; }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetDiskTotal] {ex.Message}"); return 0; }
     }
 
     private long GetDiskUsed()
@@ -166,7 +166,7 @@ public class SystemInfoService
             var drive = new DriveInfo(root);
             return drive.TotalFreeSpace;
         }
-        catch { return 0; }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetDiskFree] {ex.Message}"); return 0; }
     }
 
     private double GetDiskPercent()
@@ -199,7 +199,7 @@ public class SystemInfoService
                 return obj["BuildNumber"]?.ToString() ?? "";
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetWindowsBuild] {ex.Message}"); }
         return Environment.OSVersion.Version.Build.ToString();
     }
 
@@ -211,7 +211,7 @@ public class SystemInfoService
                 @"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
             return key?.GetValue("EditionID")?.ToString() ?? "";
         }
-        catch { return ""; }
+        catch (Exception ex) { Console.Error.WriteLine($"[SystemInfoService.GetWindowsEdition] {ex.Message}"); return ""; }
     }
 
     private static bool IsAdministrator()

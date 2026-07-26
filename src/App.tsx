@@ -9,33 +9,52 @@ import { LanguageProvider } from "./contexts/LanguageContext";
 import ToastContainer from "./components/Toast";
 import ConfirmDialog from "./components/ConfirmDialog";
 import type { Page } from "./types";
-import TitleBar from "./components/TitleBar";
+import { STORAGE_PAGE } from "./constants/storage-keys";import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
-import { GlassLayout, GlassMain, pageTransition } from "./design-system";
+import { GlassLayout, GlassMain, GlassEmptyState, pageTransition } from "./design-system";
+import ErrorBoundary from "./components/ErrorBoundary";
 import FluidBackground from "./components/FluidBackground";
 import { loadFluidSettings, type FluidSettingsValues } from "./components/FluidSettingsPanel";
 import type { RGB } from "./utils/colorExtractor";
 
-// Lazy-loaded pages for code splitting
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Win32Priority = lazy(() => import("./pages/Win32Priority"));
-const AppCpuPriority = lazy(() => import("./pages/AppCpuPriority"));
-const MusicManager = lazy(() => import("./pages/MusicManager"));
-const BackupCenter = lazy(() => import("./pages/BackupCenter"));
-const Settings = lazy(() => import("./pages/Settings"));
+// Lazy-loaded pages with hover preload support
+const pageLoaders: Record<Page, () => Promise<{ default: React.ComponentType<any> }>> = {
+  dashboard: () => import("./pages/Dashboard"),
+  win32priority: () => import("./pages/Win32Priority"),
+  appcpupriority: () => import("./pages/AppCpuPriority"),
+  musicmanager: () => import("./pages/MusicManager"),
+  backupcenter: () => import("./pages/BackupCenter"),
+  settings: () => import("./pages/Settings"),
+};
+const preloadPage = (page: Page) => { pageLoaders[page](); };
+const Dashboard = lazy(pageLoaders.dashboard);
+const Win32Priority = lazy(pageLoaders.win32priority);
+const AppCpuPriority = lazy(pageLoaders.appcpupriority);
+const MusicManager = lazy(pageLoaders.musicmanager);
+const BackupCenter = lazy(pageLoaders.backupcenter);
+const Settings = lazy(pageLoaders.settings);
 
 function PageLoader() {
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "center",
-      height: "100%", minHeight: 200,
+      height: "100%", minHeight: 300, padding: 24,
     }}>
-      <div style={{
-        width: 32, height: 32, borderRadius: "50%",
-        border: "3px solid var(--border-color)",
-        borderTopColor: "var(--accent)",
-        animation: "spin 0.6s linear infinite",
-      }} />
+      <GlassEmptyState
+        style={{ minWidth: 320 }}
+        icon={
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 0.6, ease: "linear" }}
+            style={{
+              width: 36, height: 36, borderRadius: "50%",
+              border: "3px solid var(--border-color)",
+              borderTopColor: "var(--accent)",
+            }}
+          />
+        }
+        title={"加载中…"}
+      />
     </div>
   );
 }
@@ -43,7 +62,7 @@ function PageLoader() {
 function AppContent() {
   const { theme, resolvedTheme, settings, setTheme, updateSettings } = useTheme();
   const [currentPage, setCurrentPage] = useState<Page>(() => {
-    return (localStorage.getItem("codexa-studio-page") as Page) || "dashboard";
+    return (localStorage.getItem(STORAGE_PAGE) as Page) || "dashboard";
   });
   const [isMaximized, setIsMaximized] = useState(false);
   const animDuration = getAnimDuration(settings.animationSpeed);
@@ -117,7 +136,7 @@ function AppContent() {
   // Save current page
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
-    localStorage.setItem("codexa-studio-page", page);
+    localStorage.setItem(STORAGE_PAGE, page);
   };
 
   const pages: Record<Page, React.ReactNode> = {
@@ -165,32 +184,34 @@ function AppContent() {
           zIndex: 1,
         }}
       >
-        <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+        <Sidebar currentPage={currentPage} onNavigate={handleNavigate} onPreload={preloadPage} />
 
         <GlassMain
           padding={settings.compactMode ? 16 : 24}
         >
           <Suspense fallback={<PageLoader />}>
-            {settings.animationSpeed === "off" ? (
-              <div style={{ height: "100%", zoom: "var(--font-scale)" }}>{pages[currentPage]}</div>
-            ) : (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentPage}
-                  variants={pageTransition}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  transition={{ duration: animDuration, ease: EASE_OUT }}
-                  style={{
-                    height: "100%",
-                    zoom: `var(--font-scale)`,
-                  }}
-                >
-                  {pages[currentPage]}
-                </motion.div>
-              </AnimatePresence>
-            )}
+            <ErrorBoundary key={currentPage}>
+              {settings.animationSpeed === "off" ? (
+                <div style={{ height: "100%", zoom: "var(--font-scale)" }}>{pages[currentPage]}</div>
+              ) : (
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentPage}
+                    variants={pageTransition}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: animDuration, ease: EASE_OUT }}
+                    style={{
+                      height: "100%",
+                      zoom: `var(--font-scale)`,
+                    }}
+                  >
+                    {pages[currentPage]}
+                  </motion.div>
+                </AnimatePresence>
+              )}
+            </ErrorBoundary>
           </Suspense>
         </GlassMain>
       </div>

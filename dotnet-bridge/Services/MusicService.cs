@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using SixLabors.ImageSharp;
@@ -249,7 +249,7 @@ public class MusicService
                     return new Dictionary<string, object?>
                         { ["lyrics_text"] = System.IO.File.ReadAllText(lrcPath, Encoding.UTF8) };
                 }
-                catch { }
+                catch (Exception ex) { Console.Error.WriteLine($"[MusicService.GetLyrics] {ex.Message}"); }
             }
         }
 
@@ -265,7 +265,7 @@ public class MusicService
                     return new Dictionary<string, object?>
                         { ["lyrics_text"] = System.IO.File.ReadAllText(lrcFile, enc) };
                 }
-                catch { }
+                catch (Exception ex) { Console.Error.WriteLine($"[MusicService.GetLyrics] {ex.Message}"); }
             }
         }
 
@@ -291,7 +291,7 @@ public class MusicService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[MusicService.GetLyrics] {ex.Message}"); }
 
         return new Dictionary<string, object?> { ["lyrics_text"] = null };
     }
@@ -335,14 +335,14 @@ public class MusicService
             if (pics != null && pics.Length > 0 && pics[0].Data != null)
                 return Convert.ToBase64String(pics[0].Data.Data);
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[MusicService.ExtractCoverBase64] {ex.Message}"); }
         return null;
     }
 
     private static bool HasCover(TagLib.File file)
     {
         try { return file.Tag.Pictures?.Length > 0; }
-        catch { return false; }
+        catch (Exception ex) { Console.Error.WriteLine($"[MusicService.HasCover] {ex.Message}"); return false; }
     }
 
     private static byte[] ResizeCoverIfNeeded(byte[] data, int maxSize)
@@ -358,7 +358,7 @@ public class MusicService
             img.SaveAsJpeg(ms);
             return ms.ToArray();
         }
-        catch { return data; }
+        catch (Exception ex) { Console.Error.WriteLine($"[MusicService.ResizeCoverIfNeeded] {ex.Message}"); return data; }
     }
 
     private static void RemoveReadOnly(string filepath)
@@ -369,7 +369,7 @@ public class MusicService
             if ((attr & FileAttributes.ReadOnly) != 0)
                 System.IO.File.SetAttributes(filepath, attr & ~FileAttributes.ReadOnly);
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[MusicService.RemoveReadOnly] {ex.Message}"); }
     }
 
     private static string SanitizeFilename(string name)

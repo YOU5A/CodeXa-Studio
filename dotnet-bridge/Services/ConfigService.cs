@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 namespace CodeXaBridge.Services;
 
@@ -28,7 +28,7 @@ public class ConfigService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine($"[ConfigService.Get] {ex.Message}"); }
         return new Dictionary<string, object?>();
     }
 

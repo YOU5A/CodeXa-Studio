@@ -2,7 +2,7 @@ import { useCallback } from "react";
 
 const api = window.electronAPI;
 
-export function usePythonBridge() {
+export function useBridge() {
   const call = useCallback(async (method: string, params?: any) => {
     if (!api) {
       console.warn("[Bridge] Electron API not available");
