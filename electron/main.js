@@ -55,26 +55,42 @@ if (electronSettings.autoStart) {
 
 // ---- Auto-Elevation (Admin Privileges) ----
 function elevateViaPowerShell() {
+  var ps1Path = null;
   try {
-    const electronPath = process.execPath.replace(/'/g, "''");
-    let psCmd;
+    // Escape single-quotes for PowerShell single-quoted strings
+    var escapePs = function(s) { return s.replace(/'/g, "''"); };
+
+    var psScript;
     if (app.isPackaged) {
-      psCmd = "Start-Process -FilePath '" + electronPath + "' -Verb RunAs";
+      psScript = "Start-Process -FilePath '" + escapePs(process.execPath) + "' -Verb RunAs";
     } else {
-      const workDir = process.cwd().replace(/'/g, "''");
-      psCmd = "Start-Process -FilePath '" + electronPath + "' -ArgumentList '.' -WorkingDirectory '" + workDir + "' -Verb RunAs";
+      psScript = "Start-Process -FilePath '" + escapePs(process.execPath) + "' -ArgumentList '.' -WorkingDirectory '" + escapePs(process.cwd()) + "' -Verb RunAs";
     }
-    const encoded = Buffer.from(psCmd, "utf16le").toString("base64");
-    const result = spawnSync("powershell", ["-NoProfile", "-EncodedCommand", encoded], {
+
+    // Write to temp .ps1 file to avoid PowerShell string-escaping pitfalls
+    // (backtick, $, and double-quote are irrelevant inside single-quoted PS strings,
+    //  but the file-based approach future-proofs against path chars like [ ] { } ;)
+    ps1Path = path.join(app.getPath("temp"), "codexa-elevate.ps1");
+    fs.writeFileSync(ps1Path, psScript, "utf-8");
+
+    var result = spawnSync("powershell", [
+      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1Path,
+    ], {
       stdio: "pipe",
       windowsHide: true,
       encoding: "utf-8",
     });
+
+    // Cleanup temp file
+    try { fs.unlinkSync(ps1Path); } catch (e) {}
+
     if (result.error) throw result.error;
-    if (result.status !== 0) throw new Error(result.stderr.trim() || "Exit code " + result.status);
+    if (result.status !== 0) throw new Error((result.stderr || "").trim() || "Exit code " + result.status);
   } catch (err) {
     console.error("[Admin] Elevation failed:", err.message);
     if (err.stderr) console.error("[Admin] stderr:", err.stderr.toString().trim());
+    // Best-effort cleanup
+    if (ps1Path) { try { fs.unlinkSync(ps1Path); } catch (e) {} }
   }
   app.quit();
 }

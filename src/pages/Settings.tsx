@@ -1,17 +1,23 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Sun, Moon, Monitor, Globe, Palette,
-  Layout, Zap, RotateCcw
+  Sun, Moon, Monitor, Palette,
+  RotateCcw
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import { useToast } from "@/contexts/ToastContext";
+import { GlassModal, GlassPanel, GlassPillButton } from "@/design-system/components";
 import { APP_VERSION } from "@/version";
-import { GlassButton, GlassModal, GlassPanel, GlassToggle, GlassPillButton, GlassSlider } from "@/design-system";
 import { getAnimDuration, EASE_OUT } from "@/utils/animations";
 import type { Theme, Language } from "@/types";
+
+import AppearanceSection from "./settings/AppearanceSection";
+import BehaviorSection from "./settings/BehaviorSection";
+import InterfaceSection from "./settings/InterfaceSection";
+import AboutSection from "./settings/AboutSection";
+
 
 const t: Record<Language, Record<string, string>> = {
   zh: {
@@ -49,7 +55,6 @@ const t: Record<Language, Record<string, string>> = {
     themeReset: "恢复默认",
     about: "关于",
     aboutTitle: "CodeXa Studio",
-    aboutVersion: `版本 ${APP_VERSION}`,
     aboutDesc: "统一 Windows 系统管理工具",
     aboutAuthor: "作者: Y0USA",
     aboutTech: "Electron + React + Python",
@@ -57,6 +62,7 @@ const t: Record<Language, Record<string, string>> = {
     bilibli: "B站",
     usertool: "UserTool",
     language: "语言",
+    aboutVersion: `版本 ${APP_VERSION}`,
   },
   en: {
     title: "Personalization",
@@ -93,7 +99,6 @@ const t: Record<Language, Record<string, string>> = {
     themeReset: "Reset to Default",
     about: "About",
     aboutTitle: "CodeXa Studio",
-    aboutVersion: `Version ${APP_VERSION}`,
     aboutDesc: "Unified Windows System Management Tool",
     aboutAuthor: "Author: Y0USA",
     aboutTech: "Electron + React + Python",
@@ -101,6 +106,7 @@ const t: Record<Language, Record<string, string>> = {
     bilibli: "Bilibili",
     usertool: "UserTool",
     language: "Language",
+    aboutVersion: `Version ${APP_VERSION}`,
   },
 };
 
@@ -149,44 +155,6 @@ const animSpeedOptions = [
   { value: "off", key: "animOff" },
 ] as const;
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 500,
-  color: "var(--text-primary)",
-  minWidth: 56,
-  flexShrink: 0,
-};
-
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  color: "var(--text-tertiary)",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  marginBottom: -4,
-};
-
-const rowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "6px 0",
-  gap: 12,
-};
-
-const sectionStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-};
-
-const separatorStyle: React.CSSProperties = {
-  height: 1,
-  background: "var(--border-color)",
-  opacity: 0.5,
-  margin: "4px 0",
-};
-
 export default function Settings() {
   const { lang, setLang } = useLanguage();
   const tx = t[lang];
@@ -197,14 +165,17 @@ export default function Settings() {
 
   const [themePickerOpen, setThemePickerOpen] = useState(false);
 
+  // Load Electron-specific settings (not in AppSettings)
+  const [electronSettings, setElectronSettings] = useState({ autoStart: false, closeToTray: false });
+
   useEffect(() => {
-    window.electronAPI?.python.call("config.get").then((_cfg: any) => {
+    window.electronAPI?.python.call("config.get").then((_cfg: unknown) => {
     }).catch(() => {});
-    window.electronAPI?.settings.getAll().then((s: any) => {
-      if (s?.autoStart !== undefined) updateSettings({ autoStart: s.autoStart } as any);
-      if (s?.closeToTray !== undefined) updateSettings({ closeToTray: s.closeToTray } as any);
-      if (s?.rememberSize !== undefined) updateSettings({ rememberSize: s.rememberSize });
-      if (s?.rememberPosition !== undefined) updateSettings({ rememberPosition: s.rememberPosition });
+    window.electronAPI?.settings.getAll().then((s) => {
+      const autoStart = s?.autoStart;
+      const closeToTray = s?.closeToTray;
+      if (typeof autoStart === "boolean") setElectronSettings(prev => ({ ...prev, autoStart }));
+      if (typeof closeToTray === "boolean") setElectronSettings(prev => ({ ...prev, closeToTray }));
     }).catch(() => {});
   }, []);
 
@@ -217,26 +188,6 @@ export default function Settings() {
     window.electronAPI?.settings.resetBounds();
     showToast(tx.resetSuccess, "success");
   };
-
-  const setPillGlow = useCallback((el: HTMLElement, cx: number, cy: number) => {
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) return;
-    el.style.setProperty("--pill-gx", ((cx - r.left) / r.width) * 100 + "%");
-    el.style.setProperty("--pill-gy", ((cy - r.top) / r.height) * 100 + "%");
-    el.style.setProperty("--pill-go", "1");
-  }, []);
-
-  const clearPillGlow = useCallback((el: HTMLElement) => {
-    el.style.setProperty("--pill-go", "0");
-  }, []);
-
-  const handlePillMove = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    setPillGlow(e.currentTarget, e.clientX, e.clientY);
-  }, [setPillGlow]);
-
-  const handlePillLeave = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    clearPillGlow(e.currentTarget);
-  }, [clearPillGlow]);
 
   const currentThemeOption = themeDropdownOptions.find(o => o.value === theme) ?? themeDropdownOptions[0];
 
@@ -253,7 +204,6 @@ export default function Settings() {
         </h1>
         <GlassPillButton
           onClick={handleReset}
-          
           style={{
             padding: "4px 14px",
             borderRadius: 14,
@@ -269,293 +219,45 @@ export default function Settings() {
           }}
           title={tx.resetConfirm}
         >
-                    <RotateCcw size={12} style={{ marginRight: 4, display: "inline", verticalAlign: "middle" }} />
+          <RotateCcw size={12} style={{ marginRight: 4, display: "inline", verticalAlign: "middle" }} />
           {tx.resetSettings}
         </GlassPillButton>
       </div>
 
-      {/* ── Settings Panel ── */}
+      {/* Settings Panel */}
       <GlassPanel tier="thick" padding={20} style={{ gap: 12 }}>
+        <AppearanceSection
+          tx={tx}
+          settings={settings}
+          updateSettings={updateSettings}
+          onOpenThemePicker={() => setThemePickerOpen(true)}
+          currentThemeIcon={currentThemeOption.icon}
+          currentThemeKey={currentThemeOption.key}
+          animSpeedOptions={animSpeedOptions}
+        />
 
-        {/* ── Appearance ── */}
-        <div style={sectionLabelStyle}>{tx.appearance}</div>
+        <BehaviorSection
+          tx={tx}
+          settings={settings}
+          updateSettings={updateSettings}
+          autoStart={electronSettings.autoStart}
+          closeToTray={electronSettings.closeToTray}
+        />
 
-        {/* Theme */}
-        <div style={rowStyle}>
-          <div style={labelStyle}>{tx.themeLabel}</div>
-          <GlassPillButton
-            onClick={() => setThemePickerOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "5px 12px",
-              borderRadius: 20,
-              border: "1.5px solid var(--border-color)",
-              background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all var(--transition-fast)",
-              fontFamily: "inherit",
-              outline: "none",
-            }}
-          >
-            {currentThemeOption.icon}
-            {tx[currentThemeOption.key]}
-            <Palette size={12} />
-          </GlassPillButton>
-        </div>
+        <InterfaceSection
+          tx={tx}
+          settings={settings}
+          updateSettings={updateSettings}
+          lang={lang}
+          setLang={setLang}
+          sidebarWidthOptions={sidebarWidthOptions}
+          fontScaleOptions={fontScaleOptions}
+        />
 
-        {/* Opacity */}
-        <div style={sectionStyle}>
-          <GlassSlider
-            label={tx.opacity}
-            display={settings.windowOpacity + "%"}
-            value={settings.windowOpacity}
-            defaultVal={100}
-            min={70}
-            max={100}
-            step={1}
-            onChange={(v) => updateSettings({ windowOpacity: v })}
-          />
-        </div>
-
-        {/* Radius */}
-        <div style={sectionStyle}>
-          <GlassSlider
-            label={tx.radius}
-            display={settings.borderRadius + "px"}
-            value={settings.borderRadius}
-            defaultVal={20}
-            min={0}
-            max={30}
-            step={1}
-            onChange={(v) => updateSettings({ borderRadius: v })}
-          />
-        </div>
-
-        {/* Animation Speed */}
-        <div style={sectionStyle}>
-          <div style={labelStyle}>{tx.animSpeed}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {animSpeedOptions.map((opt) => {
-              const active = settings.animationSpeed === opt.value;
-              return (
-                <GlassPillButton
-                  key={opt.value}
-                  
-                  onClick={() => updateSettings({ animationSpeed: opt.value as typeof settings.animationSpeed })}
-                  style={{
-                    padding: "5px 14px",
-                    borderRadius: 20,
-                    border: `1.5px solid ${active ? "var(--accent)" : "var(--border-color)"}`,
-                    background: active ? "var(--accent-bg)" : "transparent",
-                    color: active ? "var(--accent)" : "var(--text-secondary)",
-                    fontSize: 12,
-                    fontWeight: active ? 600 : 400,
-                    cursor: "pointer",
-                    transition: "all var(--transition-fast)",
-                    boxShadow: active ? "0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "none",
-                    fontFamily: "inherit",
-                    outline: "none",
-                  }}
-                >
-                  {tx[opt.key]}
-                </GlassPillButton>
-              );
-            })}
-          </div>
-        </div>
-
-        <div style={separatorStyle} />
-
-        {/* ── Window Behavior ── */}
-        <div style={sectionLabelStyle}>{tx.windowBehavior}</div>
-
-        <div style={rowStyle}>
-          <div style={labelStyle}>{tx.autoStart}</div>
-          <GlassToggle active={(settings as any).autoStart ?? false} onChange={(v) => { updateSettings({ autoStart: v } as any); window.electronAPI?.settings.set('autoStart', v); }} />
-        </div>
-
-        <div style={rowStyle}>
-          <div style={labelStyle}>{tx.closeToTray}</div>
-          <GlassToggle active={(settings as any).closeToTray ?? false} onChange={(v) => { updateSettings({ closeToTray: v } as any); window.electronAPI?.settings.set('closeToTray', v); }} />
-        </div>
-
-        <div style={rowStyle}>
-          <div style={labelStyle}>{tx.rememberSize}</div>
-          <GlassToggle active={settings.rememberSize} onChange={(v) => { updateSettings({ rememberSize: v }); window.electronAPI?.settings.set('rememberSize', v); }} />
-        </div>
-
-        <div style={rowStyle}>
-          <div style={labelStyle}>{tx.rememberPos}</div>
-          <GlassToggle active={settings.rememberPosition} onChange={(v) => { updateSettings({ rememberPosition: v }); window.electronAPI?.settings.set('rememberPosition', v); }} />
-        </div>
-
-        <div style={separatorStyle} />
-
-        {/* ── Interface ── */}
-        <div style={sectionLabelStyle}>{tx.interface}</div>
-
-        {/* Sidebar Width */}
-        <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div style={labelStyle}>{tx.sidebarWidth}</div>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-              {settings.sidebarWidth}px
-            </span>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {sidebarWidthOptions.map((opt) => {
-              const active = String(settings.sidebarWidth) === opt.value;
-              return (
-                <GlassPillButton
-                  key={opt.value}
-                  
-                  onClick={() => updateSettings({ sidebarWidth: Number(opt.value) })}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 20,
-                    border: `1.5px solid ${active ? "var(--accent)" : "var(--border-color)"}`,
-                    background: active ? "var(--accent-bg)" : "transparent",
-                    color: active ? "var(--accent)" : "var(--text-secondary)",
-                    fontSize: 12,
-                    fontWeight: active ? 600 : 400,
-                    cursor: "pointer",
-                    transition: "all var(--transition-fast)",
-                    boxShadow: active ? "0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "none",
-                    fontFamily: "inherit",
-                    outline: "none",
-                  }}
-                >
-                  {opt.label}
-                </GlassPillButton>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Font Scale */}
-        <div style={sectionStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div style={labelStyle}>{tx.fontScale}</div>
-            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-              {settings.fontScale}%
-            </span>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {fontScaleOptions.map((opt) => {
-              const active = String(settings.fontScale) === opt.value;
-              return (
-                <GlassPillButton
-                  key={opt.value}
-                  
-                  onClick={() => updateSettings({ fontScale: Number(opt.value) })}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 20,
-                    border: `1.5px solid ${active ? "var(--accent)" : "var(--border-color)"}`,
-                    background: active ? "var(--accent-bg)" : "transparent",
-                    color: active ? "var(--accent)" : "var(--text-secondary)",
-                    fontSize: 12,
-                    fontWeight: active ? 600 : 400,
-                    cursor: "pointer",
-                    transition: "all var(--transition-fast)",
-                    boxShadow: active ? "0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "none",
-                    fontFamily: "inherit",
-                    outline: "none",
-                  }}
-                >
-                  {opt.label}
-                </GlassPillButton>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Compact Mode */}
-        <div style={rowStyle}>
-          <div style={labelStyle}>{tx.compact}</div>
-          <GlassToggle active={settings.compactMode} onChange={(v) => updateSettings({ compactMode: v, fontScale: v ? 90 : 120 })} />
-        </div>
-
-        <div style={separatorStyle} />
-
-        {/* ── Language ── */}
-        <div style={sectionLabelStyle}>{tx.language}</div>
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {(["zh", "en"] as const).map((lng) => {
-            const active = lang === lng;
-            return (
-              <GlassPillButton
-                key={lng}
-                
-                onClick={() => setLang(lng)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "5px 14px",
-                  borderRadius: 20,
-                  border: `1.5px solid ${active ? "var(--accent)" : "var(--border-color)"}`,
-                  background: active ? "var(--accent-bg)" : "transparent",
-                  color: active ? "var(--accent)" : "var(--text-secondary)",
-                  fontSize: 12,
-                  fontWeight: active ? 600 : 400,
-                  cursor: "pointer",
-                  transition: "all var(--transition-fast)",
-                  boxShadow: active ? "0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "none",
-                  fontFamily: "inherit",
-                  outline: "none",
-                }}
-              >
-                                <Globe size={13} />
-                {lng === "zh" ? "中文" : "English"}
-              </GlassPillButton>
-            );
-          })}
-        </div>
-
-        <div style={separatorStyle} />
-
-        {/* ── About ── */}
-        <div style={sectionLabelStyle}>{tx.about}</div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="./icon.png" alt="" style={{ width: 40, height: 40, borderRadius: 10 }} />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{tx.aboutTitle}</div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{tx.aboutVersion}</div>
-          </div>
-        </div>
-
-        <div style={{ fontSize: 12, color: "var(--text-tertiary)", lineHeight: 1.7 }}>
-          <div>{tx.aboutDesc}</div>
-          <div>{tx.aboutAuthor}</div>
-          <div>{tx.aboutTech}</div>
-        </div>
-
-        <div style={{ display: "flex", gap: 6 }}>
-          <GlassButton variant="secondary" size="sm"
-            onClick={() => window.electronAPI?.shell.openExternal("https://github.com/YOU5A")}>
-            {tx.github}
-          </GlassButton>
-          <GlassButton variant="secondary" size="sm"
-            onClick={() => window.electronAPI?.shell.openExternal("https://space.bilibili.com/353017137")}>
-            {tx.bilibli}
-          </GlassButton>
-          <GlassButton variant="secondary" size="sm"
-            onClick={() => window.electronAPI?.shell.openExternal("https://you5a.github.io/UserTool")}>
-            {tx.usertool}
-          </GlassButton>
-        </div>
-
+        <AboutSection tx={tx} />
       </GlassPanel>
 
-      {/* ── Theme Picker Modal ── */}
+      {/* Theme Picker Modal */}
       <GlassModal open={themePickerOpen} onClose={() => setThemePickerOpen(false)} maxWidth={400}>
         {/* Header */}
         <div style={{ marginBottom: 14 }}>
@@ -658,7 +360,7 @@ export default function Settings() {
             transition: "all var(--transition-fast)",
           }}
         >
-                    <RotateCcw size={12} />
+          <RotateCcw size={12} />
           {tx.themeReset}
         </GlassPillButton>
       </GlassModal>

@@ -3,16 +3,8 @@ import { motion } from "framer-motion";
 import { RefreshCw, Save, RotateCcw, Trash2, FolderOpen } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import { BottomNotice } from "@/components/BottomNotice";
-import {
-  GlassButton,
-  GlassInput,
-  GlassBadge,
-  GlassEmptyState,
-  GlassProgressBar,
-  space,
-  radii,
-  fontSizes,
-} from "@/design-system";
+import { GlassButton, GlassInput, GlassBadge, GlassEmptyState, GlassProgressBar } from "@/design-system/components";
+import { space, radii, fontSizes } from "@/design-system/tokens";
 import { useToast } from "@/contexts/ToastContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirm } from "@/contexts/ConfirmContext";

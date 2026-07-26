@@ -1,9 +1,16 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
-import { getCssTransitionValues, type AnimationSpeed } from "@/utils/animations";
+import { getCssTransitionValues } from "@/utils/animations";
 import type { Theme, AppSettings } from "@/types";
 import { STORAGE_SETTINGS } from "@/constants/storage-keys";
+import { defaultSettings } from "@/constants/default-settings";
 
-// Dynamic theme CSS injection for non-default themes (light/dark stay in globals.css)
+/** Sync a partial settings object to the Bridge layer (non-blocking, best-effort). */
+function syncSettingsToBridge(partial: Partial<AppSettings>) {
+  window.electronAPI?.python.call("config.set", partial).catch(() => {});
+}
+
+/* ----- Dynamic theme CSS injection ----- */
+
 const THEME_CSS_FILES: Record<string, string> = {
   graphite: "graphite",
   midnight: "midnight",
@@ -42,20 +49,7 @@ function injectThemeCss(theme: string) {
     .catch(() => {});
 }
 
-
-const THEME_KEY = "codexa-studio-theme";
-
-export const defaultSettings: AppSettings = {
-  windowOpacity: 100,
-  borderRadius: 20,
-  animationSpeed: "fast" as AnimationSpeed,
-  rememberSize: true,
-  rememberPosition: true,
-  sidebarWidth: 240,
-  fontScale: 120,
-  compactMode: false,
-  theme: "auto",
-};
+/* ----- Helpers ----- */
 
 function getSystemTheme(): "light" | "dark" {
   if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
@@ -98,7 +92,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [settings, setSettingsState] = useState<AppSettings>(loadSettings);
   const resolvedLightDark = resolveThemeToLightDark(settings.theme);
 
-  // Apply CSS variables
+  // ?? Initial sync: push loaded React settings to Bridge on mount ??
+  useEffect(() => {
+    syncSettingsToBridge(settings);
+    // Run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ?? Apply CSS variables ??
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-theme", resolvedLightDark);
@@ -114,7 +115,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     injectThemeCss(settings.theme);
   }, [settings]);
 
-  // System theme listener
+  // ?? System theme listener ??
   useEffect(() => {
     if (settings.theme !== "auto") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -126,10 +127,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, [settings.theme]);
 
+  // ?? Mutators (localStorage + state + Bridge mirror) ??
+
   const setTheme = useCallback((theme: Theme) => {
     setSettingsState(prev => {
       const next = { ...prev, theme };
       saveSettings(next);
+      syncSettingsToBridge({ theme });
       return next;
     });
   }, []);
@@ -138,21 +142,26 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setSettingsState(prev => {
       const next = { ...prev, ...partial };
       saveSettings(next);
+      syncSettingsToBridge(partial);
       return next;
     });
   }, []);
 
   const resetSettings = useCallback(() => {
-    setSettingsState({ ...defaultSettings });
-    saveSettings({ ...defaultSettings });
+    const defaults = { ...defaultSettings };
+    setSettingsState(defaults);
+    saveSettings(defaults);
+    syncSettingsToBridge(defaults);
   }, []);
 
   const toggleTheme = useCallback(() => {
     setSettingsState(prev => {
       const themes: Theme[] = ["light", "dark", "auto", "graphite", "midnight", "ocean", "emerald", "crimson"];
       const idx = themes.indexOf(prev.theme);
-      const next = { ...prev, theme: themes[(idx + 1) % themes.length] };
+      const nextTheme = themes[(idx + 1) % themes.length];
+      const next = { ...prev, theme: nextTheme };
       saveSettings(next);
+      syncSettingsToBridge({ theme: nextTheme });
       return next;
     });
   }, []);

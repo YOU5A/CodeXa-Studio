@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Plus, Pencil, Trash2, RefreshCw, Upload, Download } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
-import { GlassButton, GlassInput, GlassModal, GlassSelect, GlassToggle, GlassBadge, GlassEmptyState, space, radii, fontSizes } from "@/design-system";
+import { GlassButton, GlassInput, GlassModal, GlassSelect, GlassToggle, GlassBadge, GlassEmptyState } from "@/design-system/components";
+import { space, radii, fontSizes } from "@/design-system/tokens";
 import PageLayout from "@/components/PageLayout";
-import type { SelectOption } from "@/design-system";
+import type { SelectOption } from "@/design-system/components";
 import { useToast } from "@/contexts/ToastContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirm } from "@/contexts/ConfirmContext";
@@ -217,9 +218,9 @@ export default function AppCpuPriority(_props: Props) {
     try {
       const ok = await confirm({ title: tx.importConfirm, danger: false });
       if (!ok) return;
-      const filepath = await window.electronAPI?.dialog.openFile({
+      const filepath = await window.electronAPI?.dialog.openFile([{
         name: "JSON Files", extensions: ["json"],
-      });
+      }]);
       if (!filepath) return;
       const result = await window.electronAPI?.python.call("priority.import_config", { filepath });
       if (result && !result.error) {

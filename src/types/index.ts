@@ -81,6 +81,29 @@ export type Page =
   | "backupcenter"
   | "settings";
 
+/** All 29 JSON-RPC methods routed through electron/rpc ? .NET Bridge (or Python fallback). */
+export type RpcMethod =
+  | "system.info"
+  | "registry.read" | "registry.write" | "registry.backup"
+  | "admin.check" | "admin.restart"
+  | "priority.list" | "priority.add" | "priority.edit" | "priority.delete" | "priority.export" | "priority.import_config"
+  | "music.scan" | "music.get_metadata" | "music.save_tags" | "music.extract_cover" | "music.apply_cover"
+  | "music.remove_cover" | "music.read_cover_file" | "music.rename" | "music.get_lyrics" | "music.save_cover_file"
+  | "backup.list" | "backup.dir" | "backup.export" | "backup.restore" | "backup.delete" | "backup.clear_all"
+  | "config.get" | "config.set";
+
+/** Electron native dialog filter descriptor. */
+export interface DialogFilter {
+  name: string;
+  extensions: string[];
+}
+
+/** Electron native save-dialog options. */
+export interface SaveDialogOptions {
+  defaultPath?: string;
+  filters?: DialogFilter[];
+}
+
 export interface AppSettings {
   windowOpacity: number;
   borderRadius: number;
@@ -107,14 +130,14 @@ export interface ElectronAPI {
     getSize: () => Promise<[number, number]>;
   };
   python: {
-    call: (method: string, params?: any) => Promise<any>;
+    call: <T = any>(method: RpcMethod, params?: Record<string, unknown>) => Promise<T>;
     status: () => Promise<boolean>;
     getFileUrl: (filepath: string) => string;
   };
   dialog: {
     openFolder: () => Promise<string | null>;
-    openFile: (filters?: any) => Promise<string | null>;
-    saveFile: (options?: any) => Promise<string | null>;
+    openFile: (filters?: DialogFilter[]) => Promise<string | null>;
+    saveFile: (options?: SaveDialogOptions) => Promise<string | null>;
   };
   shell: {
     openPath: (filePath: string) => Promise<string>;
@@ -132,9 +155,9 @@ export interface ElectronAPI {
     downloadCoverImage: (url: string) => Promise<{ data: string | null; error: string | null }>;
   };
   settings: {
-    get: (key: string) => Promise<any>;
-    set: (key: string, value: any) => Promise<boolean>;
-    getAll: () => Promise<Record<string, any>>;
+    get: (key: string) => Promise<unknown>;
+    set: (key: string, value: unknown) => Promise<boolean>;
+    getAll: () => Promise<Record<string, unknown>>;
     resetBounds: () => Promise<boolean>;
   };
 }

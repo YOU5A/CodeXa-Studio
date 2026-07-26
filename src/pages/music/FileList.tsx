@@ -1,5 +1,6 @@
 import { Music } from "lucide-react";
-import { GlassCard, space, fontSizes } from "@/design-system";
+import { GlassCard } from "@/design-system/components";
+import { space, fontSizes } from "@/design-system/tokens";
 import type { FileListProps } from "./types";
 
 export default function FileList(props: FileListProps) {

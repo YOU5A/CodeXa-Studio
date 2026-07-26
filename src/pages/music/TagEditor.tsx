@@ -1,5 +1,6 @@
 import { Save, X, Edit3 } from "lucide-react";
-import { GlassButton, GlassInput, space, fontSizes } from "@/design-system";
+import { GlassButton, GlassInput } from "@/design-system/components";
+import { space, fontSizes } from "@/design-system/tokens";
 import type { TagEditorProps } from "./types";
 
 export default function TagEditor(props: TagEditorProps) {

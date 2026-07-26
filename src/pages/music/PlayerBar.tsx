@@ -3,10 +3,8 @@ import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
   Volume2, Music, Settings,
 } from "lucide-react";
-import {
-  GlassSurface, GlassButton, GlassTooltip,
-  radii, space, fontSizes,
-} from "@/design-system";
+import { GlassSurface, GlassButton, GlassTooltip } from "@/design-system/components";
+import { radii, space, fontSizes } from "@/design-system/tokens";
 import { EASE_OUT } from "@/utils/animations";
 import type { PlayMode } from "@/contexts/MusicPlayerContext";
 import type { PlayerBarProps } from "./types";

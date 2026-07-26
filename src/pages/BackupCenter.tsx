@@ -1,15 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Trash2, FolderOpen, Download } from "lucide-react";
-import {
-  GlassCard,
-  GlassButton,
-  GlassEmptyState,
-  GlassBadge,
-  space,
-  fontSizes,
-  radii,
-} from "@/design-system";
+import { GlassCard, GlassButton, GlassEmptyState, GlassBadge } from "@/design-system/components";
+import { space, fontSizes, radii } from "@/design-system/tokens";
 import { useToast } from "@/contexts/ToastContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirm } from "@/contexts/ConfirmContext";

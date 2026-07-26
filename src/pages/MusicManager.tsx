@@ -5,18 +5,8 @@ import {
   SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
   Volume2, Trash2, Music, Edit3, ChevronUp, Globe
 } from "lucide-react";
-import {
-  GlassCard,
-  GlassButton,
-  GlassInput,
-  GlassSurface,
-  GlassEmptyState,
-  GlassBadge,
-  GlassTooltip,
-  space,
-  fontSizes,
-  radii,
-} from "@/design-system";
+import { GlassCard, GlassButton, GlassInput, GlassSurface, GlassEmptyState, GlassBadge, GlassTooltip } from "@/design-system/components";
+import { space, fontSizes, radii } from "@/design-system/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useConfirm } from "@/contexts/ConfirmContext";
@@ -471,7 +461,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
   // ?? Cover ??
   const pickCover = async () => {
-    const p = await window.electronAPI?.dialog.openFile({ name: "Images", extensions: ["jpg","jpeg","png","bmp","webp"] });
+    const p = await window.electronAPI?.dialog.openFile([{ name: "Images", extensions: ["jpg","jpeg","png","bmp","webp"] }]);
     if (p) {
       setNewCoverPath(p);
       const r = await window.electronAPI?.python.call("music.read_cover_file", { filepath: p });

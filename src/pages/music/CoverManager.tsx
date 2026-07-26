@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Music, ChevronUp, Globe, Image, Save, Trash2 } from "lucide-react";
-import { GlassCard, GlassButton, radii, space } from "@/design-system";
+import { GlassCard, GlassButton } from "@/design-system/components";
+import { radii, space } from "@/design-system/tokens";
 import type { CoverManagerProps } from "./types";
 
 export default function CoverManager(props: CoverManagerProps) {

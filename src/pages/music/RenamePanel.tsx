@@ -1,4 +1,5 @@
-import { GlassButton, GlassInput, space, fontSizes } from "@/design-system";
+import { GlassButton, GlassInput } from "@/design-system/components";
+import { space, fontSizes } from "@/design-system/tokens";
 import type { RenamePanelProps } from "./types";
 
 export default function RenamePanel(props: RenamePanelProps) {

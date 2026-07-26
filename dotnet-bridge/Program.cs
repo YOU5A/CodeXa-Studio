@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using CodeXaBridge.Services;
 
@@ -53,7 +53,13 @@ class Program
             var method = request.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
             var reqParamsRaw = request.TryGetProperty("params", out var rp) ? rp : default;
 
-            if (method == "__shutdown__") Environment.Exit(0);
+            if (method == "__shutdown__")
+            {
+                var shutdownResponse = new Dictionary<string, object?> { ["id"] = reqId, ["result"] = "ok" };
+                Console.WriteLine(JsonSerializer.Serialize(shutdownResponse, _jsonOptions));
+                Console.Out.Flush();
+                Environment.Exit(0);
+            }
 
             var reqParams = JsonElementToDict(reqParamsRaw);
             object? result = null;

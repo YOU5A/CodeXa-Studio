@@ -2,22 +2,15 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Cpu, MemoryStick, HardDrive, Activity, Clock, Database, Gauge, Music } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
-import {
-  GlassButton,
-  GlassProgressBar,
-  GlassBadge,
-  GlassEmptyState,
-  space,
-  radii,
-  fontSizes,
-} from "@/design-system";
+import { GlassButton, GlassProgressBar, GlassBadge, GlassEmptyState } from "@/design-system/components";
+import { space, radii, fontSizes } from "@/design-system/tokens";
 import { getActivities, type ActivityEntry } from "@/hooks/useActivityLog";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { SystemInfo, BackupEntry, Language } from "@/types";
+import type { SystemInfo, BackupEntry, Language, Page } from "@/types";
 import { useTheme } from "@/hooks/useTheme";
 
 interface DashboardProps {
-  onNavigate: (page: any) => void;
+  onNavigate: (page: Page) => void;
 }
 
 const t = {

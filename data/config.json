@@ -1,4 +1,13 @@
 ﻿{
   "language": "zh",
-  "musicVolume": 11
+  "musicVolume": 11,
+  "windowOpacity": 100,
+  "borderRadius": 20,
+  "animationSpeed": "fast",
+  "rememberSize": true,
+  "rememberPosition": true,
+  "sidebarWidth": 240,
+  "fontScale": 120,
+  "compactMode": false,
+  "theme": "auto"
 }
