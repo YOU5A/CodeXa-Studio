@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -135,6 +135,14 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [letters] = useState<ParticleInit[]>(() => generateLetters(window.innerWidth));
   const [exitPhase, setExitPhase] = useState<"idle" | "exiting">("idle");
+  const confettiPieces = useMemo(() =>
+    Array.from({ length: 40 }).map((_, i) => ({
+      id: i,
+      dx: (Math.random() - 0.5) * 600,
+      dy: (Math.random() - 0.5) * 600,
+      rotate: Math.random() * 720,
+    }))
+  , []);
   const lastInteractionRef = useRef(Date.now());
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -183,7 +191,7 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
   // Auto-exit after celebration or failure
   useEffect(() => {
     if (phase === "success") {
-      exitTimerRef.current = setTimeout(() => setExitPhase("exiting"), 1500);
+      exitTimerRef.current = setTimeout(() => setExitPhase("exiting"), 2500);
       return () => { if (exitTimerRef.current) { clearTimeout(exitTimerRef.current); exitTimerRef.current = null; } };
     }
     if (phase === "failed") {
@@ -275,13 +283,13 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
       {/* Success */}
       {phase === "success" && (
         <>
-          {Array.from({ length: 40 }).map((_, i) => (
+          {confettiPieces.map((p) => (
             <motion.div
-              key={"c-" + i}
+              key={"c-" + p.id}
               initial={{ x: w / 2, y: h / 2, scale: 0, opacity: 1 }}
-              animate={{ x: w / 2 + (Math.random() - 0.5) * 600, y: h / 2 + (Math.random() - 0.5) * 600, scale: [0, 1.5, 0], opacity: [1, 1, 0], rotate: Math.random() * 720 }}
-              transition={{ duration: 1.2, delay: i * 0.02, ease: "easeOut" }}
-              style={{ position: "absolute", width: 10, height: 10, background: CONFETTI_COLORS[i % CONFETTI_COLORS.length], borderRadius: 2 }}
+              animate={{ x: w / 2 + p.dx, y: h / 2 + p.dy, scale: [0, 1.5, 0], opacity: [1, 1, 0], rotate: p.rotate }}
+              transition={{ duration: 1.2, delay: p.id * 0.02, ease: "easeOut" }}
+              style={{ position: "absolute", width: 10, height: 10, background: CONFETTI_COLORS[p.id % CONFETTI_COLORS.length], borderRadius: 2 }}
             />
           ))}
           <div
