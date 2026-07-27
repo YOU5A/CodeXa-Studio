@@ -1,15 +1,17 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTheme, ThemeProvider } from "./hooks/useTheme";
 import { getAnimDuration, EASE_OUT } from "./utils/animations";
-import { ToastProvider } from "./contexts/ToastContext";
+import { ToastProvider, useToast } from "./contexts/ToastContext";
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { MusicPlayerProvider, useMusicPlayer } from "./contexts/MusicPlayerContext";
-import { LanguageProvider } from "./contexts/LanguageContext";
+import { LanguageProvider, useLanguage } from "./contexts/LanguageContext";
+import { DevUnlockProvider, useDevUnlock, UnlockGameOverlay } from "@/developer-unlock";
 import ToastContainer from "./components/Toast";
 import ConfirmDialog from "./components/ConfirmDialog";
 import type { Page } from "./types";
-import { STORAGE_PAGE } from "./constants/storage-keys";import TitleBar from "./components/TitleBar";
+import { STORAGE_PAGE } from "./constants/storage-keys";
+import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import { GlassLayout, GlassMain, GlassEmptyState, pageTransition } from "./design-system";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -72,6 +74,9 @@ function AppContent() {
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const { lang } = useLanguage();
+  const { isDeveloperMode, isGameOpen, openGame, closeGame, unlock } = useDevUnlock();
+  const { showToast } = useToast();
 
   useEffect(() => {
     window.electronAPI?.window.onMaximizeChange(setIsMaximized);
@@ -135,8 +140,31 @@ function AppContent() {
     return () => { cancelled = true; };
   }, [playingFile]);
 
-  // Save current page
+  // Redirect from NCM page when developer mode is disabled
+  const prevDevMode = useRef(isDeveloperMode);
+  useEffect(() => {
+    if (prevDevMode.current && !isDeveloperMode && currentPage === "ncmstudio") {
+      setCurrentPage("dashboard");
+      localStorage.setItem(STORAGE_PAGE, "dashboard");
+      showToast(
+        lang === "zh" ? "开发者模式已关闭，已返回仪表盘" : "Developer mode disabled, returned to dashboard",
+        "info", 3000
+      );
+    }
+    prevDevMode.current = isDeveloperMode;
+  }, [isDeveloperMode]);
+
+  // Save current page with NCM Studio route guard
   const handleNavigate = (page: Page) => {
+    if (page === "ncmstudio" && !isDeveloperMode) {
+      setCurrentPage("dashboard");
+      localStorage.setItem(STORAGE_PAGE, "dashboard");
+      showToast(
+        lang === "zh" ? "请先解锁开发者模式" : "Developer mode required",
+        "warning", 3000
+      );
+      return;
+    }
     setCurrentPage(page);
     localStorage.setItem(STORAGE_PAGE, page);
   };
@@ -187,7 +215,12 @@ function AppContent() {
           zIndex: 1,
         }}
       >
-        <Sidebar currentPage={currentPage} onNavigate={handleNavigate} onPreload={preloadPage} />
+        <Sidebar
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          onPreload={preloadPage}
+          onVersionTrigger={() => openGame()}
+        />
 
         <GlassMain
           padding={settings.compactMode ? 16 : 24}
@@ -219,6 +252,14 @@ function AppContent() {
         </GlassMain>
       </div>
 
+      {/* Developer Unlock Game Overlay */}
+      {isGameOpen && (
+        <UnlockGameOverlay
+          onSuccess={unlock}
+          onClose={closeGame}
+        />
+      )}
+
       <ToastContainer />
       <ConfirmDialog />
     </GlassLayout>
@@ -228,15 +269,17 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <ToastProvider>
-        <ConfirmProvider>
-          <LanguageProvider>
-            <MusicPlayerProvider>
-              <AppContent />
-            </MusicPlayerProvider>
-          </LanguageProvider>
-        </ConfirmProvider>
-      </ToastProvider>
+      <DevUnlockProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <LanguageProvider>
+              <MusicPlayerProvider>
+                <AppContent />
+              </MusicPlayerProvider>
+            </LanguageProvider>
+          </ConfirmProvider>
+        </ToastProvider>
+      </DevUnlockProvider>
     </ThemeProvider>
   );
 }

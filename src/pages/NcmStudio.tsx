@@ -3,7 +3,7 @@ import {
   FolderOpen, Search, CheckCircle, XCircle, Zap, ExternalLink,
 } from "lucide-react";
 import {
-  GlassButton, GlassInput, GlassSurface, GlassBadge, GlassProgressBar,
+  GlassButton, GlassInput, GlassSurface, GlassBadge, GlassProgressBar, GlassScrollArea,
 } from "@/design-system/components";
 import { space, fontSizes, radii } from "@/design-system/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -363,10 +363,10 @@ export default function NcmStudio() {
             }}>
               <GlassSurface tier="regular" style={{
                 padding: 10, borderRadius: radii.md,
-                maxHeight: 150, overflowY: "auto",
+                maxHeight: 150, display: "flex", flexDirection: "column",
               }}>
                 {isDecoding && (
-                  <div style={{ marginBottom: 6 }}>
+                  <div style={{ marginBottom: 6, flexShrink: 0 }}>
                     <div style={{ fontSize: fontSizes.xs, color: "var(--text-secondary)", marginBottom: 3 }}>
                       {tx.decoding}
                     </div>
@@ -375,28 +375,30 @@ export default function NcmStudio() {
                 )}
                 {results.length > 0 && (
                   <>
-                    <div style={{ fontSize: fontSizes.xs, color: "var(--text-secondary)", marginBottom: 4 }}>
+                    <div style={{ fontSize: fontSizes.xs, color: "var(--text-secondary)", marginBottom: 4, flexShrink: 0 }}>
                       {results.filter((r: DecodeResult) => r.success).length} {tx.success}
                       {" / "}
                       {results.filter((r: DecodeResult) => !r.success).length} {tx.failed}
                     </div>
-                    <div style={{ fontSize: fontSizes.xs }}>
-                      {results.map((r: DecodeResult, i: number) => (
-                        <div key={i} style={{
-                          display: "flex", alignItems: "center", gap: 6, padding: "2px 0",
-                          color: r.success ? "var(--text-primary)" : "var(--danger)",
-                        }}>
-                          {r.success
-                            ? <CheckCircle size={12} style={{ color: "var(--success)", flexShrink: 0 }} />
-                            : <XCircle size={12} style={{ color: "var(--danger)", flexShrink: 0 }} />}
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <GlassScrollArea fadeEdges={true} scrollbarGutter={8}>
+                      <div style={{ fontSize: fontSizes.xs, padding: "4px 0 10px 0" }}>
+                        {results.map((r: DecodeResult, i: number) => (
+                          <div key={i} style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "2px 0",
+                            color: r.success ? "var(--text-primary)" : "var(--danger)",
+                          }}>
                             {r.success
-                              ? r.outputPath?.split("\\").pop() || r.outputPath
-                              : r.errorMessage}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                              ? <CheckCircle size={12} style={{ color: "var(--success)", flexShrink: 0 }} />
+                              : <XCircle size={12} style={{ color: "var(--danger)", flexShrink: 0 }} />}
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {r.success
+                                ? r.outputPath?.split("\\").pop() || r.outputPath
+                                : r.errorMessage}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </GlassScrollArea>
                   </>
                 )}
               </GlassSurface>

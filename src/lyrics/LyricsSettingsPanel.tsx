@@ -95,9 +95,10 @@ const LyricsSettingsPanel: FC<Props> = ({ open, onClose, values, onChange }) => 
               <Row label={tx.enableBlur}><GlassToggle active={values.enableBlur} onChange={v => set("enableBlur", v)} /></Row>
               <Row label={tx.enableGlow}><GlassToggle active={values.enableGlow} onChange={v => set("enableGlow", v)} /></Row>
               <Row label={tx.enableStagger}><GlassToggle active={values.enableStagger} onChange={v => set("enableStagger", v)} /></Row>
-              <Row label={tx.animationTiming}>
-                <div style={{ display: "flex", gap: 4 }}>{TIMINGS.map(o => <GlassPillButton key={o.id} active={values.animationTiming === o.id} onClick={() => set("animationTiming", o.id)}>{o.l[lang]}</GlassPillButton>)}</div>
-              </Row>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{tx.animationTiming}</span>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>{TIMINGS.map(o => <GlassPillButton key={o.id} active={values.animationTiming === o.id} onClick={() => set("animationTiming", o.id)}>{o.l[lang]}</GlassPillButton>)}</div>
+              </div>
             </Sec>
             <div style={sep} />
 
@@ -122,7 +123,7 @@ const LyricsSettingsPanel: FC<Props> = ({ open, onClose, values, onChange }) => 
             <div style={sep} />
 
             <Sec title={tx.lyricSource}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", paddingLeft: 6, paddingBottom: 6 }}>{SOURCES.map(o => <GlassPillButton key={o.id} active={values.lyricSource === o.id} onClick={() => set("lyricSource", o.id)}>{o.l[lang]}</GlassPillButton>)}</div>
+              <div style={{ display: "flex", gap: 4, justifyContent: "center", padding: "4px 0" }}>{SOURCES.map(o => <GlassPillButton key={o.id} active={values.lyricSource === o.id} onClick={() => set("lyricSource", o.id)}>{o.l[lang]}</GlassPillButton>)}</div>
             </Sec>
 
           </div>

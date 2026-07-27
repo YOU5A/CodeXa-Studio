@@ -70,14 +70,6 @@ export default function MetadataPanel({
               <span style={{ color: "var(--text-primary)" }}>
                 {info?.album || "-"}
               </span>
-              <span style={{ color: "var(--text-tertiary)" }}>{formatLabel}:</span>
-              <span style={{
-                color: "var(--accent)", fontSize: fontSizes.xs,
-                background: "var(--accent-bg)", padding: "1px 6px",
-                borderRadius: 4, display: "inline-block", width: "fit-content",
-              }}>
-                {info?.format || "?"}
-              </span>
 
               {info?.duration > 0 && (
                 <>
@@ -87,6 +79,15 @@ export default function MetadataPanel({
                   </span>
                 </>
               )}
+
+              <span style={{ color: "var(--text-tertiary)" }}>{formatLabel}:</span>
+              <span style={{
+                color: "var(--accent)", fontSize: fontSizes.xs,
+                background: "var(--accent-bg)", padding: "1px 6px",
+                borderRadius: 4, display: "inline-block", width: "fit-content",
+              }}>
+                {info?.format || "?"}
+              </span>
             </div>
           </div>
 

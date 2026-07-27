@@ -56,3 +56,5 @@ publish2/
 
 # Runtime data (user config)
 data/config.json
+
+.tmp-*

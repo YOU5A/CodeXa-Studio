@@ -9,20 +9,20 @@
 **作者:** YOU5A / Y0USA
 **技术栈:** TypeScript 6 · React 19 · Tailwind CSS 4 · Framer Motion 12 · Electron 42 · .NET 10
 **仓库:** https://github.com/YOU5A/CodeXa-Studio
-**版本:** 2.0.0
+**版本:** 2.1.0
 **许可证:** AGPL-3.0
 
 ---
 
-## 核心规则
+## 一、核心规则
 
 ### 语言与编码
 
 - 对话与注释默认中文。
 - 所有文本文件 UTF-8 without BOM。
 - 修改文件时保持原文件编码，严禁添加 BOM。
-- Python 读文件用 `encoding='utf-8'` 或 `encoding='utf-8-sig'`。
-- **PowerShell 禁令:** 禁止在 PowerShell 中编写/拼接包含中文的代码；改用 Python。写入 UTF-8 文件用 `[System.IO.File]::WriteAllText` + `UTF8Encoding($false)`。
+- Python 读文件用 encoding='utf-8' 或 encoding='utf-8-sig'。
+- **PowerShell 禁令:** 禁止在 PowerShell 中编写/拼接包含中文的代码；改用 Python。写入 UTF-8 文件用 [System.IO.File]::WriteAllText + UTF8Encoding(False)。
 - 仅用 PowerShell 做文件浏览和简单单文件操作。
 
 ### Git 规则
@@ -32,54 +32,40 @@
 
 ### 文件删除安全规则
 
-- **严禁批量删除。** 禁止: `del /s`、`rd /s`、`rmdir /s`、`Remove-Item -Recurse`、`rm -rf`。
+- **严禁批量删除。** 禁止: del /s、
+d /s、
+mdir /s、Remove-Item -Recurse、
+m -rf。
 - 只能逐个删除明确路径的文件。需批量删除时停止操作，交用户处理。
 
 ---
 
-## 编码行为准则
+## 二、编码准则
 
 1. **先思考再编码** — 明确假设，有疑问先问。
 2. **简洁优先** — 只写解决问题所需的最少代码，不过度抽象。
-3. **精准修改** — 只改需要改的，不顺手"优化"无关代码，匹配现有代码风格。
+3. **精准修改** — 只改需要改的，不顺手优化无关代码，匹配现有代码风格。
 4. **目标驱动** — 以可验证的成功标准定义任务，循环直到验证通过。
 
 ---
 
-## Liquid Glass 设计系统
+## 三、项目架构
 
-### 迁移原则
+### 3.1 项目结构
 
-- **只修改:** UI、组件、样式、动画。
-- **不修改:** 业务逻辑、API、路由、状态管理。
-- **所有 UI 必须使用 `src/design-system`**，禁止在页面内创建零散样式。
-- **执行流程:** 检查现有代码 → 理解架构 → 解释方案 → 分阶段推进。禁止盲目重写。
-
-### Light DOM 渲染策略
-
-- 全量使用 Light DOM（禁用 Shadow DOM），确保 Electron offscreen 截图可见。
-- 禁止 Web Component custom element。
-- 样式直接通过 CSS 文件引入，不依赖 Shadow DOM 隔离。
-
----
-
-## 项目结构
-
-```
+`
 CodeXa-Studio/
-├── .gitignore
 ├── package.json                 # 依赖 + electron-builder 配置
 ├── vite.config.ts               # Vite 8 · 端口 5173 · base: ./ · 别名 @ → src/
 ├── tsconfig.json                # TypeScript 6 · ES2022 · bundler 解析
 ├── tsconfig.electron.json       # Electron 主进程 TS 配置
-├── start-dev.bat / stop-dev.bat # 开发模式启停脚本
 ├── index.html                   # Vite 入口 HTML
 │
 ├── electron/                    # Electron 42 主进程
 │   ├── main.js                  # 窗口、IPC、托盘、提权、单实例锁
 │   ├── preload.js               # contextBridge → window.electronAPI
 │   ├── bridge-manager.js        # 双桥管理器（.NET 优先 → Python 回退）
-│   ├── python-bridge.js         # JSON-RPC 子进程管理器（PythonBridge 类）
+│   ├── python-bridge.js         # JSON-RPC 子进程管理器
 │   ├── ipc-setup.js             # IPC 处理器 + 在线歌词/封面搜索
 │   ├── window.js                # 窗口创建与持久化
 │   ├── tray.js                  # 系统托盘
@@ -127,23 +113,16 @@ CodeXa-Studio/
 │
 ├── diag-cpu/                    # CPU 诊断小工具 (.NET)
 ├── data/                        # 运行时数据（gitignore 排除）
-├── bridge/                      # 旧 Python 桥接（已废弃）
 │
 └── src/                         # React 19 前端
     ├── main.tsx                  # ReactDOM 入口
     ├── App.tsx                   # 根组件：路由、布局、Provider 嵌套
-    ├── version.ts                # 版本号 (2.0.0)
-    ├── vite-env.d.ts
+    ├── version.ts                # 版本号 (2.1.0)
     │
-    ├── types/
-    │   └── index.ts              # 全局类型：SystemInfo · RpcMethod(31) · ElectronAPI
-    │
-    ├── constants/
-    │   ├── storage-keys.ts       # localStorage key 定义
-    │   └── default-settings.ts   # 默认设置
-    │
-    ├── styles/
-    │   └── globals.css           # Tailwind CSS 4 + 8 套主题
+    ├── types/index.ts            # 全局类型：SystemInfo · RpcMethod(31) · ElectronAPI
+    ├── constants/                # storage-keys · default-settings
+    ├── styles/globals.css        # Tailwind CSS 4 + 8 套主题
+    ├── utils/                    # animations · colorExtractor
     │
     ├── design-system/            # ★ Liquid Glass 核心
     │   ├── index.ts
@@ -153,9 +132,8 @@ CodeXa-Studio/
     │   ├── layouts/              # GlassBackground · GlassLayout · GlassMain
     │   └── animations/           # springs · glass variants
     │
-├── components/               # 应用级组件（12 个）
-    │   ├── TitleBar.tsx          # 自定义标题栏
-    │   ├── DevLogPanel.tsx       # 开发日志面板
+    ├── components/               # 应用级组件（12 个）
+    │   ├── TitleBar.tsx
     │   ├── Sidebar.tsx           # 侧边导航 + 预加载
     │   ├── PageLayout.tsx
     │   ├── GlassCard.tsx
@@ -165,72 +143,47 @@ CodeXa-Studio/
     │   ├── ErrorBoundary.tsx
     │   ├── CoverSearchPanel.tsx
     │   ├── FluidSettingsPanel.tsx
+    │   ├── DevLogPanel.tsx
     │   └── FluidBackground/      # Canvas 2D + SVG 流体背景
-    │       ├── index.tsx
-    │       ├── renderer.ts
-    │       ├── presets.ts        # 7 套预设
-    │       ├── config.ts
-    │       ├── SvgFluidRenderer.tsx
-    │       └── SvgFluidRenderer.css
     │
     ├── contexts/                 # 5 个 Context
+    │   ├── ThemeProvider (useTheme.tsx)
     │   ├── LanguageContext.tsx
     │   ├── ToastContext.tsx
     │   ├── ConfirmContext.tsx
     │   └── MusicPlayerContext.tsx
     │
-    ├── hooks/                    # 3 个 Hook
+    ├── hooks/                    # 4 个 Hook
     │   ├── useTheme.tsx          # 8 套主题 + CSS 变量注入
     │   ├── useBridge.ts          # Bridge RPC 封装
     │   ├── useMouseGlow.ts       # 鼠标光晕
     │   └── useActivityLog.ts     # 活动日志
     │
-    ├── pages/                    # 6 页面 (React.lazy)
+    ├── pages/                    # 7 页面 (React.lazy)
     │   ├── Dashboard.tsx
     │   ├── Win32Priority.tsx
     │   ├── AppCpuPriority.tsx
     │   ├── MusicManager.tsx
-    │   ├── NcmStudio.tsx         # NCM 解码工作室
+    │   ├── NcmStudio.tsx
     │   ├── BackupCenter.tsx
     │   ├── Settings.tsx
-    │   ├── music/                # 音乐子模块
-    │   │   ├── FileList.tsx
-    │   │   ├── PlayerBar.tsx
-    │   │   ├── TagEditor.tsx
-    │   │   ├── CoverManager.tsx
-    │   │   └── RenamePanel.tsx
-    ├── ncm/                  # NCM 子模块
-    │   ├── types.ts
-    │   ├── FileList.tsx
-    │   ├── DecodeBar.tsx
-    │   └── MetadataPanel.tsx
-    │   └── settings/             # 设置子模块
-    │       ├── AppearanceSection.tsx
-    │       ├── BehaviorSection.tsx
-    │       ├── InterfaceSection.tsx
-    │       └── AboutSection.tsx
+    │   ├── music/                # 音乐子模块 (FileList, PlayerBar, TagEditor, CoverManager, RenamePanel)
+    │   ├── ncm/                  # NCM 子模块 (FileList, DecodeBar, MetadataPanel)
+    │   └── settings/             # 设置子模块 (Appearance, Behavior, Interface, About)
     │
-    ├── lyrics/                   # 歌词子系统（9 个文件）
-    │   ├── index.ts
-    │   ├── types.ts
-    │   ├── LyricParser.ts
-    │   ├── LyricManager.tsx
-    │   ├── LyricDisplay.tsx
-    │   ├── LyricBlock.tsx
-    │   ├── LyricWindow.tsx
-    │   ├── InterludeDots.tsx
-    │   └── LyricsSettingsPanel.tsx
-    │
-    └── utils/
-        ├── animations.ts
-        └── colorExtractor.ts
-```
+    └── lyrics/                   # 歌词子系统（9 个文件）
+        ├── LyricParser.ts
+        ├── LyricManager.tsx
+        ├── LyricDisplay.tsx
+        ├── LyricBlock.tsx
+        ├── LyricWindow.tsx
+        ├── InterludeDots.tsx
+        └── LyricsSettingsPanel.tsx
+`
 
----
+### 3.2 桥接架构（双桥回退）
 
-## 桥接架构（双桥回退）
-
-```
+`
 React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Python (回退)
                                 │
                ┌────────────────┼────────────────┐
@@ -244,74 +197,95 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
     dotnet-bridge/publish-sc/           resources/*.pyw
     CodeXaBridge.exe                    3 个 .pyw 脚本
     8 个 .cs 服务
-```
+`
 
-- **主桥接:** .NET 10 `CodeXaBridge.exe`，JSON-RPC over stdin/stdout，7 个 C# 服务类。
-- **回退桥接:** Python `.pyw` 脚本，.NET 不可用时自动切换（bridge-manager.js: 3s 延迟 + 最多 3 次重试）。
-- **路由层:** `electron/rpc/` 8 个 JS 模块，统一分发 31 个 RPC 方法。
-- **IPC 通道:** `electron/preload.js` → `contextBridge.exposeInMainWorld` → `window.electronAPI`。
+- **主桥接:** .NET 10 CodeXaBridge.exe，JSON-RPC over stdin/stdout，8 个 C# 服务类。
+- **回退桥接:** Python .pyw 脚本，.NET 不可用时自动切换（bridge-manager.js: 3s 延迟 + 最多 3 次重试）。
+- **路由层:** electron/rpc/ 9 个 JS 模块，统一分发 34 个 RPC 方法。
+- **IPC 通道:** electron/preload.js → contextBridge.exposeInMainWorld → window.electronAPI。
 - **在线搜索:** Electron 主进程集成 NeteaseCloudMusicApi（歌词） + 原生 HTTPS（封面：网易云/QQ/iTunes）。
 
----
-
-## RPC 方法表（34 个）
+### 3.3 RPC 方法表（34 个）
 
 | 类别 | 数量 | 方法 | .NET 实现 |
 |------|------|------|-----------|
-| 系统信息 | 1 | `system.info` | SystemInfoService.cs |
-| 注册表 | 3 | `registry.read` / `write` / `backup` | RegistryService.cs |
-| 管理员 | 2 | `admin.check` / `restart` | AdminService.cs |
-| 优先级 | 6 | `priority.list` / `add` / `edit` / `delete` / `export` / `import_config` | PriorityService.cs |
-| 音乐 | 10 | `music.scan` / `get_metadata` / `save_tags` / `extract_cover` / `apply_cover` / `remove_cover` / `read_cover_file` / `save_cover_file` / `rename` / `get_lyrics` | MusicService.cs |
-| NCM | 4 | `ncm.list` / `get_info` / `decode` / `batch_decode` | NcmService.cs |
-| 备份 | 6 | `backup.list` / `dir` / `export` / `restore` / `delete` / `clear_all` | BackupService.cs |
-| 配置 | 2 | `config.get` / `set` | ConfigService.cs |
+| 系统信息 | 1 | system.info | SystemInfoService.cs |
+| 注册表 | 3 | 
+egistry.read / write / ackup | RegistryService.cs |
+| 管理员 | 2 | dmin.check / 
+estart | AdminService.cs |
+| 优先级 | 6 | priority.list / dd / edit / delete / export / import_config | PriorityService.cs |
+| 音乐 | 10 | music.scan / get_metadata / save_tags / extract_cover / pply_cover / 
+emove_cover / 
+ead_cover_file / save_cover_file / 
+ename / get_lyrics | MusicService.cs |
+| NCM | 4 | 
+cm.list / get_info / decode / atch_decode | NcmService.cs |
+| 备份 | 6 | ackup.list / dir / export / 
+estore / delete / clear_all | BackupService.cs |
+| 配置 | 2 | config.get / set | ConfigService.cs |
 
 ---
 
-## Context · Hook · 关键组件
+## 四、前端体系
 
-### Context（4 个）
-
-| 名称 | 用途 |
-|------|------|
-| `ThemeProvider` | 8 套主题 + localStorage + CSS 变量注入 + auto 跟随系统 |
-| `LanguageContext` | 中英文切换 · 同步 Bridge |
-| `ToastContext` | 全局 Toast (success/warning/error/info) |
-| `ConfirmContext` | 全局确认对话框 |
-| `MusicPlayerContext` | HTML5 Audio 播放器 + 播放列表管理 |
-
-### Hook（4 个）
+### 4.1 Context（5 个）
 
 | 名称 | 用途 |
 |------|------|
-| `useTheme` | 主题读写 · updateSettings · resetSettings · toggleTheme |
-| `useBridge` | RPC 调用 · 文件夹/文件对话框 · 文件保存 |
-| `useMouseGlow` | 鼠标光晕追踪 |
-| `useActivityLog` | 活动日志记录与导出 |
+| ThemeProvider | 8 套主题 + localStorage + CSS 变量注入 + auto 跟随系统 |
+| LanguageContext | 中英文切换 · 同步 Bridge |
+| ToastContext | 全局 Toast (success/warning/error/info) |
+| ConfirmContext | 全局确认对话框 |
+| MusicPlayerContext | HTML5 Audio 播放器 + 播放列表管理 |
 
+### 4.2 Hook（4 个）
 
-### 流体背景系统
+| 名称 | 用途 |
+|------|------|
+| useTheme | 主题读写 · updateSettings · resetSettings · toggleTheme |
+| useBridge | RPC 调用 · 文件夹/文件对话框 · 文件保存 |
+| useMouseGlow | 鼠标光晕追踪 |
+| useActivityLog | 活动日志记录与导出 |
 
-`src/components/FluidBackground/` — Canvas 2D + SVG 双渲染器：
+### 4.3 页面路由（7 个）
+
+| Page key | 组件 | 功能 |
+|----------|------|------|
+| dashboard | Dashboard.tsx | 系统概览仪表盘 |
+| win32priority | Win32Priority.tsx | Win32 优先级分离 |
+| ppcpupriority | AppCpuPriority.tsx | 进程 CPU 优先级规则 |
+| musicmanager | MusicManager.tsx | 音乐标签/封面/播放 |
+| 
+cmstudio | NcmStudio.tsx | NCM 文件解码/格式转换 |
+| ackupcenter | BackupCenter.tsx | 备份浏览/恢复/导出 |
+| settings | Settings.tsx | 外观/行为/界面设置 |
+
+页面使用 React.lazy 懒加载，切换动画由 framer-motion AnimatePresence 驱动，当前页持久化到 localStorage key codexa-studio-page。
+
+### 4.4 关键子系统
+
+#### 流体背景系统
+
+src/components/FluidBackground/ — Canvas 2D + SVG 双渲染器：
 - 7 套预设: aurora / ocean / ember / nebula / plasma / forest / cover
 - 支持 auto（主题自适应）和 custom（专辑封面取色）模式
 - 速度/强度/模糊/质量 (fps) 可调
-- 配置持久化到 localStorage key `fluid-background-config`
-- 通过 CustomEvent `fluidSettingsChanged` 跨组件同步
+- 配置持久化到 localStorage key luid-background-config
+- 通过 CustomEvent luidSettingsChanged 跨组件同步
 
-### 歌词子系统
+#### 歌词子系统
 
-`src/lyrics/` — 完整 LRC 歌词方案：
-- `LyricParser` — LRC 格式解析（多时间标签、偏移量）
-- `LyricManager` — 状态管理（当前行、滚动同步）
-- `LyricDisplay` — 主容器（动态模糊背景、逐行高亮）
-- `LyricBlock` — 卡拉 OK 逐字着色动画
-- `LyricWindow` — 独立悬浮窗口
-- `InterludeDots` — 间奏等待动画
-- `LyricsSettingsPanel` — 样式调节
+src/lyrics/ — 完整 LRC 歌词方案：
+- LyricParser — LRC 格式解析（多时间标签、偏移量）
+- LyricManager — 状态管理（当前行、滚动同步）
+- LyricDisplay — 主容器（动态模糊背景、逐行高亮）
+- LyricBlock — 卡拉 OK 逐字着色动画
+- LyricWindow — 独立悬浮窗口
+- InterludeDots — 间奏等待动画
+- LyricsSettingsPanel — 样式调节
 
-### NCM 解码子系统
+#### NCM 解码子系统
 
 
 cm-studio/ — 独立 .NET 类库，负责网易云音乐 .ncm 文件解码：
@@ -324,65 +298,70 @@ cm-studio/ — 独立 .NET 类库，负责网易云音乐 .ncm 文件解码：
 
 ---
 
-## 页面路由（7 个）
+## 五、Liquid Glass 设计系统
 
-| Page key | 组件 | 功能 |
-|----------|------|------|
-| `dashboard` | Dashboard.tsx | 系统概览仪表盘 |
-| `win32priority` | Win32Priority.tsx | Win32 优先级分离 |
-| `appcpupriority` | AppCpuPriority.tsx | 进程 CPU 优先级规则 |
-| `musicmanager` | MusicManager.tsx | 音乐标签/封面/播放 |
-| `ncmstudio` | NcmStudio.tsx | NCM 文件解码/格式转换 |
-| `backupcenter` | BackupCenter.tsx | 备份浏览/恢复/导出 |
-| `settings` | Settings.tsx | 外观/行为/界面设置 |
+### 迁移原则
 
-页面使用 `React.lazy` 懒加载，切换动画由 framer-motion `AnimatePresence` 驱动，当前页持久化到 `localStorage` key `codexa-studio-page`。
+- **只修改:** UI、组件、样式、动画。
+- **不修改:** 业务逻辑、API、路由、状态管理。
+- **所有 UI 必须使用 src/design-system**，禁止在页面内创建零散样式。
+- **执行流程:** 检查现有代码 → 理解架构 → 解释方案 → 分阶段推进。禁止盲目重写。
 
----
+### Light DOM 渲染策略
 
-## 设计令牌速查
+- 全量使用 Light DOM（禁用 Shadow DOM），确保 Electron offscreen 截图可见。
+- 禁止 Web Component custom element。
+- 样式直接通过 CSS 文件引入，不依赖 Shadow DOM 隔离。
 
-### 颜色 (`tokens/colors.ts`)
-8 套主题 CSS 变量 + 4 级 glass 表面色
+### 设计令牌速查
 
-### 模糊层级 (`tokens/blur.ts`)
-glass(24px) → surface(16px) → subtle(8px) → none(0px)
-
-### 间距 (`tokens/spacing.ts`)
-4px 基准 · 圆角 sm/md/lg/xl · 字体 xs~4xl · 图标 · z-index 层级
-
-### 材质 (`materials/materials.ts`)
-ultraThin → regular → thick → elevated
+| 类别 | 文件 | 说明 |
+|------|------|------|
+| 颜色 | 	okens/colors.ts | 8 套主题 CSS 变量 + 4 级 glass 表面色 |
+| 模糊 | 	okens/blur.ts | glass(24px) → surface(16px) → subtle(8px) → none(0px) |
+| 间距 | 	okens/spacing.ts | 4px 基准 · 圆角 sm/md/lg/xl · 字体 xs~4xl · 图标 · z-index 层级 |
+| 材质 | materials/materials.ts | ultraThin → regular → thick → elevated |
 
 ### Glass 组件（17 个）
-`GlassSurface` · `GlassCard` · `GlassPanel` · `GlassButton` · `GlassPillButton` · `GlassInput` · `GlassModal` · `GlassSelect` · `GlassToggle` · `GlassProgressBar` · `GlassBadge` · `GlassEmptyState` · `GlassGlow` · `GlassFloat` · `GlassTooltip` · `GlassScrollArea` · `GlassSlider`
+
+GlassSurface · GlassCard · GlassPanel · GlassButton · GlassPillButton · GlassInput · GlassModal · GlassSelect · GlassToggle · GlassProgressBar · GlassBadge · GlassEmptyState · GlassGlow · GlassFloat · GlassTooltip · GlassScrollArea · GlassSlider
 
 ---
 
-## 运行命令
+## 六、运行与部署
 
-```bash
+### 命令
+
+`ash
 npm run dev          # 开发模式 (Vite + Electron)
 npm run vite:dev     # 仅 Vite
 npm run electron:dev # 仅 Electron
 npm run build        # 生产构建 (Vite + electron-builder)
-```
+`
 
-**环境:** Node.js 22+ · .NET 10 SDK · Windows 11（管理员权限）
+### 环境
 
-**Vite:** 端口 5173 · base: `./` · chunk 分包: react-vendor / motion-vendor / icons-vendor · 别名 `@` → `src/`
+- Node.js 22+
+- .NET 10 SDK
+- Windows 11（管理员权限）
 
-**Electron Builder:** 输出 portable + NSIS 安装包 · 请求管理员权限 · 单实例锁
+### 构建配置
+
+- **Vite:** 端口 5173 · base: ./ · chunk 分包: react-vendor / motion-vendor / icons-vendor · 别名 @ → src/
+- **Electron Builder:** 输出 portable + NSIS 安装包 · 请求管理员权限 · 单实例锁
 
 ---
 
-## 非项目文件（忽略）
+## 七、非项目文件（忽略）
 
-`node_modules/` · `dist/` · `dist-electron/` · `build-support/` · `__pycache__/` · `*.pyc` · `docs/` · `.env*` · `.vscode/` · `main.js`（临时）· `*.diff` / `*.patch` · `.tmp-dev-*` · `data/config.json` · .NET `bin/` `obj/` `publish/` `publish2/` · `ncm-studio/bin/` `ncm-studio/obj/`
+
+ode_modules/ · dist/ · dist-electron/ · uild-support/ · __pycache__/ · *.pyc · docs/ · .env* · .vscode/ · main.js（临时）· *.diff / *.patch · .tmp-dev-* · data/config.json · .NET in/ obj/ publish/ publish2/ · 
+cm-studio/bin/ 
+cm-studio/obj/
 
 ---
 
-## 设计参考
+## 八、设计参考
 
 - [liquid-glass-react](https://github.com/rdev/liquid-glass-react)
 - [liquid-dom](https://github.com/AndrewPrifer/liquid-dom)
