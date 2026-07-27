@@ -83,7 +83,7 @@ export default function MetadataPanel({
               <span style={{ color: "var(--text-tertiary)" }}>{formatLabel}:</span>
               <span style={{
                 color: "var(--accent)", fontSize: fontSizes.xs,
-                background: "var(--accent-bg)", padding: "1px 6px",
+                background: "var(--accent-bg-fade)", padding: "1px 6px",
                 borderRadius: 4, display: "inline-block", width: "fit-content",
               }}>
                 {info?.format || "?"}

@@ -270,7 +270,7 @@ export default function NcmStudio() {
     <div style={{ display: "flex", flexDirection: "column", gap: space[3], height: "100%" }}>
       <GlassSurface tier="regular" style={{
         display: "flex", alignItems: "center", gap: space[2],
-        padding: "8px 12px", borderRadius: radii.md, flexWrap: "wrap", flexShrink: 0,
+        padding: "10px 14px", borderRadius: radii.md, flexWrap: "wrap", flexShrink: 0, rowGap: 6,
       }}>
         <GlassButton variant="ghost" size="sm" onClick={browseFolder}>
           <FolderOpen size={14} />

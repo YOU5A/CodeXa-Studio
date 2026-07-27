@@ -7,6 +7,8 @@
 export { GlassSurface } from "./GlassSurface";
 export type { GlassSurfaceProps } from "./GlassSurface";
 
+export { default as GlassSVGFilter } from "./GlassSVGFilter";
+
 export { GlassCard } from "./GlassCard";
 export type { GlassCardProps } from "./GlassCard";
 

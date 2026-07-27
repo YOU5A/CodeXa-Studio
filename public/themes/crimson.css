@@ -13,6 +13,7 @@
   --accent: #f43f5e;
   --accent-hover: #fb7185;
   --accent-bg: rgba(244,63,94,0.15);
+  --accent-bg-fade: linear-gradient(to right, rgba(244,63,94,0.14) 0%, rgba(244,63,94,0.11) 55%, transparent 100%);
   --accent-rgb: 244,63,94;
   --success: #22c55e;
   --warning: #f59e0b;

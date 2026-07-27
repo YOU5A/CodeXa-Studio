@@ -49,16 +49,23 @@ export function GlassPillButton({
       title={title}
       style={{
         padding: "5px 14px",
-        borderRadius: 20,
-        border: `1.5px solid ${active ? "var(--accent)" : "var(--border-color)"}`,
-        background: active ? "var(--accent-bg)" : "transparent",
+        borderRadius: "calc(var(--radius) * 1.0)",
+        border: "none",
+        background: active
+          ? "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.15) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 50%, rgba(var(--glass-glow-rgb,255,255,255),0.01) 100%), var(--accent-bg-fade)"
+          : "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.01) 45%, rgba(var(--glass-glow-rgb,255,255,255),0.00) 70%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 100%), transparent",
         color: active ? "var(--accent)" : "var(--text-secondary)",
         fontSize: 12,
         fontWeight: active ? 600 : 400,
+        backdropFilter: "blur(32px) saturate(2.2)",
+        WebkitBackdropFilter: "blur(32px) saturate(2.2)",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
+        "--glass-angle": (105 + Math.random() * 60) + "deg",
+        "--glass-highlight-opacity": "0.08",
+        "--glass-noise-opacity": "0.01",
         transition: "all var(--transition-fast)",
-        boxShadow: active ? "0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "none",
+        boxShadow: active ? "0 0 0 1px var(--accent), 0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "0 0 0 1px var(--border-color)",
         whiteSpace: "nowrap",
         fontFamily: "inherit",
         outline: "none",

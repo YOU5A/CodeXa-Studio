@@ -1,4 +1,4 @@
-﻿@import "tailwindcss" source("../");
+@import "tailwindcss" source("../");
 
 /* ??? Global Focus Reset ??? */
 /* Hide Chromium default yellow focus ring */
@@ -26,14 +26,20 @@
   --bg-image-filter: none;
   --accent-rgb: 0,113,227;
   --bg-base: #fef0db;
+
+  /* ─── Glass Effect Variables ─── */
+  --glass-angle: 135deg;
+  --glass-highlight-opacity: 0.08;
+  --glass-noise-opacity: 0.015;
+  --glass-glow-rgb: 255,255,255;
 }
 
 :root, [data-theme="light"], [data-theme-name="light"] {
   --bg-primary: rgba(255,255,255,0.72);
-  --bg-secondary: rgba(249,247,244,0.32);
+  --bg-secondary: rgba(249,247,244,0.45);
   --bg-tertiary: rgba(242,241,238,0.14);
-  --bg-elevated: rgba(253,251,248,0.70);
-  --bg-glass: rgba(249,247,244,0.35);
+  --bg-elevated: rgba(253,251,248,0.80);
+  --bg-glass: rgba(249,247,244,0.48);
   --border-color: rgba(0,0,0,0.10);
   --border-strong: rgba(0,0,0,0.16);
   --text-primary: rgba(0,0,0,0.88);
@@ -42,6 +48,7 @@
   --accent: #0071e3;
   --accent-hover: #0077ed;
   --accent-bg: rgba(0,113,227,0.10);
+  --accent-bg-fade: linear-gradient(to right, rgba(0,113,227,0.12) 0%, rgba(0,113,227,0.10) 55%, transparent 100%);
   --accent-rgb: 0,113,227;
   --bg-base: #fef0db;
   --success: #34c759;
@@ -58,10 +65,10 @@
 [data-theme="dark"] {
   --bg-base: #231e16;
   --bg-primary: rgba(30,30,32,0.70);
-  --bg-secondary: rgba(30,30,32,0.30);
+  --bg-secondary: rgba(30,30,32,0.42);
   --bg-tertiary: rgba(30,30,32,0.06);
-  --bg-elevated: rgba(44,44,46,0.68);
-  --bg-glass: rgba(30,30,32,0.38);
+  --bg-elevated: rgba(44,44,46,0.78);
+  --bg-glass: rgba(30,30,32,0.50);
   --border-color: rgba(255,255,255,0.08);
   --border-strong: rgba(255,255,255,0.12);
   --text-primary: rgba(255,255,255,0.92);
@@ -70,6 +77,7 @@
   --accent: #0a84ff;
   --accent-hover: #409cff;
   --accent-bg: rgba(10,132,255,0.12);
+  --accent-bg-fade: linear-gradient(to right, rgba(10,132,255,0.14) 0%, rgba(10,132,255,0.11) 55%, transparent 100%);
   --accent-rgb: 10,132,255;
   --success: #30d158;
   --warning: #ff9f0a;
@@ -254,6 +262,70 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15);background
 
 /* ─── Glass Chromatic Aberration ─── */
 
+/* Base glass surface styles */
+.glass-surface {
+  position: relative;
+}
+
+/* Specular highlight overlay — top-left to bottom-right diagonal light */
+.glass-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+      var(--glass-angle, 135deg),
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.075)) 0%,
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.03)) 35%,
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.003)) 55%,
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.025)) 100%
+    );
+}
+
+/* Borderless card specular - only top-left reduced by 1/3 */
+.glass-surface-no-border::before {
+  background: linear-gradient(
+      var(--glass-angle, 135deg),
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.10)) 0%,
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.06)) 35%,
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.006)) 55%,
+      rgba(var(--glass-glow-rgb, 255,255,255), calc(var(--glass-highlight-opacity, 0.08) * 0.05)) 100%
+    );
+}
+
+/* ─── Noise now merged into ::before ─── */
+
+/* Chromatic aberration applies only to .glass-surface-ca via SVG filter */
+.glass-surface-ca {
+  filter: url(#glass-ca);
+}
+
+/* ─── Gradient Border via ::after ─── */
+.glass-surface-border {
+  border: none !important;
+}
+.glass-surface-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  z-index: 1;
+  background: linear-gradient(
+    var(--glass-angle, 135deg),
+    rgba(var(--glass-glow-rgb, 255,255,255), 0.05) 0%,
+    rgba(var(--glass-glow-rgb, 255,255,255), 0.04) 40%,
+    rgba(var(--glass-glow-rgb, 255,255,255), 0.01) 60%,
+    rgba(var(--glass-glow-rgb, 255,255,255), 0.02) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 /* ??? Music File List Scrollbar ??? */
 .music-file-list-scroll::-webkit-scrollbar {
   width: 8px;
@@ -276,9 +348,16 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15);background
   .glass-background-animated::after {
     animation: none;
   }
+  .glass-surface::before,
+  .glass-surface-border::after {
+    opacity: 0 !important;
+  }
+  .glass-surface-ca {
+    filter: none !important;
+  }
 }
 
-/* Theme pill — white cursor-following glow (matches GlassButton) */
+
 .theme-pill {
   position: relative;
   transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease, color var(--transition-fast) ease, box-shadow var(--transition-fast) ease, opacity var(--transition-fast) ease;

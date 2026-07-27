@@ -25,17 +25,21 @@ export interface GlassInputProps extends Omit<HTMLMotionProps<"input">, "childre
 }
 
 const baseInputStyle: React.CSSProperties = {
-  background: "var(--bg-tertiary)",
+  background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.04) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 50%, rgba(var(--glass-glow-rgb,255,255,255),0.06) 100%), var(--bg-tertiary)",
   color: "var(--text-primary)",
-  border: "1px solid var(--border-color)",
+  border: "none",
   borderRadius: radii.lg,
   padding: String(space[2]) + "px " + String(space[4]) + "px",
   fontSize: fontSizes.sm,
   outline: "none",
   transition: "all var(--transition-fast) ease",
   width: "100%",
-  backdropFilter: "blur(8px)",
-  WebkitBackdropFilter: "blur(8px)",
+  backdropFilter: "blur(10px) saturate(1.4)",
+  WebkitBackdropFilter: "blur(10px) saturate(1.4)",
+  boxShadow: "0 0 0 1px var(--border-color), inset 0 1px 1px rgba(var(--glass-glow-rgb,255,255,255),0.06)",
+  "--glass-angle": (115 + Math.random() * 40) + "deg",
+  "--glass-highlight-opacity": String(0.5 + Math.random() * 0.5),
+  "--glass-noise-opacity": String(0.01 + Math.random() * 0.02),
 };
 
 const errorFocusStyle = {

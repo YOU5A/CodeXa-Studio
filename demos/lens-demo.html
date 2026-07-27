@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>水滴边缘折射涟漪效果</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #f0f4f8;
+      cursor: none;
+    }
+    #baseCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #lensCanvas {
+      position: fixed;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      will-change: left, top;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="baseCanvas"></canvas>
+  <canvas id="lensCanvas"></canvas>
+
+  <script>
+    // ============================================================
+    //  配置
+    // ============================================================
+    const CONFIG = {
+      radius: 120,           // 水滴半径
+      edgeZoom: 1.5,         // 边缘最大放大倍数
+      centerZoom: 1.0,       // 中心放大倍数（1=不放大/恢复正常）
+      distortionPower: 2,    // 放大曲线幂次（2=抛物线，越大边缘放大越集中）
+      dispersion: 3,         // 色散强度
+      lerpSpeed: 0.15,       // 跟随速度
+      wobbleAmount: 0.04,    // 弹性形变幅度（很小，很克制）
+      wobbleFreq: 8,         // 回弹频率
+      wobbleDamping: 0.94,   // 回弹衰减
+    };
+
+    const baseCanvas = document.getElementById('baseCanvas');
+    const lensCanvas = document.getElementById('lensCanvas');
+    const baseCtx = baseCanvas.getContext('2d');
+    const lensCtx = lensCanvas.getContext('2d');
+
+    let targetX = window.innerWidth / 2;
+    let targetY = window.innerHeight / 2;
+    let currentX = targetX;
+    let currentY = targetY;
+    let prevX = targetX;
+    let prevY = targetY;
+
+    // 水滴形变状态
+    let stretchX = 1;
+    let stretchY = 1;
+    let wobbleVel = 0;
+    let wobblePos = 0;
+
+    const dpr = window.devicePixelRatio || 1;
+
+    // ============================================================
+    //  初始化
+    // ============================================================
+    function resize() {
+      baseCanvas.width = window.innerWidth * dpr;
+      baseCanvas.height = window.innerHeight * dpr;
+      baseCanvas.style.width = window.innerWidth + 'px';
+      baseCanvas.style.height = window.innerHeight + 'px';
+      baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const pad = 40;
+      const size = CONFIG.radius * 2 + pad * 2;
+      lensCanvas.width = size * dpr;
+      lensCanvas.height = size * dpr;
+      lensCanvas.style.width = size + 'px';
+      lensCanvas.style.height = size + 'px';
+      lensCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      drawBaseContent();
+    }
+    window.addEventListener('resize', resize);
+
+    // ============================================================
+    //  底层内容
+    // ============================================================
+    function drawBaseContent() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      baseCtx.fillStyle = '#f0f4f8';
+      baseCtx.fillRect(0, 0, w, h);
+
+      // 网格（观察弯曲）
+      baseCtx.strokeStyle = 'rgba(99, 102, 241, 0.18)';
+      baseCtx.lineWidth = 1;
+      const grid = 40;
+      for (let x = 0; x < w; x += grid) {
+        baseCtx.beginPath();
+        baseCtx.moveTo(x, 0);
+        baseCtx.lineTo(x, h);
+        baseCtx.stroke();
+      }
+      for (let y = 0; y < h; y += grid) {
+        baseCtx.beginPath();
+        baseCtx.moveTo(0, y);
+        baseCtx.lineTo(w, y);
+        baseCtx.stroke();
+      }
+
+      // 彩色圆点（观察色散）
+      const dots = [
+        { x: 200, y: 180, color: '#ef4444' },
+        { x: 280, y: 180, color: '#22c55e' },
+        { x: 360, y: 180, color: '#3b82f6' },
+        { x: 440, y: 180, color: '#eab308' },
+        { x: 520, y: 180, color: '#a855f7' },
+      ];
+      dots.forEach(d => {
+        baseCtx.beginPath();
+        baseCtx.arc(d.x, d.y, 20, 0, Math.PI * 2);
+        baseCtx.fillStyle = d.color;
+        baseCtx.fill();
+      });
+
+      // 彩色卡片
+      const colors = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff6b9d'];
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 5; col++) {
+          const x = 120 + col * 160;
+          const y = 260 + row * 140;
+          baseCtx.fillStyle = colors[(row + col) % colors.length];
+          baseCtx.beginPath();
+          baseCtx.roundRect(x, y, 130, 100, 10);
+          baseCtx.fill();
+          baseCtx.fillStyle = 'rgba(255,255,255,0.95)';
+          baseCtx.font = 'bold 14px sans-serif';
+          baseCtx.fillText(`Item ${row * 5 + col + 1}`, x + 12, y + 30);
+          baseCtx.font = '11px sans-serif';
+          baseCtx.fillText('Lorem ipsum', x + 12, y + 52);
+          baseCtx.fillText('dolor sit', x + 12, y + 70);
+        }
+      }
+
+      // 文字
+      baseCtx.fillStyle = '#1e293b';
+      baseCtx.font = 'bold 20px sans-serif';
+      baseCtx.fillText('💧 水滴边缘折射涟漪效果', 60, h - 50);
+      baseCtx.fillStyle = '#64748b';
+      baseCtx.font = '13px sans-serif';
+      baseCtx.fillText('边缘放大扭曲 · 中心恢复正常 · RGB 色散', 60, h - 28);
+    }
+
+    // ============================================================
+    //  放大率函数
+    //  中心放大率 = centerZoom（接近1，不放大）
+    //  边缘放大率 = edgeZoom（更大，放大扭曲）
+    //  效果：像涟漪一样，越往边缘放大越明显
+    // ============================================================
+    function magnification(d) {
+      // d: 归一化距离 0~1
+      // 幂次曲线：中心低，边缘高
+      return CONFIG.centerZoom + (CONFIG.edgeZoom - CONFIG.centerZoom) * Math.pow(d, CONFIG.distortionPower);
+    }
+
+    // ============================================================
+    //  核心：折射渲染
+    // ============================================================
+    function drawLens() {
+      const size = lensCanvas.width / dpr;
+      const cx = size / 2;
+      const cy = size / 2;
+      const R = CONFIG.radius;
+
+      lensCtx.clearRect(0, 0, size, size);
+
+      // 应用拉伸形变
+      const effR = R;
+      const scaleX = stretchX;
+      const scaleY = stretchY;
+
+      lensCtx.save();
+      lensCtx.translate(cx, cy);
+      lensCtx.scale(scaleX, scaleY);
+      lensCtx.translate(-cx, -cy);
+
+      // 裁剪为圆形
+      lensCtx.save();
+      lensCtx.beginPath();
+      lensCtx.arc(cx, cy, R, 0, Math.PI * 2);
+      lensCtx.clip();
+
+      // 折射 + 色散
+      renderRefraction(cx, cy, R);
+
+      // 柔和高光（左上渐变，无硬边白点）
+      const shineGrad = lensCtx.createRadialGradient(
+        cx - R * 0.3, cy - R * 0.3, 0,
+        cx - R * 0.3, cy - R * 0.3, R * 0.55
+      );
+      shineGrad.addColorStop(0, 'rgba(255,255,255,0.35)');
+      shineGrad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+      shineGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      lensCtx.fillStyle = shineGrad;
+      lensCtx.fillRect(0, 0, size, size);
+
+      // 底部反光
+      const bottomShine = lensCtx.createRadialGradient(
+        cx + R * 0.2, cy + R * 0.35, 0,
+        cx + R * 0.2, cy + R * 0.35, R * 0.35
+      );
+      bottomShine.addColorStop(0, 'rgba(255,255,255,0.12)');
+      bottomShine.addColorStop(1, 'rgba(255,255,255,0)');
+      lensCtx.fillStyle = bottomShine;
+      lensCtx.fillRect(0, 0, size, size);
+
+      // 边缘暗角
+      const edgeGrad = lensCtx.createRadialGradient(cx, cy, R * 0.6, cx, cy, R);
+      edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      edgeGrad.addColorStop(1, 'rgba(0,0,0,0.15)');
+      lensCtx.fillStyle = edgeGrad;
+      lensCtx.fillRect(0, 0, size, size);
+
+      lensCtx.restore();
+
+      // 边缘高光线
+      lensCtx.beginPath();
+      lensCtx.arc(cx, cy, R - 0.5, 0, Math.PI * 2);
+      lensCtx.lineWidth = 1.2;
+      lensCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+      lensCtx.stroke();
+
+      lensCtx.restore();
+    }
+
+    // ============================================================
+    //  折射 + 色散
+    //  边缘放大、中心正常 → 画面向外凸出弯曲（枕形畸变）
+    // ============================================================
+    function renderRefraction(cx, cy, R) {
+      // 计算最大源半径（边缘放大率最大，源距离最小）
+      // 不对，放大率 m = dst/src，所以 src = dst/m
+      // 边缘 m 最大 → src 最小？不对...
+      // 等等，让我重新想。
+      // m = 像大小 / 物大小 = dst / src
+      // src = dst / m
+      // 如果边缘 m 大，src_edge = R / m_edge < R
+      // 所以源图像只需要比 R/m_edge 大就行
+      
+      const mMax = CONFIG.edgeZoom;
+      const minSrcR = R / mMax; // 最小源半径（边缘处）
+      
+      // 等等，不对。我们是从目标反推源。
+      // 对于目标点 r_dst，放大率 m(r_dst)
+      // r_src = r_dst / m(r_dst)
+      // 中心：r_dst=0, r_src=0
+      // 边缘：r_dst=R, m=mMax, r_src = R/mMax < R
+      // 所以源图像半径只需要 R/mMax 就够了？
+      // 不对，还有色散偏移，需要更大一点。
+      
+      const srcR = R / CONFIG.centerZoom + CONFIG.dispersion + 10;
+      const srcX = currentX - srcR;
+      const srcY = currentY - srcR;
+      const srcSize = srcR * 2;
+
+      // 越界检查
+      if (srcX < 0 || srcY < 0 ||
+          srcX + srcSize > window.innerWidth ||
+          srcY + srcSize > window.innerHeight) {
+        lensCtx.fillStyle = 'rgba(200, 215, 240, 0.1)';
+        lensCtx.beginPath();
+        lensCtx.arc(cx, cy, R, 0, Math.PI * 2);
+        lensCtx.fill();
+        return;
+      }
+
+      const srcImageData = baseCtx.getImageData(
+        srcX * dpr, srcY * dpr,
+        Math.floor(srcSize * dpr), Math.floor(srcSize * dpr)
+      );
+
+      const dstSize = Math.floor(R * 2);
+      const dstImageData = lensCtx.createImageData(dstSize, dstSize);
+
+      const srcData = srcImageData.data;
+      const dstData = dstImageData.data;
+      const srcWpx = Math.floor(srcSize * dpr);
+      const srcHpx = Math.floor(srcSize * dpr);
+      const srcCenterPx = srcWpx / 2;
+
+      const disp = CONFIG.dispersion * dpr;
+
+      for (let dy = 0; dy < dstSize; dy++) {
+        for (let dx = 0; dx < dstSize; dx++) {
+          const ox = dx - R;
+          const oy = dy - R;
+          const r = Math.sqrt(ox * ox + oy * oy);
+
+          if (r > R) continue;
+
+          const d = r / R; // 归一化 0~1
+          const m = magnification(d); // 放大率
+
+          // 源偏移 = 目标偏移 / 放大率
+          const srcOx = ox / m;
+          const srcOy = oy / m;
+
+          // 转换为源图像像素坐标
+          const srcBaseX = srcCenterPx + srcOx * dpr;
+          const srcBaseY = srcCenterPx + srcOy * dpr;
+
+          // 角度
+          const angle = r > 0.001 ? Math.atan2(oy, ox) : 0;
+          const cosA = Math.cos(angle);
+          const sinA = Math.sin(angle);
+
+          // 色散：沿径向偏移
+          // 红光偏折少（采样更靠外），蓝光偏折多（采样更靠内）
+          const dispFactor = d; // 边缘色散更明显
+
+          const r_channel = sampleBilinear(
+            srcData, srcWpx, srcHpx,
+            srcBaseX + cosA * disp * dispFactor,
+            srcBaseY + sinA * disp * dispFactor, 0
+          );
+          const g_channel = sampleBilinear(
+            srcData, srcWpx, srcHpx,
+            srcBaseX, srcBaseY, 1
+          );
+          const b_channel = sampleBilinear(
+            srcData, srcWpx, srcHpx,
+            srcBaseX - cosA * disp * dispFactor,
+            srcBaseY - sinA * disp * dispFactor, 2
+          );
+
+          // 边缘渐隐
+          let alpha = 255;
+          if (d > 0.92) {
+            alpha = Math.floor(255 * (1 - (d - 0.92) / 0.08));
+          }
+
+          const di = (dy * dstSize + dx) * 4;
+          dstData[di] = r_channel;
+          dstData[di + 1] = g_channel;
+          dstData[di + 2] = b_channel;
+          dstData[di + 3] = alpha;
+        }
+      }
+
+      lensCtx.putImageData(dstImageData, cx - R, cy - R);
+    }
+
+    // 双线性采样
+    function sampleBilinear(data, w, h, x, y, channel) {
+      const x0 = Math.max(0, Math.floor(x));
+      const y0 = Math.max(0, Math.floor(y));
+      const x1 = Math.min(x0 + 1, w - 1);
+      const y1 = Math.min(y0 + 1, h - 1);
+
+      if (x0 < 0 || y0 < 0 || x0 >= w || y0 >= h) return 0;
+
+      const fx = x - x0;
+      const fy = y - y0;
+
+      const i00 = (y0 * w + x0) * 4 + channel;
+      const i10 = (y0 * w + x1) * 4 + channel;
+      const i01 = (y1 * w + x0) * 4 + channel;
+      const i11 = (y1 * w + x1) * 4 + channel;
+
+      const v00 = data[i00] || 0;
+      const v10 = data[i10] || 0;
+      const v01 = data[i01] || 0;
+      const v11 = data[i11] || 0;
+
+      const top = v00 * (1 - fx) + v10 * fx;
+      const bottom = v01 * (1 - fx) + v11 * fx;
+      return top * (1 - fy) + bottom * fy;
+    }
+
+    // ============================================================
+    //  动画：缓动跟随 + 轻微弹性形变
+    // ============================================================
+    function animate() {
+      // 缓动跟随
+      const dx = targetX - currentX;
+      const dy = targetY - currentY;
+      currentX += dx * CONFIG.lerpSpeed;
+      currentY += dy * CONFIG.lerpSpeed;
+
+      // 速度
+      const vx = currentX - prevX;
+      const vy = currentY - prevY;
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      prevX = currentX;
+      prevY = currentY;
+
+      // 弹性回弹模拟（阻尼振荡）
+      if (speed > 0.3) {
+        // 移动中：给弹性一个初始速度
+        wobbleVel += speed * 0.002;
+      }
+      // 阻尼振荡
+      wobbleVel += -wobblePos * CONFIG.wobbleFreq * CONFIG.wobbleFreq * 0.001;
+      wobbleVel *= CONFIG.wobbleDamping;
+      wobblePos += wobbleVel;
+
+      // 移动方向拉伸
+      const moveAngle = Math.atan2(vy, vx);
+      const speedFactor = Math.min(speed / 20, 1);
+      
+      // 基础形变
+      const baseStretch = 1 + speedFactor * CONFIG.wobbleAmount;
+      const baseSquash = 1 - speedFactor * CONFIG.wobbleAmount * 0.6;
+
+      // 叠加回弹振荡
+      const wobble = wobblePos * CONFIG.wobbleAmount * 2;
+      
+      // 综合形变（沿运动方向）
+      // 简化为：垂直方向整体拉伸/压缩
+      stretchY = baseStretch + wobble;
+      stretchX = baseSquash - wobble * 0.6;
+
+      // 限制范围
+      stretchX = Math.max(0.9, Math.min(1.1, stretchX));
+      stretchY = Math.max(0.9, Math.min(1.1, stretchY));
+
+      lensCanvas.style.left = currentX + 'px';
+      lensCanvas.style.top = currentY + 'px';
+
+      drawLens();
+      requestAnimationFrame(animate);
+    }
+
+    // ============================================================
+    //  鼠标事件
+    // ============================================================
+    document.addEventListener('mousemove', (e) => {
+      targetX = e.clientX;
+      targetY = e.clientY;
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      targetX = e.touches[0].clientX;
+      targetY = e.touches[0].clientY;
+    }, { passive: false });
+
+    // ============================================================
+    //  启动
+    // ============================================================
+    resize();
+    currentX = window.innerWidth / 2;
+    currentY = window.innerHeight / 2;
+    prevX = currentX;
+    prevY = currentY;
+    animate();
+  </script>
+</body>
+</html>

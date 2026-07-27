@@ -112,10 +112,14 @@ public class SystemInfoService
         _prevUserTime = userTime;
         _prevSampleTime = DateTime.UtcNow;
 
-        // Sampling window < 500ms ??? fall back to WMI LoadPercentage
-        if (totalDelta < 5_000_000) return GetCpuPercentWmi();
+        // Sampling window < 500ms or no meaningful delta ->
+        // fall back to WMI LoadPercentage
+        if (totalDelta <= 0 || totalDelta < 5_000_000)
+            return GetCpuPercentWmi();
 
-        return (1.0 - (double)idleDelta / totalDelta) * 100.0;
+        // Clamp to [0, 100] in case of edge conditions
+        var pct = (1.0 - (double)idleDelta / totalDelta) * 100.0;
+        return Math.Clamp(pct, 0.0, 100.0);
     }
 
     private static double GetCpuPercentWmi()

@@ -74,26 +74,26 @@ export default function CoverManager(props: CoverManagerProps) {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
-            style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: "var(--space-1, 4px)" }}
+            style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: 6, padding: "6px 10px" }}
           >
             <GlassButton variant="secondary" size="sm" inline={false} onClick={() => setCoverSearchOpen(true)}
-              style={{ justifyContent: "center" }}>
+              style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>
               <Globe size={12} /> {tx.searchCover}
             </GlassButton>
             <GlassButton variant="secondary" size="sm" inline={false} onClick={pickCover}
-              style={{ justifyContent: "center" }}>
+              style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>
               <Image size={12} /> {tx.selectCover}
             </GlassButton>
             <GlassButton variant="secondary" size="sm" inline={false} onClick={applyCover}
-              style={{ justifyContent: "center" }}>
+              style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>
               {tx.applyCover}
             </GlassButton>
             <GlassButton variant="secondary" size="sm" inline={false} onClick={saveCover}
-              style={{ justifyContent: "center" }}>
+              style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>
               <Save size={12} /> {tx.saveCover}
             </GlassButton>
             <GlassButton variant="secondary" size="sm" inline={false} onClick={removeCover}
-              style={{ justifyContent: "center" }}>
+              style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>
               <Trash2 size={12} /> {tx.removeCover}
             </GlassButton>
           </motion.div>

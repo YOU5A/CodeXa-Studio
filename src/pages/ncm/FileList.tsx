@@ -56,7 +56,7 @@ export default function FileList({
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "6px 8px", borderRadius: 6, cursor: "pointer",
                 fontSize: fontSizes.xs,
-                background: isSelected ? "var(--accent-bg)" : "transparent",
+                background: isSelected ? "var(--accent-bg-fade)" : "transparent",
                 color: isSelected ? "var(--accent)" : "var(--text-primary)",
                 transition: "background 0.15s ease",
               }}

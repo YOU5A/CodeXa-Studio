@@ -93,10 +93,11 @@ export function GlassToggle({
         boxSizing: "border-box",
         position: "relative",
         background: active
-          ? "rgba(var(--accent-rgb), 0.30)"
+          ? "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.06) 50%, rgba(var(--glass-glow-rgb,255,255,255),0.02) 100%), rgba(var(--accent-rgb), 0.35)"
           : "var(--bg-tertiary)",
-        backdropFilter: active ? "blur(8px) saturate(1.4)" : "none",
-        WebkitBackdropFilter: active ? "blur(8px) saturate(1.4)" : "none",
+        backdropFilter: active ? "blur(10px) saturate(1.6)" : "none",
+        WebkitBackdropFilter: active ? "blur(10px) saturate(1.6)" : "none",
+        boxShadow: active ? "inset 0 1px 2px rgba(var(--glass-glow-rgb,255,255,255),0.1)" : "none",
         border: "1px solid",
         borderColor: active
           ? "rgba(var(--accent-rgb), 0.5)"

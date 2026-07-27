@@ -53,7 +53,9 @@ export interface FileListProps {
   playingFile: string | null;
   onSelect: (fp: string) => void;
   onPlay: (fp: string) => void;
-  tx: Record<string, string>;
+  audioFilesLabel: string;
+  noFilesLabel: string;
+  filesCountLabel: string;
   listRef: React.RefObject<HTMLDivElement | null>;
 }
 

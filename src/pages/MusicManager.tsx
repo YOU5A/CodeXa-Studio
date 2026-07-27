@@ -52,6 +52,9 @@ const t = {
     renameAll: "全部重命名",
     noFiles: "选择文件夹并扫描",
     noFileSelected: "请先选择文件",
+    audioFiles: "音频文件",
+    noAudioFiles: "选择文件夹并扫描",
+    filesCount: "个文件",
     scanResult: "找到 {n} 个音频文件",
     tagsSaved: "标签已保存",
     coverApplied: "封面已应用",
@@ -105,6 +108,9 @@ en: {
     renameAll: "Rename All",
     noFiles: "Select a folder and scan",
     noFileSelected: "Select a file first",
+    audioFiles: "Audio Files",
+    noAudioFiles: "Select a folder and scan",
+    filesCount: "files",
     scanResult: "Found {n} audio files",
     tagsSaved: "Tags saved",
     coverApplied: "Cover applied",
@@ -691,7 +697,9 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 playingFile={playingFile}
                 onSelect={handleFileClick}
                 onPlay={playFile}
-                tx={tx}
+                audioFilesLabel={tx.audioFiles}
+                noFilesLabel={tx.noAudioFiles}
+                filesCountLabel={tx.filesCount}
                 listRef={listRef}
               />
             </div>

@@ -1,73 +1,88 @@
 import { Music } from "lucide-react";
-import { GlassCard } from "@/design-system/components";
-import { space, fontSizes } from "@/design-system/tokens";
+import { GlassCard, GlassScrollArea, GlassGlow } from "@/design-system/components";
+import { fontSizes } from "@/design-system/tokens";
 import type { FileListProps } from "./types";
 
-export default function FileList(props: FileListProps) {
-  const { files, selectedFile, playingFile, onSelect, onPlay, listRef } = props;
-
+export default function FileList({
+  files, selectedFile, playingFile,
+  onSelect, onPlay,
+  audioFilesLabel, noFilesLabel, filesCountLabel,
+  listRef,
+}: FileListProps) {
   return (
-    <GlassCard style={{ flex: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <div
-        ref={listRef}
-        className="music-file-list-scroll scroll-fade-edge"
-        style={{
-          flex: 1, overflowY: "auto", overflowX: "hidden",
-          padding: `${space[2]}px 0`,
-        }}
-      >
-        {files.map((fp: string) => {
+    <GlassCard style={{
+      minHeight: "200px", maxHeight: "100%", display: "flex", flexDirection: "column",
+      overflow: "hidden", padding: 0,
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "8px 12px", borderBottom: "1px solid var(--border-color)",
+        fontSize: fontSizes.sm, fontWeight: 600, color: "var(--text-secondary)",
+        flexShrink: 0,
+      }}>
+        <span>{audioFilesLabel}</span>
+      </div>
+
+      {/* List with top/bottom fade mask */}
+      <GlassScrollArea ref={listRef} fadeEdges={true} scrollbarGutter={8} style={{ padding: "4px 10px", margin: 0 }}>
+        {files.length === 0 ? (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            height: "100%", minHeight: 120, color: "var(--text-tertiary)",
+            fontSize: fontSizes.sm, userSelect: "none",
+          }}>
+            {noFilesLabel}
+          </div>
+        ) : files.map((fp: string) => {
           const name = fp.split("\\").pop() || fp;
           const isSelected = fp === selectedFile;
           const isPlaying = fp === playingFile;
           return (
-            <div
+            <GlassGlow
               key={fp}
-              data-filepath={fp}
-              onClick={() => onSelect(fp)}
-              onDoubleClick={() => onPlay(fp)}
-              onMouseMove={(e) => {
-                const el = e.currentTarget;
-                const r = el.getBoundingClientRect();
-                el.style.setProperty("--gx", `${((e.clientX - r.left) / r.width) * 100}%`);
-                el.style.setProperty("--gy", `${((e.clientY - r.top) / r.height) * 100}%`);
-                el.style.setProperty("--go", "1");
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.setProperty("--go", "0");
-              }}
-              style={{
-                padding: `${space[2]}px ${space[4]}px`,
-                cursor: "pointer",
-                fontSize: fontSizes.sm,
-                color: isSelected ? "var(--accent)" : "var(--text-secondary)",
-                background: isSelected
-                  ? "rgba(var(--accent-rgb, 99,102,241), 0.12)"
-                  : "rgba(255,255,255,0.03)",
-                backdropFilter: "blur(8px) saturate(1.2)",
-                WebkitBackdropFilter: "blur(8px) saturate(1.2)",
-                borderLeft: isPlaying ? "3px solid var(--accent)" : "3px solid transparent",
-                display: "flex", alignItems: "center", gap: space[2],
-                position: "relative", overflow: "hidden",
-                transition: "background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast)",
-              }}
+              glowColor="rgba(255,255,255,0.15)"
+              glowRadius={280}
+              borderRadius={6}
+              style={{ marginBottom: 1 }}
             >
-              <span style={{
-                position: "absolute", inset: 0, pointerEvents: "none",
-                background: "radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgba(var(--accent-rgb, 99,102,241), 0.15) 0%, transparent 60%)",
-                opacity: "var(--go, 0)",
-                transition: "opacity 0.25s ease",
-              }} />
-              <Music size={12} style={{ position: "relative", zIndex: 1 }} />
-              <span style={{
-                flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                position: "relative", zIndex: 1,
-              }}>
-                {name}
-              </span>
-            </div>
+              <div
+                data-filepath={fp}
+                onClick={() => onSelect(fp)}
+                onDoubleClick={() => onPlay(fp)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 8px", borderRadius: 6, cursor: "pointer",
+                  fontSize: fontSizes.xs,
+                  background: isSelected ? "var(--accent-bg-fade)" : "transparent",
+                  color: isSelected ? "var(--accent)" : "var(--text-primary)",
+                  transition: "background 0.15s ease, color 0.15s ease",
+                }}
+              >
+                {isPlaying ? (
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+                ) : (
+                  <span style={{ width: 7, height: 7, flexShrink: 0 }} />
+                )}
+                <Music size={12} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
+                <span style={{
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  flex: 1,
+                }}>
+                  {name}
+                </span>
+              </div>
+            </GlassGlow>
           );
         })}
+      </GlassScrollArea>
+
+      {/* Footer */}
+      <div style={{
+        padding: "6px 12px", borderTop: "1px solid var(--border-color)",
+        fontSize: fontSizes.xs, color: "var(--text-tertiary)", flexShrink: 0,
+      }}>
+        {files.length} {filesCountLabel}
       </div>
     </GlassCard>
   );

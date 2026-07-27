@@ -250,7 +250,7 @@ export default function Win32Priority(_props: Props) {
 
   return (
     <PageLayout title={tx.title} subtitle={tx.subtitle}>
-      <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
       {/* ─── Current Value ─── */}
       <GlassCard>
         <h3 style={sectionTitle}>{tx.currentValue}</h3>
@@ -264,7 +264,7 @@ export default function Win32Priority(_props: Props) {
               <GlassBadge variant="default">{tx.hex}: 0x{registry.hex}</GlassBadge>
               <GlassBadge variant="default">{tx.binary}: {registry.binary}</GlassBadge>
             </div>
-            <div style={{ display: "flex", gap: space[2], marginTop: space[2] }}>
+            <div style={{ display: "flex", gap: space[4], marginTop: space[2] }}>
               <GlassButton variant="secondary" size="sm" onClick={fetchData}>
                 <RefreshCw size={14} /> {tx.refresh}
               </GlassButton>
@@ -285,7 +285,7 @@ export default function Win32Priority(_props: Props) {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            gap: space[2],
+            gap: space[4],
           }}
         >
           {presetData.map((p) => {
@@ -304,7 +304,7 @@ export default function Win32Priority(_props: Props) {
                     : {
                         scale: 1.02,
                         borderColor: "var(--border-strong)",
-                        background: "var(--bg-elevated)",
+                        background: "var(--bg-secondary)",
                       }
                 }
                 whileTap={{ scale: 0.96 }}
@@ -312,12 +312,12 @@ export default function Win32Priority(_props: Props) {
                   isActive
                     ? {
                         borderColor: "var(--accent)",
-                        background: "var(--accent-bg)",
+                        background: "var(--accent-bg-fade)",
                         boxShadow: "0 0 20px rgba(var(--accent-rgb), 0.14)",
                       }
                     : {
                         borderColor: "var(--border-color)",
-                        background: "var(--bg-secondary)",
+                        background: "var(--bg-tertiary)",
                         boxShadow: "none",
                       }
                 }
@@ -331,7 +331,7 @@ export default function Win32Priority(_props: Props) {
                   borderRadius: radii.lg,
                   cursor: isActive ? "default" : "pointer",
                   border: "1.5px solid var(--border-color)",
-                  background: "var(--bg-secondary)",
+                  background: "var(--bg-tertiary)",
                   textAlign: "left",
                   fontFamily: "inherit",
                   fontSize: "inherit",
@@ -350,7 +350,7 @@ export default function Win32Priority(_props: Props) {
                     </GlassBadge>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
                   <span style={{ fontSize: fontSizes.xs, color: "var(--text-tertiary)" }}>
                     {aaLabel[lang][p.aa]}
                   </span>

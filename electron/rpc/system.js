@@ -5,6 +5,17 @@ const os = require("os");
 let prevCpuIdle = 0;
 let prevCpuTotal = 0;
 
+// Prime initial CPU times at module load so the first delta
+// calculation returns a real percentage instead of 0.
+function primeCpuTimes() {
+  const cpus = os.cpus();
+  for (const cpu of cpus) {
+    prevCpuIdle += cpu.times.idle;
+    prevCpuTotal += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
+  }
+}
+primeCpuTimes();
+
 /** Compute CPU percentage via os.cpus() delta between successive calls. */
 function getCpuPercent() {
   const cpus = os.cpus();

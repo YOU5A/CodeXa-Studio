@@ -153,7 +153,7 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
                 justifyContent: "flex-start",
                 color: isActive ? "var(--accent)" : "var(--text-secondary)",
                 fontWeight: isActive ? 500 : 400,
-                background: isActive ? "var(--accent-bg)" : "transparent",
+                background: isActive ? "var(--accent-bg-fade)" : "transparent",
                 borderRadius: 10,
                 padding: settings.compactMode ? "8px 10px" : "10px 14px",
                 fontSize: settings.compactMode ? 12 : 13,

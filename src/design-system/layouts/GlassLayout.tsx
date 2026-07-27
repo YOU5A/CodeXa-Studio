@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { GlassBackground, type GlassBackgroundProps } from "./GlassBackground";
+import GlassSVGFilter from "../components/GlassSVGFilter";
 
 export interface GlassLayoutProps {
   children?: ReactNode;
@@ -23,6 +24,9 @@ export function GlassLayout({
         isolation: "isolate",
       }}
     >
+      {/* Global SVG filters for chromatic aberration */}
+      <GlassSVGFilter />
+
       {/* FluidBackground is now rendered in AppContent with proper enabled control */}
       <GlassBackground {...background} />
 

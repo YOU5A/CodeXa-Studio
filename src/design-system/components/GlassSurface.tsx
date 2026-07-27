@@ -6,7 +6,7 @@
 
 import { forwardRef, type ReactNode, useRef, useCallback, useEffect } from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
-import { materialToStyle } from "../materials";
+import { materialToStyle, generateGlassSeed, type GlassSeed } from "../materials";
 import type { GlassTier } from "../tokens";
 
 export interface GlassSurfaceProps extends HTMLMotionProps<"div"> {
@@ -14,17 +14,26 @@ export interface GlassSurfaceProps extends HTMLMotionProps<"div"> {
   tier?: GlassTier;
   noBlur?: boolean;
   noGlow?: boolean;
+  /** Randomized glass parameters for specular highlight variation. Auto-generated if omitted. */
+  glassSeed?: GlassSeed;
   styleOverrides?: Partial<{ radius: number; shadow: string; border: string }>;
 }
 
-const GLOW_COLOR = "rgba(255,255,255,0.06)";
-const GLOW_RADIUS = 400;
+const GLOW_COLOR = "rgba(255,255,255,0.05)";
+const GLOW_RADIUS = 500;
 
 export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(
   function GlassSurface(
-    { children, tier = "regular", noBlur = false, noGlow = false, styleOverrides, style, ...rest },
+    { children, tier = "regular", noBlur = false, noGlow = false, glassSeed, styleOverrides, style, ...rest },
     ref
   ) {
+    // Stable random seed per mount — NOT per render (avoids flicker)
+    const seedRef = useRef<GlassSeed | null>(null);
+    if (!seedRef.current) {
+      seedRef.current = glassSeed ?? generateGlassSeed();
+    }
+    const seed = seedRef.current;
+
     const baseStyle = materialToStyle(tier, styleOverrides);
     if (noBlur) {
       baseStyle.backdropFilter = "none";
@@ -127,7 +136,15 @@ export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(
           if (typeof ref === "function") ref(node);
           else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
         }}
-        style={{ position: "relative", ...baseStyle, ...style }}
+        className={"glass-surface" + (tier !== "ultraThin" ? " glass-surface-border" : " glass-surface-no-border")}
+        style={{
+          position: "relative",
+          "--glass-angle": seed.angle + "deg",
+          "--glass-highlight-opacity": String(seed.intensity),
+          "--glass-noise-opacity": String(seed.noiseStrength),
+          ...baseStyle,
+          ...style,
+        } as React.CSSProperties}
         onMouseMove={onMove}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}

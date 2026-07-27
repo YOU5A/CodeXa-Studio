@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GlassModal - Liquid Glass Modal / Dialog
  *
  * Full-screen overlay with centered glass panel.
@@ -101,6 +101,7 @@ export function GlassModal({
           >
             <GlassSurface
               tier="elevated"
+              noBlur
               style={{
                 padding: "28px 28px 22px",
                 display: "flex", flexDirection: "column", gap: 18,

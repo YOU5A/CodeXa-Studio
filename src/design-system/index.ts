@@ -28,8 +28,8 @@ export {
 export type { GlassTier, BlurConfig } from './tokens';
 
 /* ─── Materials ─── */
-export { materials, getMaterial, materialToStyle } from './materials';
-export type { GlassMaterial } from './materials';
+export { materials, getMaterial, materialToStyle, generateGlassSeed } from './materials';
+export type { GlassMaterial, GlassSeed } from './materials';
 
 /* ─── Animations ─── */
 export {
@@ -80,6 +80,7 @@ export {
   GlassTooltip,
   GlassSlider,
   GlassScrollArea,
+  GlassSVGFilter,
 } from './components';
 export type {
   GlassSurfaceProps,

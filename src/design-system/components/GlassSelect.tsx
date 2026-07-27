@@ -73,6 +73,19 @@ export function GlassSelect({
     }
   }, []);
 
+  /* Cursor-following glow */
+  const setGlow = useCallback((el: HTMLElement, cx: number, cy: number) => {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    el.style.setProperty("--pill-gx", ((cx - r.left) / r.width) * 100 + "%");
+    el.style.setProperty("--pill-gy", ((cy - r.top) / r.height) * 100 + "%");
+    el.style.setProperty("--pill-go", "1");
+  }, []);
+
+  const clearGlow = useCallback((el: HTMLElement) => {
+    el.style.setProperty("--pill-go", "0");
+  }, []);
+
   useEffect(() => {
     if (open) {
       updateDropdownPos();
@@ -106,10 +119,10 @@ export function GlassSelect({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
-    background: "var(--bg-secondary)",
+    background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.12) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 45%, rgba(var(--glass-glow-rgb,255,255,255),0.01) 70%, rgba(var(--glass-glow-rgb,255,255,255),0.05) 100%), transparent",
     color: value ? "var(--text-primary)" : "var(--text-tertiary)",
-    border: "1.5px solid var(--border-color)",
-    borderRadius: 20,
+    border: "none",
+    borderRadius: "calc(var(--radius) * 1.0)",
     padding: "7px 16px",
     fontSize: fontSizes.sm,
     fontWeight: 500,
@@ -117,11 +130,13 @@ export function GlassSelect({
     width: fullWidth ? (width ?? "100%") : width ?? "auto",
     outline: "none",
     userSelect: "none",
-    backdropFilter: "blur(15px)",
-    WebkitBackdropFilter: "blur(15px)",
+    backdropFilter: "blur(32px) saturate(2.2)",
+    WebkitBackdropFilter: "blur(32px) saturate(2.2)",
+    "--glass-angle": (105 + Math.random() * 60) + "deg",
+    "--glass-highlight-opacity": "0.08",
     transition: "all var(--transition-fast)",
     opacity: disabled ? 0.5 : 1,
-    boxShadow: open ? "0 0 0 3px var(--accent-bg)" : "none",
+    margin: "2px 0", boxShadow: open ? "0 0 0 1px var(--accent), 0 0 0 3px var(--accent-bg)" : "0 0 0 1px var(--border-color)",
   };
 
   /* ── Dropdown panel — fluid glass ── */
@@ -130,8 +145,8 @@ export function GlassSelect({
     top: dropdownPos.top,
     left: dropdownPos.left,
     width: dropdownPos.width,
-    zIndex: zLayers.tooltip,
-    background: "var(--bg-elevated)",
+    zIndex: zLayers.tooltip + 10,
+    background: "var(--bg-secondary)",
     backdropFilter: "blur(50px) saturate(2.5)",
     WebkitBackdropFilter: "blur(50px) saturate(2.5)",
     border: "1px solid var(--border-strong)",
@@ -141,7 +156,7 @@ export function GlassSelect({
     display: "flex",
     flexDirection: "column",
     gap: 0,
-    maxHeight: 320,
+    maxHeight: 360,
     overflowY: "auto",
   };
 
@@ -249,15 +264,19 @@ export function GlassSelect({
           }
           if (e.key === "Escape") setOpen(false);
         }}
+        onMouseMove={(e) => !disabled && setGlow(e.currentTarget, e.clientX, e.clientY)}
+        onMouseEnter={(e) => !disabled && setGlow(e.currentTarget, e.clientX, e.clientY)}
+        onMouseLeave={(e) => clearGlow(e.currentTarget)}
         style={triggerStyle}
       >
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="theme-pill-glow" />
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", position: "relative", zIndex: 1 }}>
           {selectedLabel}
         </span>
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={dropdownTransition}
-          style={{ flexShrink: 0, display: "flex", color: "var(--text-tertiary)" }}
+          style={{ flexShrink: 0, display: "flex", color: "var(--text-tertiary)", position: "relative", zIndex: 1 }}
         >
           <ChevronDown size={14} />
         </motion.span>
