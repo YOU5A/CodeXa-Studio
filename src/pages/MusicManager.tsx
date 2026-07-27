@@ -156,6 +156,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [newCoverPath, setNewCoverPath] = useState("");
   const [coverPreviewB64, setCoverPreviewB64] = useState<string | null>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
+  const [listBlur, setListBlur] = useState(0);
   const [coverMenuHover, setCoverMenuHover] = useState(false);
   const [coverSearchOpen, setCoverSearchOpen] = useState(false);
 
@@ -167,6 +168,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [renameName, setRenameName] = useState("");
   const { audioState, playingFile, volume, playMode, playlist, playFile: contextPlayFile, toggle: contextToggle, seek: contextSeek, seekTo, setVolume, setPlaylist, setPlayMode, playNext: contextPlayNext, playPrev: contextPlayPrev, stop: contextStop, releaseHandle, fmtTime } = useMusicPlayer();
   const [saving, setSaving] = useState(false);
+  const playingFileRef = useRef(playingFile);
+  playingFileRef.current = playingFile; // sync every render, not async via useEffect
   const ensureFileWritable = (filepath: string) => {
     if (filepath && playingFile && filepath === playingFile) {
       releaseHandle();
@@ -196,6 +199,17 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   useEffect(() => {
     saveFluidSettings(fluidSettings);
   }, [fluidSettings]);
+
+  // Blur the file list during cover menu open/close transition only
+  const prevCoverMenuOpen = useRef(coverMenuOpen);
+  useEffect(() => {
+    // Only trigger blur when coverMenuOpen actually toggles (skip initial mount)
+    if (prevCoverMenuOpen.current === coverMenuOpen) return;
+    prevCoverMenuOpen.current = coverMenuOpen;
+    setListBlur(8);
+    const timer = setTimeout(() => setListBlur(0), 400);
+    return () => clearTimeout(timer);
+  }, [coverMenuOpen]);
 
   // Extract cover color and notify app
   useEffect(() => {
@@ -253,21 +267,70 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   }, []);
 
   // Scroll selected file into center of list
+  const scrollAnimRef = useRef<number | null>(null);
+  const isProgrammaticScroll = useRef(false);
+
   const scrollToFile = (fp: string) => {
     if (!fp || !listRef.current) return;
     const el = listRef.current.querySelector(`[data-filepath="${CSS.escape(fp)}"]`) as HTMLElement | null;
-    if (el && listRef.current) {
-      const container = listRef.current;
-      const elTop = el.offsetTop;
-      const elHeight = el.offsetHeight;
-      const containerHeight = container.clientHeight;
-      container.scrollTo({
-        top: elTop - containerHeight / 2 + elHeight / 2,
-        behavior: "smooth",
-      });
+    if (!el || !listRef.current) return;
+    const container = listRef.current;
+
+    // Cancel any in-progress animation
+    if (scrollAnimRef.current !== null) {
+      cancelAnimationFrame(scrollAnimRef.current);
+      scrollAnimRef.current = null;
     }
+
+    // Direct calculation: position the element at the vertical center of the card.
+    // el.getBoundingClientRect().top - container.getBoundingClientRect().top
+    // = visual distance from card top to element top (includes scroll offset and padding).
+    // Add scrollTop to get the element"s offset within the full scrollable content.
+    const visualTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    const contentOffset = visualTop + container.scrollTop;
+    const target = contentOffset - container.clientHeight / 2 + el.getBoundingClientRect().height / 2;
+    const maxScroll = container.scrollHeight - container.clientHeight;
+    const clamped = Math.max(0, Math.min(Math.round(target), maxScroll));
+
+    if (Math.abs(container.scrollTop - clamped) < 1) return;
+
+    // Smooth animation to target
+    isProgrammaticScroll.current = true;
+    const startScroll = container.scrollTop;
+    const distance = clamped - startScroll;
+    const duration = Math.min(600, Math.max(150, Math.abs(distance) * 0.5));
+    const startTime = performance.now();
+
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      container.scrollTop = Math.round(startScroll + distance * easeInOutCubic(progress));
+      if (progress < 1) {
+        scrollAnimRef.current = requestAnimationFrame(animate);
+      } else {
+        container.scrollTop = clamped;
+        scrollAnimRef.current = null;
+        isProgrammaticScroll.current = false;
+      }
+    };
+
+    scrollAnimRef.current = requestAnimationFrame(animate);
   };
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset 5s idle-scroll timer
+  const resetIdleScrollTimer = () => {
+    if (idleScrollTimerRef.current) { clearTimeout(idleScrollTimerRef.current); }
+    idleScrollTimerRef.current = setTimeout(() => {
+      const current = playingFileRef.current;
+      if (current) scrollToFile(current);
+      idleScrollTimerRef.current = null;
+    }, 5000);
+  };
 
   // ?? File ??
   const { settings } = useTheme();
@@ -293,6 +356,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   };
   const selectFile = async (fp: string) => {
     setSelectedFile(fp);
+    scrollToFile(fp);
+    resetIdleScrollTimer();
     const m = await window.electronAPI?.python.call("music.get_metadata", { filepath: fp });
     if (m && !m.error) {
       setMetadata(m);
@@ -304,16 +369,17 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     setNewCoverPath(""); setCoverPreviewB64(null);
     const fname = fp.split("\\").pop() || fp;
     setRenameName(fname.replace(/\.[^.]+$/, ""));
-    scrollToFile(fp);
   };
 
   // File list click handler (with auto-revert timer)
   const handleFileClick = (fp: string) => {
     setSelectedFile(fp);
+    resetIdleScrollTimer();
     if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
     if (fp !== playingFile && playingFile) {
       revertTimerRef.current = setTimeout(() => {
-        setSelectedFile(playingFile);
+        const current = playingFileRef.current;
+        if (current) setSelectedFile(current);
         revertTimerRef.current = null;
       }, 1500);
     }
@@ -342,6 +408,25 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       window.removeEventListener("mouseup", onUp);
     };
   }, [isDraggingVolume]);
+
+  // Auto-scroll to playing file after 5s idle + listen for manual scroll
+  useEffect(() => {
+    const container = listRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      if (!isProgrammaticScroll.current) resetIdleScrollTimer();
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, [playingFile]);
+
+  // Idle scroll: start timer when playingFile changes, cleanup on unmount
+  useEffect(() => {
+    if (playingFile) {
+      resetIdleScrollTimer();
+      return () => { if (idleScrollTimerRef.current) { clearTimeout(idleScrollTimerRef.current); } };
+    }
+  }, [playingFile]);
 
   // Sync selectedFile and metadata when playingFile changes
   useEffect(() => {
@@ -390,6 +475,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     contextPlayFile(fp);
     if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
     scrollToFile(fp);
+    resetIdleScrollTimer();
   };
 
   const toggle = () => {
@@ -644,25 +730,33 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       {/* Main Content */}
       {files.length > 0 && (
         <>
-          <div style={{ flex: 1, minHeight: 0, display: "flex", gap: space[4] }}>
-            {/* Left: Cover */}
-            <CoverManager
-              coverB64={coverB64}
-              coverPreviewB64={coverPreviewB64}
-              coverMenuOpen={coverMenuOpen}
-              coverMenuHover={coverMenuHover}
-              setCoverMenuOpen={setCoverMenuOpen}
-              setCoverMenuHover={setCoverMenuHover}
-              setCoverSearchOpen={setCoverSearchOpen}
-              pickCover={pickCover}
-              applyCover={applyCover}
-              saveCover={saveCover}
-              removeCover={removeCover}
-              tx={tx}
-            />
+          <div style={{
+            flex: 1, minHeight: 0,
+            display: "grid",
+            gridTemplateColumns: "220px 1fr",
+            gridTemplateRows: "auto auto 1fr",
+            gap: space[4],
+          }}>
+            {/* Cover: always rendered, spans all rows */}
+            <div style={{ gridRow: "1 / 4", gridColumn: 1 }}>
+              <CoverManager
+                coverB64={coverB64}
+                coverPreviewB64={coverPreviewB64}
+                coverMenuOpen={coverMenuOpen}
+                coverMenuHover={coverMenuHover}
+                setCoverMenuOpen={setCoverMenuOpen}
+                setCoverMenuHover={setCoverMenuHover}
+                setCoverSearchOpen={setCoverSearchOpen}
+                pickCover={pickCover}
+                applyCover={applyCover}
+                saveCover={saveCover}
+                removeCover={removeCover}
+                tx={tx}
+              />
+            </div>
 
-            {/* Right: Tag Editor + File List */}
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: space[3] }}>
+            {/* Tag Editor + RenamePanel: top-right */}
+            <div style={{ gridRow: 1, gridColumn: 2, minWidth: 0, alignSelf: "start" }}>
               <GlassCard style={{ flexShrink: 0 }}>
                 <TagEditor
                   tagTitle={tagTitle}
@@ -691,6 +785,26 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                   lang={lang}
                 />
               </GlassCard>
+            </div>
+
+            {/* FileList: spans rows 2-3, full width when collapsed */}
+            <motion.div
+              layout
+              initial={false}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+              style={{
+                gridRow: "2 / 4",
+                gridColumn: coverMenuOpen ? 2 : "1 / 3",
+                minWidth: 0,
+                minHeight: 0,
+                backdropFilter: "blur(24px) saturate(1.4)",
+                WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+                borderRadius: radii.lg,
+                filter: `blur(${listBlur}px)`,
+                willChange: listBlur > 0 ? "filter" : "auto",
+                transition: "grid-column 0.35s ease, filter 0.35s ease",
+              }}
+            >
               <FileList
                 files={files}
                 selectedFile={selectedFile}
@@ -702,7 +816,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                 filesCountLabel={tx.filesCount}
                 listRef={listRef}
               />
-            </div>
+            </motion.div>
           </div>
 
           {/* Player Bar */}

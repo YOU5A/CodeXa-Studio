@@ -25,11 +25,11 @@ export default function FileList({
       </div>
 
       {/* List with top/bottom fade mask */}
-      <GlassScrollArea ref={listRef} fadeEdges={true} scrollbarGutter={8} style={{ padding: "4px 10px", margin: 0 }}>
+      <GlassScrollArea ref={listRef} fadeEdges={true} scrollbarGutter={8} style={{ padding: "4px 10px", margin: 0, display: "flex", flexDirection: "column" }}>
         {files.length === 0 ? (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            height: "100%", minHeight: 120, color: "var(--text-tertiary)",
+            flex: 1, minHeight: 120, color: "var(--text-tertiary)",
             fontSize: fontSizes.sm, userSelect: "none",
           }}>
             {noFilesLabel}
@@ -59,15 +59,14 @@ export default function FileList({
                   transition: "background 0.15s ease, color 0.15s ease",
                 }}
               >
-                {isPlaying ? (
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
-                ) : (
-                  <span style={{ width: 7, height: 7, flexShrink: 0 }} />
-                )}
-                <Music size={12} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
+                <Music size={12} style={{
+                  color: isPlaying ? "var(--accent)" : "var(--text-tertiary)",
+                  flexShrink: 0,
+                  transition: "color 0.15s ease",
+                }} />
                 <span style={{
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  flex: 1,
+                  flex: 1, lineHeight: "12px",
                 }}>
                   {name}
                 </span>

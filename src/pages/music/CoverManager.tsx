@@ -70,11 +70,11 @@ export default function CoverManager(props: CoverManagerProps) {
       <AnimatePresence>
         {coverMenuOpen && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: 6, padding: "6px 10px" }}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 10px" }}
           >
             <GlassButton variant="secondary" size="sm" inline={false} onClick={() => setCoverSearchOpen(true)}
               style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>
@@ -101,10 +101,12 @@ export default function CoverManager(props: CoverManagerProps) {
       </AnimatePresence>
 
       {coverPreviewB64 && (
-        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
-          <img src={`data:image/jpeg;base64,${coverPreviewB64}`} alt="Cover Preview"
-            style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: radii.lg }} />
-        </GlassCard>
+        <motion.div layout>
+          <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+            <img src={`data:image/jpeg;base64,${coverPreviewB64}`} alt="Cover Preview"
+              style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: radii.lg }} />
+          </GlassCard>
+        </motion.div>
       )}
     </div>
   );
