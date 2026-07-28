@@ -1,9 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" ondragenter="event.preventDefault()" ondragover="event.preventDefault()">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CodeXa Studio</title>
+  <script>
+    // Electron drag-and-drop: must prevent default on dragover to accept OS file drops
+    document.addEventListener('dragenter', function(e) { e.preventDefault(); });
+    document.addEventListener('dragover', function(e) { e.preventDefault(); });
+  </script>
   </head>
   <body>
     <div id="root"></div>

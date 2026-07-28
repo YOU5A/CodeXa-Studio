@@ -170,6 +170,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [saving, setSaving] = useState(false);
   const playingFileRef = useRef(playingFile);
   playingFileRef.current = playingFile; // sync every render, not async via useEffect
+  const selectedFileRef = useRef(selectedFile);
+  selectedFileRef.current = selectedFile;
   const ensureFileWritable = (filepath: string) => {
     if (filepath && playingFile && filepath === playingFile) {
       releaseHandle();
@@ -268,7 +270,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
   // Scroll selected file into center of list
   const scrollAnimRef = useRef<number | null>(null);
-  const isProgrammaticScroll = useRef(false);
 
   const scrollToFile = (fp: string) => {
     if (!fp || !listRef.current) return;
@@ -295,7 +296,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     if (Math.abs(container.scrollTop - clamped) < 1) return;
 
     // Smooth animation to target
-    isProgrammaticScroll.current = true;
     const startScroll = container.scrollTop;
     const distance = clamped - startScroll;
     const duration = Math.min(600, Math.max(150, Math.abs(distance) * 0.5));
@@ -313,24 +313,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       } else {
         container.scrollTop = clamped;
         scrollAnimRef.current = null;
-        isProgrammaticScroll.current = false;
       }
     };
 
     scrollAnimRef.current = requestAnimationFrame(animate);
   };
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const idleScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Reset 5s idle-scroll timer
-  const resetIdleScrollTimer = () => {
-    if (idleScrollTimerRef.current) { clearTimeout(idleScrollTimerRef.current); }
-    idleScrollTimerRef.current = setTimeout(() => {
-      const current = playingFileRef.current;
-      if (current) scrollToFile(current);
-      idleScrollTimerRef.current = null;
-    }, 5000);
-  };
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ?? File ??
   const { settings } = useTheme();
@@ -354,10 +343,64 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       showToast(tx.scanResult.replace("{n}", String(r.count ?? 0)), "info");
     }
   };
+
+  // -- Drag & Drop (document-level, capture phase for Electron compatibility) --
+  const AUDIO_EXTENSIONS = [".mp3", ".flac", ".ogg", ".m4a", ".wav", ".opus", ".mp4a"];
+
+  useEffect(() => {
+    const onDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      if (!e.dataTransfer?.files) return;
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      const audioPaths: string[] = [];
+      for (const f of droppedFiles) {
+        const fp = (f as any).path;
+        if (fp && AUDIO_EXTENSIONS.some(ext => fp.toLowerCase().endsWith(ext))) {
+          audioPaths.push(fp);
+        }
+      }
+      if (audioPaths.length === 0) return;
+      const existing = new Set(files);
+      const newPaths = audioPaths.filter(p => !existing.has(p));
+      if (newPaths.length === 0) return;
+      const updated = [...files, ...newPaths];
+      setFiles(updated);
+      setPlaylist(updated);
+      if (!selectedFile && newPaths.length > 0) {
+        selectFile(newPaths[0]);
+      }
+      showToast(tx.scanResult.replace("{n}", String(newPaths.length)), "info");
+    };
+
+    document.addEventListener("dragenter", onDragEnter, true);
+    window.addEventListener("dragenter", onDragEnter, true);
+    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("drop", onDrop, true);
+    document.addEventListener("dragover", onDragOver, true);
+    document.addEventListener("drop", onDrop, true);
+    return () => {
+      document.removeEventListener("dragenter", onDragEnter, true);
+      window.removeEventListener("dragenter", onDragEnter, true);
+      window.removeEventListener("dragover", onDragOver, true);
+      window.removeEventListener("drop", onDrop, true);
+      document.removeEventListener("dragover", onDragOver, true);
+      document.removeEventListener("drop", onDrop, true);
+    };
+  }, [files, selectedFile, tx]);
+
+
+
   const selectFile = async (fp: string) => {
     setSelectedFile(fp);
     scrollToFile(fp);
-    resetIdleScrollTimer();
     const m = await window.electronAPI?.python.call("music.get_metadata", { filepath: fp });
     if (m && !m.error) {
       setMetadata(m);
@@ -374,7 +417,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   // File list click handler (with auto-revert timer)
   const handleFileClick = (fp: string) => {
     setSelectedFile(fp);
-    resetIdleScrollTimer();
     if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
     if (fp !== playingFile && playingFile) {
       revertTimerRef.current = setTimeout(() => {
@@ -409,24 +451,30 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     };
   }, [isDraggingVolume]);
 
-  // Auto-scroll to playing file after 5s idle + listen for manual scroll
+  // Window blur: after 5s, scroll list to selected file
   useEffect(() => {
-    const container = listRef.current;
-    if (!container) return;
-    const onScroll = () => {
-      if (!isProgrammaticScroll.current) resetIdleScrollTimer();
+    const onBlur = () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = setTimeout(() => {
+        const current = selectedFileRef.current;
+        if (current) scrollToFile(current);
+        blurTimerRef.current = null;
+      }, 5000);
     };
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => container.removeEventListener("scroll", onScroll);
-  }, [playingFile]);
-
-  // Idle scroll: start timer when playingFile changes, cleanup on unmount
-  useEffect(() => {
-    if (playingFile) {
-      resetIdleScrollTimer();
-      return () => { if (idleScrollTimerRef.current) { clearTimeout(idleScrollTimerRef.current); } };
-    }
-  }, [playingFile]);
+    const onFocus = () => {
+      if (blurTimerRef.current) {
+        clearTimeout(blurTimerRef.current);
+        blurTimerRef.current = null;
+      }
+    };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
 
   // Sync selectedFile and metadata when playingFile changes
   useEffect(() => {
@@ -475,7 +523,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     contextPlayFile(fp);
     if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
     scrollToFile(fp);
-    resetIdleScrollTimer();
   };
 
   const toggle = () => {

@@ -152,6 +152,67 @@ export default function NcmStudio() {
     }
   }, [openFolder]);
 
+  // -- Drag & Drop (document-level, capture phase for Electron compatibility) --
+  useEffect(() => {
+    const onDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      if (!e.dataTransfer?.files) return;
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      const ncmPaths: string[] = [];
+      for (const f of droppedFiles) {
+        const fp = (f as any).path;
+        if (fp && fp.toLowerCase().endsWith(".ncm")) {
+          ncmPaths.push(fp);
+        }
+      }
+      if (ncmPaths.length === 0) return;
+      const existingPaths = new Set(files.map(f => f.filepath));
+      const newPaths = ncmPaths.filter(p => !existingPaths.has(p));
+      if (newPaths.length === 0) return;
+      const newItems: NcmFileInfo[] = newPaths.map(fp => {
+        const parts = fp.split("\\");
+        return { filepath: fp, filename: parts[parts.length - 1], size: 0 };
+      });
+      setFiles(prev => [...prev, ...newItems]);
+      if (!selectedFile && newItems.length > 0) {
+        setSelectedFile(newItems[0]);
+        try {
+          const info = await call("ncm.get_info", { filepath: newItems[0].filepath });
+          setNcmInfo(info as Record<string, any>);
+        } catch {
+          setNcmInfo({ error: tx.decodeFail });
+        }
+      }
+      showToast(tx.found.replace("{n}", String(newPaths.length)), "info");
+    };
+
+    document.addEventListener("dragenter", onDragEnter, true);
+    window.addEventListener("dragenter", onDragEnter, true);
+    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("drop", onDrop, true);
+    document.addEventListener("dragover", onDragOver, true);
+    document.addEventListener("drop", onDrop, true);
+    return () => {
+      document.removeEventListener("dragenter", onDragEnter, true);
+      window.removeEventListener("dragenter", onDragEnter, true);
+      window.removeEventListener("dragover", onDragOver, true);
+      window.removeEventListener("drop", onDrop, true);
+      document.removeEventListener("dragover", onDragOver, true);
+      document.removeEventListener("drop", onDrop, true);
+    };
+  }, [files, selectedFile, call, showToast, tx]);
+
+
+
+
   const scan = useCallback(async () => {
     if (!folder) return;
     setIsScanning(true);

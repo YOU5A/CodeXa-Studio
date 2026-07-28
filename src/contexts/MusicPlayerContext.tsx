@@ -32,7 +32,7 @@ const MusicPlayerContext = createContext<MusicPlayerContextValue>({
   audioState: { duration: 0, playing: false, pos: 0 },
   playingFile: "",
   volume: 40,
-  playMode: "sequential",
+  playMode: "loop-all",
   playlist: [],
   playFile: () => {},
   toggle: () => {},
@@ -75,9 +75,9 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const [playMode, setPlayModeState] = useState<PlayMode>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_PLAYMODE);
-      return (saved as PlayMode) || "sequential";
+      return (saved as PlayMode) || "loop-all";
     } catch {
-      return "sequential";
+      return "loop-all";
     }
   });
   const [playlist, setPlaylistState] = useState<string[]>([]);

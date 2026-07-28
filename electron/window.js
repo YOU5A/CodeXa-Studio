@@ -34,6 +34,21 @@ function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, m
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
     mainWindow.webContents.insertCSS("*:focus, *:focus-visible { outline: none !important; }");
+  // Diagnostic: check if Windows sends WM_DROPFILES to the window
+  if (process.platform === "win32") {
+    mainWindow.hookWindowMessage(0x0233, () => {
+      console.log("[Drag] WM_DROPFILES received by window!");
+    });
+  }
+
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url.startsWith("file://")) event.preventDefault();
+  });
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === "openExternal") callback(true);
+    else callback(false);
+  });
+
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
