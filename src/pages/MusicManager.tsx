@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
   SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
-  Volume2, Trash2, Music, Edit3, ChevronUp, Globe
+  Volume2, Trash2, Edit3, ChevronUp, Globe
 } from "lucide-react";
-import { GlassCard, GlassButton, GlassInput, GlassSurface, GlassEmptyState, GlassBadge, GlassTooltip } from "@/design-system/components";
+import { GlassCard, GlassButton, GlassInput, GlassSurface, GlassBadge, GlassTooltip } from "@/design-system/components";
 import { space, fontSizes, radii } from "@/design-system/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -764,19 +764,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         </div>
       </div>
 
-      {/* Empty State */}
-      {files.length === 0 && (
-        <GlassEmptyState
-          icon={<Music size={48} style={{ color: "var(--text-tertiary)", opacity: 0.4 }} />}
-          title={tx.noFiles}
-          description={tx.formats}
-          action={<GlassButton variant="primary" onClick={browse}><FolderOpen size={14} /> {tx.browse}</GlassButton>}
-        />
-      )}
-
       {/* Main Content */}
-      {files.length > 0 && (
-        <>
+      <>
           <div style={{
             flex: 1, minHeight: 0,
             display: "grid",
@@ -943,8 +932,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
             values={lyricsSettings}
             onChange={(v) => { setLyricsSettings(v); saveLyricsSettings(v); }}
           />
-        </>
-      )}
+      </>
     </motion.div>
   );
 }

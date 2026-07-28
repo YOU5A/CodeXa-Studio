@@ -135,19 +135,35 @@ const lastItemStyle: React.CSSProperties = {
   padding: `${space[2]}px 0`,
 };
 
+// Module-level cache to avoid reset on page re-entry
+let cachedSysInfo: SystemInfo | null = null;
+
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const { lang } = useLanguage();
   const tx = t[lang];
-  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
+  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(cachedSysInfo);
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [loadingBackups, setLoadingBackups] = useState(true);
+
+  // Track last known-good CPU% to prevent spurious 0 overwrites
+  let lastGoodCpu = cachedSysInfo?.cpu_percent ?? 0;
 
   useEffect(() => {
     const fetchSysInfo = async () => {
       try {
         const result = await window.electronAPI?.python.call("system.info");
-        if (result) setSysInfo(result);
+        if (result) {
+          // Guard: if bridge cold-start returns cpu_percent=0 but we have a
+          // reasonable cached value, keep the cached cpu_percent.
+          if (result.cpu_percent === 0 && lastGoodCpu > 0) {
+            result.cpu_percent = lastGoodCpu;
+          } else if (result.cpu_percent > 0) {
+            lastGoodCpu = result.cpu_percent;
+          }
+          cachedSysInfo = result;
+          setSysInfo(result);
+        }
       } catch {}
     };
     fetchSysInfo();

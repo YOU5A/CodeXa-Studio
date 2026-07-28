@@ -9,8 +9,6 @@
  */
 
 import { forwardRef } from "react";
-import { motion } from "framer-motion";
-import { springDefault } from "../animations";
 import { radii, space } from "../tokens";
 
 export type ProgressColor = "accent" | "success" | "warning" | "danger";
@@ -76,17 +74,16 @@ export const GlassProgressBar = forwardRef<HTMLDivElement, GlassProgressBarProps
             position: "relative",
           }}
         >
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={springDefault}
+          <div
             style={{
+              width: `${pct}%`,
               height: "100%",
               borderRadius: radii.full,
               background: barColor,
               position: "absolute",
               left: 0,
               top: 0,
+              transition: "width 0.5s cubic-bezier(0.25, 0.1, 0.25, 1.0)",
             }}
           />
           {showLabel && labelPosition === "inside" && (

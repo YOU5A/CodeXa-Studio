@@ -9,12 +9,18 @@ let prevCpuTotal = 0;
 // calculation returns a real percentage instead of 0.
 function primeCpuTimes() {
   const cpus = os.cpus();
+  let idle = 0, total = 0;
   for (const cpu of cpus) {
-    prevCpuIdle += cpu.times.idle;
-    prevCpuTotal += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
+    idle += cpu.times.idle;
+    total += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
   }
+  prevCpuIdle = idle;
+  prevCpuTotal = total;
 }
 primeCpuTimes();
+// Re-prime after 500ms to ensure the first getCpuPercent() call has a meaningful delta
+// even when the module is lazy-loaded right before the first request.
+setTimeout(primeCpuTimes, 500);
 
 /** Compute CPU percentage via os.cpus() delta between successive calls. */
 function getCpuPercent() {
