@@ -212,8 +212,11 @@ export default function LyricDisplay({
       const raw = localStorage.getItem("fluidSettings");
       if (raw) cm = JSON.parse(raw).colorMode;
     } catch {}
-    if (cm === "cover" && coverGlowRgb) return coverGlowRgb;
-    if ((cm === "dynamic" || cm === "auto") && dynamicGlowRgb && dynamicGlowRgb.length > 0) return dynamicGlowRgb[0];
+    // cover / auto: cover color first (most reliable, avoids stale dynamicGlowRgb)
+    if (coverGlowRgb && (cm === "cover" || cm === "auto")) return coverGlowRgb;
+    // dynamic / auto fallback: Canvas blob sampled colors
+    if (dynamicGlowRgb && dynamicGlowRgb.length > 0 && (cm === "dynamic" || cm === "auto")) return dynamicGlowRgb[0];
+    // universal fallback
     if (coverGlowRgb) return coverGlowRgb;
     return null;
   }, [coverGlowRgb, dynamicGlowRgb]);
