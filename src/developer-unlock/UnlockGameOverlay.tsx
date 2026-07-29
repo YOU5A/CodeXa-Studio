@@ -4,6 +4,9 @@ import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LetterParticle from "./LetterParticle";
 import type { GamePhase } from "./types";
+import { devUnlockService } from "./DeveloperUnlockService";
+
+type SuccessPhase = "confetti" | "dissolve" | "sphere_form" | "sphere_travel" | "sphere_arrive" | "done";
 
 const TARGETS = ["Y", "O", "U", "S", "A"];
 const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -135,6 +138,8 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [letters] = useState<ParticleInit[]>(() => generateLetters(window.innerWidth));
   const [exitPhase, setExitPhase] = useState<"idle" | "exiting">("idle");
+  const [successPhase, setSuccessPhase] = useState<SuccessPhase>("confetti");
+  const [ncmTarget, setNcmTarget] = useState<{ x: number; y: number } | null>(null);
   const confettiPieces = useMemo(() =>
     Array.from({ length: 40 }).map((_, i) => ({
       id: i,
@@ -191,8 +196,8 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
   // Auto-exit after celebration or failure
   useEffect(() => {
     if (phase === "success") {
-      exitTimerRef.current = setTimeout(() => setExitPhase("exiting"), 2500);
-      return () => { if (exitTimerRef.current) { clearTimeout(exitTimerRef.current); exitTimerRef.current = null; } };
+      // Auto-exit is now handled by the successPhase animation chain (see below)
+      return;
     }
     if (phase === "failed") {
       exitTimerRef.current = setTimeout(() => setExitPhase("exiting"), 1000);
@@ -210,6 +215,52 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
       return () => { if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; } };
     }
   }, [exitPhase, onSuccess, onClose]);
+
+      // Success animation phase chain
+  useEffect(() => {
+    if (phase !== "success") return;
+    // Reset
+    setSuccessPhase("confetti");
+    setNcmTarget(null);
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    // Confetti runs ~2.0s, then dissolve: text melting + liquid blob contracting to droplet
+    timers.push(setTimeout(() => {
+      setSuccessPhase("dissolve");
+      // Trigger SVG liquid filter animations
+      (document.getElementById("cs-liq-freq") as any)?.beginElement?.();
+      (document.getElementById("cs-liq-scale") as any)?.beginElement?.();
+    }, 2000));
+    // Dissolve done (0.55s) -> droplet wobbles at center briefly
+    timers.push(setTimeout(() => setSuccessPhase("sphere_form"), 2550));
+    // Droplet formed -> calculate NCM button position from adjacent sidebar items
+    timers.push(setTimeout(() => {
+      const musicBtn = document.querySelector('[data-nav-id="musicmanager"]');
+      if (musicBtn) {
+        const mRect = musicBtn.getBoundingClientRect();
+        const btnHeight = mRect.height;
+        // NCM button sits right after musicmanager with 2px gap
+        setNcmTarget({
+          x: mRect.left + mRect.width / 2,
+          y: mRect.bottom + 2 + btnHeight / 2,
+        });
+      }
+      setSuccessPhase("sphere_travel");
+    }, 2800));
+    // Travel done -> arrive: unlock + droplet blurs out + overlay fades in parallel
+    timers.push(setTimeout(() => {
+      devUnlockService.enableDevModeOnly();
+      setSuccessPhase("sphere_arrive");
+      setExitPhase("exiting");
+    }, 3500));
+    // Arrive animation (0.5s) + exit transition (0.5s) finish together
+    timers.push(setTimeout(() => {
+      setSuccessPhase("done");
+    }, 4000));
+
+    return () => timers.forEach(clearTimeout);
+  }, [phase]);
 
   const handleCollect = useCallback((letter: string) => {
     markInteraction();
@@ -282,42 +333,152 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
 
       {/* Success */}
       {phase === "success" && (
-        <>
-          {confettiPieces.map((p) => (
-            <motion.div
-              key={"c-" + p.id}
-              initial={{ x: w / 2, y: h / 2, scale: 0, opacity: 1 }}
-              animate={{ x: w / 2 + p.dx, y: h / 2 + p.dy, scale: [0, 1.5, 0], opacity: [1, 1, 0], rotate: p.rotate }}
-              transition={{ duration: 1.2, delay: p.id * 0.02, ease: "easeOut" }}
-              style={{ position: "absolute", width: 10, height: 10, background: CONFETTI_COLORS[p.id % CONFETTI_COLORS.length], borderRadius: 2 }}
-            />
-          ))}
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              zIndex: 100,
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.6, type: "spring", stiffness: 200, damping: 15 }}
-              style={{
-                fontSize: 32,
-                fontWeight: 700,
-                color: "#FFD700",
-                textShadow: "0 0 40px rgba(255,215,0,0.6)",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {lang === "zh" ? "开发者功能已开启" : "Developer Mode Enabled"}
-            </motion.div>
-          </div>
-        </>
+<>
+  {/* Wobble keyframes for the glass sphere */}
+  <style>{`
+    @keyframes cs-wobble {
+      0%, 100% { transform: scale(1, 1); }
+      25% { transform: scale(1.12, 0.88); }
+      50% { transform: scale(0.92, 1.08); }
+      75% { transform: scale(1.06, 0.94); }
+    }
+  `}</style>
+
+  {/* SVG liquid filter for the dissolve blob */}
+  <svg width="0" height="0" style={{ position: "absolute" }}>
+    <defs>
+      <filter id="cs-liquid" x="-50%" y="-50%" width="200%" height="200%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" result="noise">
+          <animate id="cs-liq-freq" attributeName="baseFrequency" values="0.04;0.01" dur="0.55s" begin="indefinite" fill="freeze" />
+        </feTurbulence>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="12" xChannelSelector="R" yChannelSelector="G">
+          <animate id="cs-liq-scale" attributeName="scale" values="12;0" dur="0.55s" begin="indefinite" fill="freeze" />
+        </feDisplacementMap>
+      </filter>
+    </defs>
+  </svg>
+
+  {/* Confetti — unchanged */}
+  {confettiPieces.map((p) => (
+    <motion.div
+      key={"c-" + p.id}
+      initial={{ x: w / 2, y: h / 2, scale: 0, opacity: 1 }}
+      animate={{ x: w / 2 + p.dx, y: h / 2 + p.dy, scale: [0, 1.5, 0], opacity: [1, 1, 0], rotate: p.rotate }}
+      transition={{ duration: 1.2, delay: p.id * 0.02, ease: "easeOut" }}
+      style={{ position: "absolute", width: 10, height: 10, background: CONFETTI_COLORS[p.id % CONFETTI_COLORS.length], borderRadius: 2 }}
+    />
+  ))}
+
+  {successPhase !== "done" && (
+<>
+  {/* Dissolve: text melts + liquid blob contracts into droplet */}
+  {successPhase !== "sphere_form" && successPhase !== "sphere_travel" && successPhase !== "sphere_arrive" && (
+    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 100 }}>
+      {/* Text: appears with spring, then dissolves */}
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={
+          successPhase === "dissolve"
+            ? { scaleX: 0, opacity: 0, filter: "blur(12px)" }
+            : { scale: 1, opacity: 1 }
+        }
+        transition={
+          successPhase === "dissolve"
+            ? { duration: 0.55, ease: "easeInOut" }
+            : { delay: 0.6, type: "spring", stiffness: 200, damping: 15 }
+        }
+        style={{
+          fontSize: 32,
+          fontWeight: 700,
+          color: "#FFFFFF",
+          textShadow: "0 3px 12px rgba(var(--fluid-glow-rgb), 0.4), 0 1px 4px rgba(var(--fluid-glow-rgb), 0.25)",
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          transformOrigin: "center",
+        }}
+      >
+        {lang === "zh" ? "\u5f00\u53d1\u8005\u529f\u80fd\u5df2\u5f00\u542f" : "Developer Mode Enabled"}
+      </motion.div>
+
+      {/* Liquid blob: starts large (covers text), contracts into droplet */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={
+          successPhase === "dissolve"
+            ? { opacity: 1, width: 30, height: 30, borderRadius: "50%", x: "-50%", y: "-50%" }
+            : { opacity: 0, width: 240, height: 40, borderRadius: "12% / 28%", x: "-50%", y: "-50%" }
+        }
+        transition={
+          successPhase === "dissolve"
+            ? { duration: 0.55, delay: 0.05, ease: "easeOut" }
+            : { duration: 0.15 }
+        }
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          background: "radial-gradient(circle at 38% 32%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.01) 100%)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          boxShadow: "0 8px 28px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.12), 0 0 30px rgba(var(--fluid-glow-rgb), 0.4), 0 0 8px rgba(var(--fluid-glow-rgb), 0.25), inset 0 0 20px rgba(255,255,255,0.08)",
+          filter: "url(#cs-liquid)",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  )}
+
+  {/* Traveling droplet: wobbles then flies to NCM button with liquid stretch */}
+  {(successPhase === "sphere_form" || successPhase === "sphere_travel" || successPhase === "sphere_arrive") && (
+    <motion.div
+      initial={false}
+      animate={{
+        left: (successPhase === "sphere_travel" || successPhase === "sphere_arrive") && ncmTarget
+          ? ncmTarget.x - 15
+          : w / 2 - 15,
+        top: (successPhase === "sphere_travel" || successPhase === "sphere_arrive") && ncmTarget
+          ? ncmTarget.y - 15
+          : h / 2 - 15,
+      }}
+      transition={
+        successPhase === "sphere_travel"
+          ? { type: "spring", stiffness: 55, damping: 12 }
+          : { duration: 0.35, ease: "easeOut" }
+      }
+      style={{ position: "fixed", zIndex: 1000, pointerEvents: "none" }}
+    >
+      <motion.div
+        animate={
+          successPhase === "sphere_arrive"
+            ? { scale: 2.5, opacity: 0, filter: "blur(12px)" }
+            : { scale: 1, opacity: 1, filter: "blur(0px)" }
+        }
+        transition={
+          successPhase === "sphere_arrive"
+            ? { duration: 0.5, ease: "easeOut" }
+            : { duration: 0.3, ease: "easeOut" }
+        }
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: "50%",
+          background: "radial-gradient(circle at 38% 32%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.01) 100%)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          boxShadow: "0 8px 28px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.12), 0 0 30px rgba(var(--fluid-glow-rgb), 0.4), 0 0 8px rgba(var(--fluid-glow-rgb), 0.25), inset 0 0 20px rgba(255,255,255,0.08)",
+          transformOrigin: successPhase === "sphere_travel" ? "25% 50%" : "center",
+          animation:
+            successPhase === "sphere_travel" ? "cs-liquid-pull 0.5s ease-in-out infinite" :
+            successPhase === "sphere_arrive" ? "none" :
+            "cs-wobble 0.9s ease-in-out infinite",
+        }}
+      />
+    </motion.div>
+  )}</>
+  )}
+</>
       )}
 
 

@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { springSnappy, GlassSurface, GlassButton, GlassTooltip } from "@/design-system";
@@ -137,9 +137,10 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
       }}
     >
       {navItems
-        .filter((item) => item.id !== "ncmstudio" || isDeveloperMode)
         .map((item) => {
+          if (item.id === "ncmstudio" && !isDeveloperMode) return null;
           const isActive = currentPage === item.id;
+          const isNewNcm = item.id === "ncmstudio";
           return (
             <GlassButton
               key={item.id}
@@ -149,6 +150,8 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
               onClick={() => onNavigate(item.id)}
               onMouseEnter={() => onPreload?.(item.id)}
               whileHover={isActive ? { background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)" } : undefined}
+              initial={isNewNcm ? { opacity: 0, y: -10 } : undefined}
+              animate={isNewNcm ? { opacity: 1, y: 0 } : undefined}
               style={{
                 justifyContent: "flex-start",
                 color: isActive ? "var(--accent)" : "var(--text-secondary)",
@@ -159,6 +162,7 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
                 fontSize: settings.compactMode ? 12 : 13,
                 width: "100%",
               }}
+              {...{ "data-nav-id": item.id }}
             >
               {item.icon}
               <span>{navLabels[lang][item.id]}</span>

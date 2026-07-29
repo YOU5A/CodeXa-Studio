@@ -77,6 +77,13 @@ class DevUnlockServiceImpl {
     this.notify();
   }
 
+  /** 仅激活开发者模式（不关闭游戏 overlay），用于动画中途显示 NCM 按钮 */
+  async enableDevModeOnly() {
+    this.isDeveloperMode = true;
+    await UnlockStorage.setDeveloperMode(true);
+    this.notify();
+  }
+
   /** 重新锁定开发者模式 */
   async lock() {
     this.isDeveloperMode = false;

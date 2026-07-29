@@ -107,16 +107,23 @@ function AppContent() {
     return () => window.removeEventListener("fluidCoverColorChanged", handler as EventListener);
   }, []);
 
-  // Sync cover color to --fluid-glow-rgb for lyrics glow effect
+  // Sync cover color to --fluid-glow-rgb for lyrics/unlock glow effect
+  useEffect(() => {
+    // Initialize with accent color on first mount
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent-rgb").trim();
+    if (accent && !document.documentElement.style.getPropertyValue("--fluid-glow-rgb")) {
+      document.documentElement.style.setProperty("--fluid-glow-rgb", accent);
+    }
+  }, []);
+
   useEffect(() => {
     if (coverColor) {
       const [r, g, b] = coverColor;
       const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
       const rgb = luminance < 40 ? "255, 255, 255" : `${r}, ${g}, ${b}`;
       document.documentElement.style.setProperty("--fluid-glow-rgb", rgb);
-    } else {
-      document.documentElement.style.removeProperty("--fluid-glow-rgb");
     }
+    // Keep previous value; don't remove so overlay always has a valid color
   }, [coverColor]);
 
   // Fetch cover image for SVG fluid background when playing file changes
