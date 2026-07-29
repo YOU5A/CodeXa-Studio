@@ -9,6 +9,7 @@
     ".NETCoreApp,Version=v10.0/win-x64": {
       "CodeXaBridge/1.0.0": {
         "dependencies": {
+          "NcmStudio.Core": "1.0.0",
           "SixLabors.ImageSharp": "3.1.7",
           "System.Diagnostics.PerformanceCounter": "10.0.0",
           "System.Management": "10.0.0",
@@ -835,6 +836,17 @@
             "fileVersion": "2.3.0.0"
           }
         }
+      },
+      "NcmStudio.Core/1.0.0": {
+        "dependencies": {
+          "TagLibSharp": "2.3.0"
+        },
+        "runtime": {
+          "NcmStudio.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -904,6 +916,11 @@
       "sha512": "sha512-Qo4z6ZjnIfbR3Us1Za5M2vQ97OWZPmODvVmepxZ8XW0UIVLGdO2T63/N3b23kCcyiwuIe0TQvMEQG8wUCCD1mA==",
       "path": "taglibsharp/2.3.0",
       "hashPath": "taglibsharp.2.3.0.nupkg.sha512"
+    },
+    "NcmStudio.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
     }
   },
   "runtimes": {
