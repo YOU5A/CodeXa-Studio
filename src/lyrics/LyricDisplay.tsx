@@ -157,6 +157,8 @@ export default function LyricDisplay({
         setCoverGlowColor(null);
         setCoverGlowRgb(null);
       }
+      // 封面切换时清空旧动态色，确保 effectiveGlowRgb 立即回退到当前封面色
+      setDynamicGlowRgb(null);
     };
     const cached = localStorage.getItem("fluidCoverColor");
     if (cached) {
