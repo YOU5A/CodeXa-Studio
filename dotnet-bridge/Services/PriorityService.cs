@@ -176,7 +176,7 @@ public class PriorityService
 
     private static string? GetString(Dictionary<string, object?> p, string key)
     {
-        if (p.TryGetValue(key, out var val) && val is string s) return s;
+        if (p.TryGetValue(key, out var val) && val != null) return val.ToString();
         return null;
     }
 
