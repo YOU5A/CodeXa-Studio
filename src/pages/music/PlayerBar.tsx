@@ -3,7 +3,7 @@ import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
   Volume2, Music, Settings,
 } from "lucide-react";
-import { GlassSurface, GlassButton, GlassTooltip } from "@/design-system/components";
+import { GlassSurface, GlassButton, GlassSeekBar, GlassTooltip } from "@/design-system/components";
 import { radii, space, fontSizes } from "@/design-system/tokens";
 import { EASE_OUT } from "@/utils/animations";
 import type { PlayMode } from "@/contexts/MusicPlayerContext";
@@ -40,35 +40,12 @@ export default function PlayerBar(props: PlayerBarProps) {
       }}
     >
       {/* Progress Bar */}
-      <div
+      <GlassSeekBar
         ref={progressRef}
+        value={pct}
+        size="md"
         onMouseDown={handleProgressMouseDown}
-        onMouseEnter={() => setProgressHover(true)}
-        onMouseLeave={() => setProgressHover(false)}
-        style={{
-          width: "100%", height: progressHover || isDragging ? 6 : 4, borderRadius: radii.sm,
-          background: "rgba(128,128,128,0.18)",
-          cursor: "pointer", position: "relative",
-          transition: "height 0.2s ease",
-        }}
-      >
-        <div style={{
-          position: "absolute", top: 0, left: 0, height: "100%", borderRadius: radii.sm,
-          width: `${pct}%`,
-          background: "var(--accent)",
-          transition: isDragging ? "none" : "width 0.15s linear",
-        }} />
-        <div style={{
-          position: "absolute", top: "50%", left: `${pct}%`,
-          width: progressHover || isDragging ? 12 : 0, height: progressHover || isDragging ? 12 : 0,
-          borderRadius: "50%",
-          background: "var(--accent)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-          transform: "translate(-50%, -50%)",
-          transition: isDragging ? "none" : "width 0.15s ease, height 0.15s ease, left 0.15s linear",
-          pointerEvents: "none",
-        }} />
-      </div>
+      />
 
       {/* Main Row */}
       <div style={{ display: "flex", alignItems: "center", gap: space[4] }}>
@@ -282,35 +259,13 @@ export default function PlayerBar(props: PlayerBarProps) {
           {/* Volume slider */}
           <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
             <Volume2 size={12} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
-            <div
+            <GlassSeekBar
               ref={volumeRef}
+              value={volume}
+              size="sm"
               onMouseDown={handleVolumeMouseDown}
-              onMouseEnter={() => setVolumeHover(true)}
-              onMouseLeave={() => setVolumeHover(false)}
-              style={{
-                width: 80, height: volumeHover || isDraggingVolume ? 6 : 4, borderRadius: radii.sm,
-                background: "rgba(128,128,128,0.18)",
-                cursor: "pointer", position: "relative",
-                transition: "height 0.2s ease",
-              }}
-            >
-              <div style={{
-                position: "absolute", top: 0, left: 0, height: "100%", borderRadius: radii.sm,
-                width: `${volume}%`,
-                background: "var(--accent)",
-                transition: isDraggingVolume ? "none" : "width 0.15s linear",
-              }} />
-              <div style={{
-                position: "absolute", top: "50%", left: `${volume}%`,
-                width: volumeHover || isDraggingVolume ? 12 : 0, height: volumeHover || isDraggingVolume ? 12 : 0,
-                borderRadius: "50%",
-                background: "var(--accent)",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-                transform: "translate(-50%, -50%)",
-                transition: isDraggingVolume ? "none" : "width 0.15s ease, height 0.15s ease, left 0.15s linear",
-                pointerEvents: "none",
-              }} />
-            </div>
+              style={{ width: 80 }}
+            />
             <span style={{
               fontSize: 10, color: "var(--text-tertiary)",
               fontVariantNumeric: "tabular-nums", minWidth: 26, textAlign: "right",

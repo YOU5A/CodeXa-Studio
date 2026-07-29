@@ -3,12 +3,13 @@ import {
   FolderOpen, Search, CheckCircle, XCircle, Zap, ExternalLink,
 } from "lucide-react";
 import {
-  GlassButton, GlassInput, GlassSurface, GlassBadge, GlassProgressBar, GlassScrollArea,
+  GlassButton, GlassInput, GlassSurface, GlassBadge, GlassProgressBar, GlassScrollArea, GlassTooltip,
 } from "@/design-system/components";
 import { space, fontSizes, radii } from "@/design-system/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useBridge } from "@/hooks/useBridge";
+import { BottomNotice } from "@/components/BottomNotice";
 import type { NcmFileInfo, DecodeResult } from "@/types";
 import { STORAGE_NCM_OUTPUT_DIR } from "@/constants/storage-keys";
 
@@ -116,6 +117,8 @@ export default function NcmStudio() {
     localStorage.getItem(STORAGE_NCM_OUTPUT_DIR) || "");
   const [ncmInfo, setNcmInfo] = useState<Record<string, any> | null>(sessionState.ncmInfo);
   const [writeTags, setWriteTags] = useState(true);
+  const [copyNotice, setCopyNotice] = useState(false);
+  const handleCopyDone = useCallback(() => setCopyNotice(false), []);
   const [results, setResults] = useState<DecodeResult[]>(sessionState.results);
   const [isScanning, setIsScanning] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
@@ -354,12 +357,33 @@ export default function NcmStudio() {
           <FolderOpen size={14} />
           <span style={{ marginLeft: 4 }}>{tx.outputDir}</span>
         </GlassButton>
-        <span style={{
-          fontSize: fontSizes.xs, color: "var(--text-tertiary)",
-          maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {outputDir || folder || "-"}
-        </span>
+        <GlassTooltip text={outputDir || folder || "-"} placement="left">
+          <span
+            onClick={() => {
+              const p = outputDir || folder || "-";
+              try {
+                const ta = document.createElement("textarea");
+                ta.value = p;
+                ta.style.position = "fixed";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+                setCopyNotice(true);
+              } catch {
+                navigator.clipboard?.writeText(p)?.then(() => setCopyNotice(true)).catch(() => {});
+              }
+            }}
+            style={{
+              fontSize: fontSizes.xs, color: "var(--text-tertiary)",
+              maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              cursor: "pointer",
+            }}
+          >
+            {outputDir || folder || "-"}
+          </span>
+        </GlassTooltip>
       </GlassSurface>
 
       <div style={{ display: "flex", gap: space[3], flex: 1, minHeight: 0, overflow: "hidden" }}>
@@ -405,6 +429,7 @@ export default function NcmStudio() {
         {/* Right: Metadata + Results overlay */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
           <MetadataPanel
+            key={selectedFile?.filepath || "none"}
             info={ncmInfo}
             writeTags={writeTags}
             onWriteTagsChange={setWriteTags}
@@ -468,6 +493,10 @@ export default function NcmStudio() {
         </div>
       </div>
 
+      {/* ─── Copy Notice ─── */}
+      <BottomNotice show={copyNotice} duration={2000} onDone={handleCopyDone}>
+        {lang === "zh" ? "已复制路径" : "Path copied"}
+      </BottomNotice>
     </div>
   );
 }

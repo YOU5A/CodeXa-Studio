@@ -81,7 +81,7 @@ const LyricBlock = memo(function LyricBlock({
 }: LyricBlockProps) {
   const pressStartTime = useRef(0);
 
-  const { fontBold, fontSize, romajiFontSize, translationFontSize, showTranslation, showRomaji } = settings;
+  const { fontBold, fontSize, romajiFontSize, translationFontSize, showTranslation, showRomaji, enableGlow } = settings;
 
   // Interlude line
   if (line.isInterlude) {
@@ -142,6 +142,8 @@ const LyricBlock = memo(function LyricBlock({
         userSelect: "none",
         overflowWrap: "break-word",
         wordBreak: "break-word",
+        position: "relative",
+        overflow: "visible",
       }}
     >
       {/* Original lyric */}
@@ -153,10 +155,20 @@ const LyricBlock = memo(function LyricBlock({
           lineHeight: 1.2,
           color: textColor,
           marginBottom: "0.3em",
-          transition: "color 0.5s ease",
+          textShadow: (isCurrent && enableGlow)
+            ? "0 3px 12px rgba(var(--lyric-glow-rgb), 0.4), 0 1px 4px rgba(var(--lyric-glow-rgb), 0.25)"
+            : "none",
+          transition: "color 0.5s ease, text-shadow 0.5s ease",
         }}
       >
-        {displayText}
+        {isCurrent && enableGlow && line.dynamicLyric && line.dynamicLyric.length > 0
+          ? line.dynamicLyric.map((w, wi) => (
+              <span key={wi} style={{
+                textShadow: "0 2px 10px rgba(var(--lyric-glow-rgb), 0.45), 0 1px 4px rgba(var(--lyric-glow-rgb), 0.3)",
+                transition: "text-shadow 0.5s ease",
+              }}>{w.word}</span>
+            ))
+          : displayText}
       </div>
 
       {/* Romaji */}

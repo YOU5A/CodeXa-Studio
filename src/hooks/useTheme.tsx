@@ -39,7 +39,7 @@ function injectThemeCss(theme: string) {
     return;
   }
 
-  fetch("/themes/" + fileName + ".css")
+  fetch("./themes/" + fileName + ".css")
     .then((r) => r.text())
     .then((css) => {
       THEME_CSS_CACHE[theme] = css;

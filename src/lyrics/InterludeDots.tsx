@@ -74,10 +74,13 @@ export default function InterludeDots({
     <div
       className={"interlude-inner" + pauseClass}
       ref={dotContainerRef}
+      style={{ position: "relative" }}
     >
+
+
       {dots.map((dot, i) => {
         const progress = dotProgress(dot);
-        const dotColor = isCurrent ? "var(--text-primary)" : "var(--text-tertiary)";
+        const fillColor = isCurrent ? "var(--text-primary)" : "var(--text-tertiary)";
         return (
           <span
             key={i}
@@ -90,12 +93,12 @@ export default function InterludeDots({
               // backwards fill uses 0% keyframe values during delay.
               opacity: 0.25,
               transform: "scale(0.9)",
-              // Transition only for dimming when NOT current.
-              // Disabled when current to avoid fighting the CSS animation.
-              transition: isCurrent ? "none" : "opacity 0.5s ease, transform 0.5s ease",
-              backgroundColor: dotColor,
+              // Transition: quick color fade-in when current (animation handles opacity/transform),
+              // full fade-out when NOT current.
+              transition: isCurrent ? "background-color 0.35s ease, box-shadow 0.35s ease" : "opacity 0.5s ease, transform 0.5s ease, background-color 0.5s ease, box-shadow 0.5s ease",
+              backgroundColor: fillColor,
               boxShadow: isCurrent
-                ? ("0 0 3px 1px " + dotColor)
+                ? "0 2px 10px rgba(var(--lyric-glow-rgb), 0.45), 0 0 4px rgba(var(--lyric-glow-rgb), 0.3)"
                 : "none",
               willChange: isCurrent ? "transform, opacity" : "auto",
             }}

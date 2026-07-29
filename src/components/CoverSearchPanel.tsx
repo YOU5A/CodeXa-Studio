@@ -138,7 +138,7 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
 
     try {
       if (source === "netease" || source === "both") {
-        const r = await window.electronAPI?.music?.searchCoverNetease(q, artist, album);
+        const r = await window.electronAPI?.music?.searchCoverNetease(q, "", "");
         if (r?.results) allResults.push(...r.results);
       }
     } catch (e) {
@@ -147,7 +147,7 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
 
     try {
       if (source === "qq" || source === "both") {
-        const r = await window.electronAPI?.music?.searchCoverQQ(q, artist, album);
+        const r = await window.electronAPI?.music?.searchCoverQQ(q, "", "");
         if (r?.results) allResults.push(...r.results);
       }
     } catch (e) {

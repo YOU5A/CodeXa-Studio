@@ -14,6 +14,9 @@ import type { LyricData, LyricLine, LyricsSettingsValues } from "./types";
 import { DEFAULT_LYRICS_SETTINGS } from "./types";
 import LyricBlock, { scaleByOffset, blurByOffset, opacityByOffset } from "./LyricBlock";
 
+import { GlassGlow } from "@/design-system/components";
+import { softenColorForGlow } from "@/utils/colorExtractor";
+
 const VIRTUALIZED_LYRIC_MIN_LINES = 90;
 const VIRTUALIZED_LYRIC_WINDOW_BEFORE = 24;
 const VIRTUALIZED_LYRIC_WINDOW_AFTER = 30;
@@ -90,6 +93,8 @@ export default function LyricDisplay({
   const [lyricGen, setLyricGen] = useState(0);
   const [heightVersion, setHeightVersion] = useState(0);
   const [coverGlowColor, setCoverGlowColor] = useState<string | null>(null);
+  const [coverGlowRgb, setCoverGlowRgb] = useState<string | null>(null);
+  const [dynamicGlowRgb, setDynamicGlowRgb] = useState<string[] | null>(null);
   // ── Resize tracking ──
 
   useLayoutEffect(() => {
@@ -145,24 +150,82 @@ export default function LyricDisplay({
     const handler = (e: Event) => {
       const color = (e as CustomEvent).detail as [number, number, number] | null;
       if (color) {
-        setCoverGlowColor("rgb(" + color[0] + "," + color[1] + "," + color[2] + ")");
+        const softened = softenColorForGlow(color);
+        setCoverGlowColor("rgb(" + softened[0] + "," + softened[1] + "," + softened[2] + ")");
+        setCoverGlowRgb(softened[0] + "," + softened[1] + "," + softened[2]);
       } else {
         setCoverGlowColor(null);
+        setCoverGlowRgb(null);
       }
     };
     const cached = localStorage.getItem("fluidCoverColor");
     if (cached) {
       try {
         const c = JSON.parse(cached) as [number, number, number];
-        setCoverGlowColor("rgb(" + c[0] + "," + c[1] + "," + c[2] + ")");
+        const softened = softenColorForGlow(c);
+        setCoverGlowColor("rgb(" + softened[0] + "," + softened[1] + "," + softened[2] + ")");
+        setCoverGlowRgb(softened[0] + "," + softened[1] + "," + softened[2]);
       } catch {}
     }
     window.addEventListener("fluidCoverColorChanged", handler);
     return () => window.removeEventListener("fluidCoverColorChanged", handler);
   }, []);
 
+  // Dynamic fluid color -> glow (top 3 blob colors)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const colors = (e as CustomEvent).detail as [number, number, number][] | null;
+      if (colors && colors.length > 0) {
+        setDynamicGlowRgb(colors.map(c => {
+          const s = softenColorForGlow(c);
+          return s[0] + "," + s[1] + "," + s[2];
+        }));
+      } else {
+        setDynamicGlowRgb(null);
+      }
+    };
+    const cached = localStorage.getItem("fluidDynamicColor");
+    if (cached) {
+      try {
+        const arr = JSON.parse(cached) as [number, number, number][];
+        if (Array.isArray(arr) && arr.length > 0) {
+          setDynamicGlowRgb(arr.map(c => {
+            const s = softenColorForGlow(c);
+            return s[0] + "," + s[1] + "," + s[2];
+          }));
+        }
+      } catch {}
+    }
+    window.addEventListener("fluidDynamicColorChanged", handler);
+    return () => window.removeEventListener("fluidDynamicColorChanged", handler);
+  }, []);
+
 
   const focusLine = scrollingMode ? scrollingFocusLine : currentLineIndex;
+
+  // ── Effective glow RGB based on fluid color mode ──
+  const effectiveGlowRgb = useMemo(() => {
+    let cm = null;
+    try {
+      const raw = localStorage.getItem("fluidSettings");
+      if (raw) cm = JSON.parse(raw).colorMode;
+    } catch {}
+    if (cm === "cover" && coverGlowRgb) return coverGlowRgb;
+    if ((cm === "dynamic" || cm === "auto") && dynamicGlowRgb && dynamicGlowRgb.length > 0) return dynamicGlowRgb[0];
+    if (coverGlowRgb) return coverGlowRgb;
+    return null;
+  }, [coverGlowRgb, dynamicGlowRgb]);
+
+  const effectiveGlowColor = effectiveGlowRgb ? "rgb(" + effectiveGlowRgb + ")" : null;
+
+  // Adaptive GlassGlow color based on effective glow RGB (softened = whitened pastel)
+  const glassGlowColor = effectiveGlowRgb
+    ? "rgba(" + effectiveGlowRgb + ", 0.18)"
+    : "rgba(255,255,255,0.15)";
+
+  // Secondary / tertiary glow RGB (from dynamic multi-color sampling)
+  const effectiveGlowRgb2 = dynamicGlowRgb && dynamicGlowRgb.length > 1 ? dynamicGlowRgb[1] : effectiveGlowRgb;
+  const effectiveGlowRgb3 = dynamicGlowRgb && dynamicGlowRgb.length > 2 ? dynamicGlowRgb[2] : effectiveGlowRgb;
 
   // ── Recalculate item heights ──
 
@@ -465,7 +528,7 @@ const manualBaseRef = useRef(0);
       <style>{`
         @keyframes interlude-dot-breathe {
           0%   { transform: scale(0.9); opacity: 0.25; }
-          50%  { transform: scale(1.08); opacity: 0.75; }
+          50%  { transform: scale(1.08); opacity: 0.5; }
           100% { transform: scale(0.9); opacity: 0.25; }
         }
         .interlude-inner {
@@ -492,18 +555,19 @@ const manualBaseRef = useRef(0);
         className={containerClass}
         style={{
           height: "100%",
-          overflow: "hidden",
           position: "relative",
           opacity: isVisible ? 1 : 0,
           transition: "opacity 0.2s ease",
           display: "flex",
           justifyContent: "center",
           textAlign: "center",
-          maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
-          WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+          overflow: "hidden",
           contain: "layout style",
           ["--lyric-timing-function" as string]: timingMap[settings.animationTiming] || "ease",
-          ["--lyric-glow" as string]: coverGlowColor || "var(--accent)",
+          ["--lyric-glow" as string]: effectiveGlowColor || "var(--accent)",
+          ["--lyric-glow-rgb" as string]: effectiveGlowRgb || "var(--accent-rgb)",
+          ["--lyric-glow-rgb-2" as string]: effectiveGlowRgb2 || "var(--accent-rgb)",
+          ["--lyric-glow-rgb-3" as string]: effectiveGlowRgb3 || "var(--accent-rgb)",
         }}
       >
         {allLines.map((line, i) => {
@@ -532,12 +596,16 @@ const manualBaseRef = useRef(0);
           const ds = tf.delay ? ` ${tf.delay}ms` : "";
 
           return (
-            <div
+            <GlassGlow
               key={i}
-              data-lyric-index={i}
+              glowColor={glassGlowColor}
+              glowRadius={350}
+              borderRadius={4}
               style={{
                 position: "absolute",
                 top: tf.top,
+                maxWidth: "calc(100% - 40px)",
+                padding: "2px 8px 1px 8px",
                 transform: `scale(${tf.scale})`,
                 filter: tf.blur > 0.5 ? `blur(${tf.blur}px)` : "none",
                 opacity: tf.opacity,
@@ -549,23 +617,27 @@ const manualBaseRef = useRef(0);
                 ].join(", "),
                 willChange: Math.abs(i - displayFocusLine) <= 3 ? "top, transform" : "auto",
                 transformOrigin: "center",
-                maxWidth: "calc(100% - 40px)",
               }}
             >
-              <LyricBlock
-                line={line}
-                offset={i - (isManual ? manualLine : focusLine)}
-                isCurrent={isCurrent}
-                currentTime={currentTime}
-                id={i}
-                getCurrentTime={getCurrentTime}
-                seekCounter={seekCounter}
-                playState={playState}
-                pageOpen={pageOpen}
-                onClick={onLineClick}
-                settings={settings}
-              />
-            </div>
+              <div
+                data-lyric-index={i}
+                style={{ margin: "-2px -8px -1px -8px" }}
+              >
+                <LyricBlock
+                  line={line}
+                  offset={i - (isManual ? manualLine : focusLine)}
+                  isCurrent={isCurrent}
+                  currentTime={currentTime}
+                  id={i}
+                  getCurrentTime={getCurrentTime}
+                  seekCounter={seekCounter}
+                  playState={playState}
+                  pageOpen={pageOpen}
+                  onClick={onLineClick}
+                  settings={settings}
+                />
+              </div>
+            </GlassGlow>
           );
         })}
       </div>

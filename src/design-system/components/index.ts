@@ -33,6 +33,9 @@ export type { GlassPanelProps } from "./GlassPanel";
 export { GlassProgressBar } from "./GlassProgressBar";
 export type { GlassProgressBarProps, ProgressColor } from "./GlassProgressBar";
 
+export { GlassSeekBar } from "./GlassSeekBar";
+export type { GlassSeekBarProps } from "./GlassSeekBar";
+
 export { GlassBadge } from "./GlassBadge";
 export type { GlassBadgeProps, BadgeVariant } from "./GlassBadge";
 

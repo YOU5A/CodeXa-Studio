@@ -84,6 +84,7 @@ export class FluidRenderer {
   private targetFps = 60;
   private frameInterval = 1000 / 60;
   private lastFrameTimestamp = 0;
+  private dynamicColorElapsed = 0;
 
   // ---------- 构造与生命周期 ----------
 
@@ -291,6 +292,32 @@ export class FluidRenderer {
     this.frameInterval = 1000 / this.targetFps;
   }
 
+  /** Sample top 3 blob colors by radius*opacity, emit array (throttled ~1.5s) */
+  private sampleAndEmitDynamicColor(dt: number): void {
+    this.dynamicColorElapsed += dt;
+    if (this.dynamicColorElapsed < 1500) return;
+    this.dynamicColorElapsed = 0;
+
+    if (this.blobs.length === 0) return;
+
+    // Rank blobs by radius * opacity, take top 3
+    const ranked = [...this.blobs]
+      .map(b => ({ color: b.color, weight: b.radius * b.opacity }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 3);
+
+    const colors: [number, number, number][] = ranked.map(r => r.color);
+    // Pad if fewer than 3 blobs
+    while (colors.length < 3) {
+      colors.push([...colors[colors.length - 1]]);
+    }
+
+    try {
+      localStorage.setItem('fluidDynamicColor', JSON.stringify(colors));
+    } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('fluidDynamicColorChanged', { detail: colors }));
+  }
+
   // ---------- 主循环 ----------
 
   private loop = (timestamp: number): void => {
@@ -311,6 +338,7 @@ export class FluidRenderer {
     if (dt > 0) {
       this.updateBlobs(dt);
       this.render();
+      this.sampleAndEmitDynamicColor(dt);
     }
 
     this.animFrameId = requestAnimationFrame(this.loop);

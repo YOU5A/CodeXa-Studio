@@ -5,14 +5,14 @@
  *
  * Apple Liquid Glass inspired UI primitives.
  * All components consume the existing CSS variable theme system
- * managed by useTheme() — no theme state duplication.
+ * managed by useTheme() ? no theme state duplication.
  *
  * Usage:
  *   import { GlassSurface, GlassCard, GlassPanel } from '@/design-system';
  *   import { materials, springDefault } from '@/design-system';
  */
 
-/* ─── Tokens ─── */
+/* ??? Tokens ??? */
 export {
   CSS_VARS,
   glass,
@@ -27,11 +27,11 @@ export {
 } from './tokens';
 export type { GlassTier, BlurConfig } from './tokens';
 
-/* ─── Materials ─── */
+/* ??? Materials ??? */
 export { materials, getMaterial, materialToStyle, generateGlassSeed } from './materials';
 export type { GlassMaterial, GlassSeed } from './materials';
 
-/* ─── Animations ─── */
+/* ??? Animations ??? */
 export {
   springDefault,
   springSnappy,
@@ -61,7 +61,7 @@ export {
   glassFocusRingOut,
 } from './animations';
 
-/* ─── Components ─── */
+/* ??? Components ??? */
 export {
   GlassSurface,
   GlassCard,
@@ -72,6 +72,7 @@ export {
   GlassSelect,
   GlassToggle,
   GlassProgressBar,
+  GlassSeekBar,
   GlassBadge,
   GlassEmptyState,
   GlassGlow,
@@ -95,6 +96,7 @@ export type {
   SelectOption,
   GlassToggleProps,
   GlassProgressBarProps,
+  GlassSeekBarProps,
   ProgressColor,
   GlassBadgeProps,
   BadgeVariant,
@@ -106,7 +108,7 @@ export type {
   GlassScrollAreaProps,
 } from './components';
 
-/* ─── Layouts ─── */
+/* ??? Layouts ??? */
 export {
   GlassBackground,
   GlassLayout,

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Music, ChevronUp, Globe, Image, Save, Trash2 } from "lucide-react";
 import { GlassCard, GlassButton } from "@/design-system/components";
@@ -10,6 +11,24 @@ export default function CoverManager(props: CoverManagerProps) {
     setCoverMenuOpen, setCoverMenuHover, setCoverSearchOpen,
     pickCover, applyCover, saveCover, removeCover, tx,
   } = props;
+
+  // Blur transition on expand/collapse ? instant blur then smooth clear
+  const buttonsRef = useRef<HTMLDivElement>(null);
+  const prevOpen = useRef(coverMenuOpen);
+  useLayoutEffect(() => {
+    if (prevOpen.current === coverMenuOpen) return;
+    prevOpen.current = coverMenuOpen;
+    const el = buttonsRef.current;
+    if (!el) return;
+    // Phase 1: apply blur instantly (no transition)
+    el.style.transition = "none";
+    el.style.filter = "blur(6px)";
+    // Force layout so the blur takes effect before we animate out
+    void el.offsetHeight;
+    // Phase 2: smoothly clear the blur over 0.35s
+    el.style.transition = "filter 0.35s ease";
+    el.style.filter = "blur(0px)";
+  }, [coverMenuOpen]);
 
   return (
     <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: space[3] }}>
@@ -70,11 +89,17 @@ export default function CoverManager(props: CoverManagerProps) {
       <AnimatePresence>
         {coverMenuOpen && (
           <motion.div
+            ref={buttonsRef}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 10px" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              padding: "4px 8px",
+            }}
           >
             <GlassButton variant="secondary" size="sm" inline={false} onClick={() => setCoverSearchOpen(true)}
               style={{ justifyContent: "center", padding: "3px 10px", fontSize: 11 }}>

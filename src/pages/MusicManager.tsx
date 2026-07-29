@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
@@ -142,14 +142,26 @@ en: {
   },
 };
 
+
+// ?? Session-persistent state (survives page switching, resets on app restart) ??
+let sessionState: {
+  folder: string;
+  files: string[];
+  scanned: boolean;
+} = {
+  folder: "",
+  files: [],
+  scanned: false,
+};
+
 export default function MusicManager({ onNavigate, fluidSettings: externalSettings, onFluidSettingsChange }: { onNavigate?: (page: Page) => void; fluidSettings?: FluidSettingsValues; onFluidSettingsChange?: (s: FluidSettingsValues) => void }) {
   const { lang } = useLanguage();
   const tx = t[lang];
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
-  const [folder, setFolder] = useState("");
-  const [files, setFiles] = useState<string[]>([]);
+  const [folder, setFolder] = useState(sessionState.folder);
+  const [files, setFiles] = useState<string[]>(sessionState.files);
   const [selectedFile, setSelectedFile] = useState("");
   const [metadata, setMetadata] = useState<MusicMetadata | null>(null);
   const [coverB64, setCoverB64] = useState<string | null>(null);
@@ -182,7 +194,16 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const volumeRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const toggleRef = useRef<() => void>(() => {});
-  const hasScanned = useRef(false);
+  const hasScanned = useRef(sessionState.scanned);
+  const scrollAnimRef = useRef<number | null>(null);
+  const scrollGateRef = useRef({ time: 0, fp: "" });
+  const userScrolledRef = useRef(false);
+  const scrollListenerRef = useRef<(() => void) | null>(null);
+
+  // Sync state to session cache (survives page navigation)
+  useEffect(() => { sessionState.folder = folder; }, [folder]);
+  useEffect(() => { sessionState.files = files; }, [files]);
+  useEffect(() => { sessionState.scanned = hasScanned.current; });
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [progressHover, setProgressHover] = useState(false);
@@ -245,8 +266,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   useEffect(() => {
     const init = async () => {
       try {
-        const saved = localStorage.getItem("music_folder");
-        if (saved && !hasScanned.current) { hasScanned.current = true; setFolder(saved); doScan(saved); }
+        // If already scanned this session, restore from cache without re-scanning
+        if (sessionState.scanned && sessionState.files.length > 0) {
+          // Already have cached data, no need to re-scan
+        } else {
+          const saved = localStorage.getItem("music_folder");
+          if (saved && !hasScanned.current) { hasScanned.current = true; setFolder(saved); doScan(saved); }
+        }
       } catch {}
       if (playingFile) {
         setSelectedFile(playingFile);
@@ -263,56 +289,88 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         setNewCoverPath(""); setCoverPreviewB64(null);
         const fname = playingFile.split("\\").pop() || playingFile;
         setRenameName(fname.replace(/\.[^.]+$/, ""));
+        requestAnimationFrame(() => scrollToFile(playingFile));
       }
     };
     init();
   }, []);
 
-  // Scroll selected file into center of list
-  const scrollAnimRef = useRef<number | null>(null);
+  // Scroll selected file into center of list (logic refactored - see below)
 
   const scrollToFile = (fp: string) => {
+    const now = performance.now();
+    if (scrollGateRef.current.fp === fp && now - scrollGateRef.current.time < 80) return;
+    scrollGateRef.current = { time: now, fp };
+
     if (!fp || !listRef.current) return;
     const el = listRef.current.querySelector(`[data-filepath="${CSS.escape(fp)}"]`) as HTMLElement | null;
     if (!el || !listRef.current) return;
     const container = listRef.current;
 
-    // Cancel any in-progress animation
     if (scrollAnimRef.current !== null) {
       cancelAnimationFrame(scrollAnimRef.current);
       scrollAnimRef.current = null;
     }
 
-    // Direct calculation: position the element at the vertical center of the card.
-    // el.getBoundingClientRect().top - container.getBoundingClientRect().top
-    // = visual distance from card top to element top (includes scroll offset and padding).
-    // Add scrollTop to get the element"s offset within the full scrollable content.
+    // Cleanup previous wheel listener
+    if (scrollListenerRef.current) {
+      scrollListenerRef.current();
+      scrollListenerRef.current = null;
+    }
+
+    // Fix: account for container padding-top in offset calculation
+    const cs = getComputedStyle(container);
+    const padTop = parseFloat(cs.paddingTop) || 0;
+
     const visualTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
-    const contentOffset = visualTop + container.scrollTop;
+    const contentOffset = visualTop + container.scrollTop - padTop;
     const target = contentOffset - container.clientHeight / 2 + el.getBoundingClientRect().height / 2;
     const maxScroll = container.scrollHeight - container.clientHeight;
     const clamped = Math.max(0, Math.min(Math.round(target), maxScroll));
 
     if (Math.abs(container.scrollTop - clamped) < 1) return;
 
-    // Smooth animation to target
+    // Reset user scroll flag before animating
+    userScrolledRef.current = false;
+
+    // Listen for user scroll (wheel) during animation
+    const onUserScroll = () => {
+      userScrolledRef.current = true;
+      if (scrollAnimRef.current !== null) {
+        cancelAnimationFrame(scrollAnimRef.current);
+        scrollAnimRef.current = null;
+      }
+      if (scrollListenerRef.current) {
+        scrollListenerRef.current();
+        scrollListenerRef.current = null;
+      }
+    };
+    container.addEventListener("wheel", onUserScroll, { passive: true });
+    scrollListenerRef.current = () => container.removeEventListener("wheel", onUserScroll);
+
+    // Smooth animation with easeOutCubic (faster initial response)
     const startScroll = container.scrollTop;
     const distance = clamped - startScroll;
-    const duration = Math.min(600, Math.max(150, Math.abs(distance) * 0.5));
+    const duration = Math.min(350, Math.max(100, Math.abs(distance) * 0.35));
     const startTime = performance.now();
 
-    const easeInOutCubic = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
+    const animate = (now_: number) => {
+      if (userScrolledRef.current) {
+        scrollAnimRef.current = null;
+        if (scrollListenerRef.current) { scrollListenerRef.current(); scrollListenerRef.current = null; }
+        return;
+      }
+      const elapsed = now_ - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      container.scrollTop = Math.round(startScroll + distance * easeInOutCubic(progress));
+      container.scrollTop = Math.round(startScroll + distance * easeOutCubic(progress));
       if (progress < 1) {
         scrollAnimRef.current = requestAnimationFrame(animate);
       } else {
         container.scrollTop = clamped;
         scrollAnimRef.current = null;
+        if (scrollListenerRef.current) { scrollListenerRef.current(); scrollListenerRef.current = null; }
       }
     };
 
@@ -338,8 +396,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     if (!d) return;
     const r = await window.electronAPI?.python.call("music.scan", { folder: d });
     if (r && !r.error) {
-      setFiles(r.files ?? []);
-      setPlaylist(r.files ?? []);
+      const newFiles = r.files ?? [];
+      setFiles(newFiles);
+      setPlaylist(newFiles);
+      // Update session cache so re-entering doesn't re-scan
+      sessionState.files = newFiles;
+      sessionState.folder = d;
+      sessionState.scanned = true;
       showToast(tx.scanResult.replace("{n}", String(r.count ?? 0)), "info");
     }
   };
@@ -421,7 +484,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     if (fp !== playingFile && playingFile) {
       revertTimerRef.current = setTimeout(() => {
         const current = playingFileRef.current;
-        if (current) setSelectedFile(current);
+        if (current) {
+          setSelectedFile(current);
+          if (!userScrolledRef.current) scrollToFile(current);
+        }
         revertTimerRef.current = null;
       }, 1500);
     }
@@ -450,6 +516,15 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       window.removeEventListener("mouseup", onUp);
     };
   }, [isDraggingVolume]);
+
+  // Detect user manual scroll (wheel) on file list ? used to suppress auto-scroll
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const onWheel = () => { userScrolledRef.current = true; };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
 
   // Window blur: after 5s, scroll list to selected file
   useEffect(() => {
@@ -744,26 +819,36 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         height: "100%",
       }}
     >
-      {/* Title + Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", gap: space[3], flexShrink: 0 }}>
-        <h1 style={{ fontSize: fontSizes["2xl"], fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+      {/* Toolbar — NCM-style, transparent background */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: space[2],
+        padding: "10px 0", flexShrink: 0,
+      }}>
+        <h1 style={{ fontSize: fontSizes["2xl"], fontWeight: 600, color: "var(--text-primary)", margin: 0, marginRight: space[1] }}>
           {tx.title}
         </h1>
-        <GlassBadge variant="accent" size="sm">{files.length} {lang === "zh" ? "个文件" : "files"}</GlassBadge>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: space[2], marginRight: space[4] }}>
-          <GlassButton variant="primary" onClick={browse} size="md">
-            <FolderOpen size={14} /> {tx.browse}
-          </GlassButton>
-          <GlassButton variant="secondary" onClick={() => doScan()} size="md">
-            <Search size={14} /> {tx.scan}
-          </GlassButton>
-          <GlassButton variant="secondary" onClick={() => setFluidSettingsOpen(true)} size="md">
-            <Settings size={14} /> {tx.settings}
-          </GlassButton>
-        </div>
+        <GlassButton variant="ghost" size="sm" onClick={browse}>
+          <FolderOpen size={14} />
+          <span style={{ marginLeft: 4 }}>{tx.browse}</span>
+        </GlassButton>
+        <GlassInput
+          value={folder}
+          onChange={(e) => setFolder((e.target as HTMLInputElement).value)}
+          placeholder={lang === "zh" ? "选择音乐文件夹..." : "Select music folder..."}
+          style={{ flex: 1, minWidth: 120, fontSize: fontSizes.xs }}
+        />
+        <GlassButton variant="primary" size="sm" onClick={() => doScan()} disabled={!folder}>
+          <Search size={14} />
+          <span style={{ marginLeft: 4 }}>{tx.scan}</span>
+        </GlassButton>
+        {files.length > 0 && (
+          <GlassBadge variant="accent">{files.length} {lang === "zh" ? "个文件" : "files"}</GlassBadge>
+        )}
+        <GlassButton variant="ghost" size="sm" onClick={() => setFluidSettingsOpen(true)}>
+          <Settings size={14} />
+          <span style={{ marginLeft: 4 }}>{tx.settings}</span>
+        </GlassButton>
       </div>
-
       {/* Main Content */}
       <>
           <div style={{

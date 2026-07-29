@@ -5,7 +5,7 @@
  * 所有 pill 按钮统一使用此组件。
  */
 
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
 
 export interface GlassPillButtonProps {
   children?: ReactNode;
@@ -26,6 +26,9 @@ export function GlassPillButton({
   style,
   title,
 }: GlassPillButtonProps) {
+  // Stable random seed per mount ? avoids angle jump during re-renders
+  const seedRef = useRef<number>(112 + Math.random() * 56);
+
   const setGlow = useCallback((el: HTMLElement, cx: number, cy: number) => {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
@@ -61,7 +64,7 @@ export function GlassPillButton({
         WebkitBackdropFilter: "blur(32px) saturate(2.2)",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
-        "--glass-angle": (105 + Math.random() * 60) + "deg",
+        "--glass-angle": seedRef.current + "deg",
         "--glass-highlight-opacity": "0.08",
         "--glass-noise-opacity": "0.01",
         transition: "all var(--transition-fast)",

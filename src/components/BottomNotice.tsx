@@ -5,7 +5,7 @@
  * 样式基于 GlassTooltip 模板，圆角匹配 radii.lg。
  */
 
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 
@@ -28,6 +28,15 @@ const springTransition = {
 };
 
 export function BottomNotice({ show, children, duration = 2000, onDone }: BottomNoticeProps) {
+  // Auto-dismiss after duration
+  useEffect(() => {
+    if (!show) return;
+    const timer = setTimeout(() => {
+      onDone?.();
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [show, duration, onDone]);
+
   return createPortal(
     <AnimatePresence onExitComplete={onDone}>
       {show && (

@@ -1,4 +1,5 @@
 import { Music, Image } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { GlassCard, GlassToggle } from "@/design-system/components";
 import { fontSizes } from "@/design-system/tokens";
 import type { NcmMetadataPanelProps } from "./types";
@@ -29,8 +30,16 @@ export default function MetadataPanel({
         <span>{metadataLabel}</span>
       </div>
 
-      {info && !info.error ? (
-        <div style={{ padding: 12 }}>
+      <AnimatePresence mode="wait">
+        {info && !info.error ? (
+        <motion.div
+          key="meta"
+          initial={{ opacity: 0, filter: "blur(6px)" }}
+          animate={{ opacity: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, filter: "blur(6px)" }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{ padding: 12 }}
+        >
           <div style={{ display: "flex", gap: 12 }}>
             {/* Cover preview */}
             {coverBase64 ? (
@@ -102,15 +111,22 @@ export default function MetadataPanel({
               {writeTagsLabel}
             </span>
           </div>
-        </div>
+        </motion.div>
       ) : (
-        <div style={{
+        <motion.div
+          key="empty"
+          initial={{ opacity: 0, filter: "blur(6px)" }}
+          animate={{ opacity: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, filter: "blur(6px)" }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{
           padding: 24, textAlign: "center",
           color: "var(--text-tertiary)", fontSize: fontSizes.sm,
         }}>
           {info?.error ? info.error : noMetadataText}
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </GlassCard>
   );
 }

@@ -440,7 +440,7 @@ export default function Win32Priority(_props: Props) {
       </div>
 
       {/* ─── Preset Tooltip ─── */}
-      <BottomNotice show={presetTooltip !== null} onDone={() => setPresetTooltip(null)}>
+      <BottomNotice key={presetTooltip || "empty"} show={presetTooltip !== null} duration={2000} onDone={() => setPresetTooltip(null)}>
         <span style={{ color: "var(--accent)", fontFamily: "monospace", fontWeight: 600 }}>
           0x{presetTooltip}
         </span>

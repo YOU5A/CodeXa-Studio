@@ -50,7 +50,7 @@ export function useMouseGlow(
       const px = ((clientX - rect.left) / rect.width) * 100;
       const py = ((clientY - rect.top) / rect.height) * 100;
 
-      overlay.style.background = `radial-gradient(${glowRadius}px circle at ${px}% ${py}%, ${glowColor}, transparent 60%)`;
+      overlay.style.background = `radial-gradient(${glowRadius}px circle at ${px}% ${py}%, ${glowColor}, transparent 85%)`;
       overlay.style.opacity = "1";
       glowingRef.current = true;
     },

@@ -12,11 +12,12 @@ import { radii } from "../tokens";
 interface GlassTooltipProps {
   text: string;
   children: ReactNode;
+  placement?: "right" | "left";
 }
 
 const SHOW_DELAY = 400;
 
-export function GlassTooltip({ text, children }: GlassTooltipProps) {
+export function GlassTooltip({ text, children, placement = "right" }: GlassTooltipProps) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,8 +66,9 @@ export function GlassTooltip({ text, children }: GlassTooltipProps) {
         <div
           style={{
             position: "fixed",
-            left: pos.x + 14,
+            left: placement === "left" ? pos.x - 14 : pos.x + 14,
             top: pos.y - 32,
+            transform: placement === "left" ? "translateX(-100%)" : "none",
             zIndex: 99999,
             pointerEvents: "none",
             backdropFilter: "blur(32px) saturate(2.2)",

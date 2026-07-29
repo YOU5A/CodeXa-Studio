@@ -465,7 +465,7 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
 // ── Cover Search: Netease ──
 ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) => {
   try {
-    const keywords = [title, artist, album].filter(Boolean).join(" ");
+    const keywords = title;
     const searchRes = await cloudsearch({ keywords, type: 1, limit: 50 });
     const songs = searchRes?.body?.result?.songs;
     if (!songs || songs.length === 0) return { results: [] };
@@ -476,8 +476,8 @@ ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) 
       const picUrl = s?.al?.picUrl;
       if (!picUrl || seen.has(picUrl)) continue;
       const songArtists = (s.ar || []).map(a => a.name || "");
-      const score = scoreMatch(s.name, songArtists, title, artist);
-      if (score < 0.3) continue;
+      const score = scoreMatch(s.name, songArtists, title, "");
+      if (score < 0.05) continue;
       seen.add(picUrl);
       results.push({
         source: "netease",
@@ -502,7 +502,7 @@ ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) 
 // ── Cover Search: QQ Music ──
 ipcMain.handle("music:searchCoverQQ", async (_event, title, artist, album) => {
   try {
-    const query = [title, artist, album].filter(Boolean).join(" ");
+    const query = title;
     const searchBody = {
       req_0: {
         module: "music.search.SearchCgiService",
@@ -521,8 +521,8 @@ ipcMain.handle("music:searchCoverQQ", async (_event, title, artist, album) => {
       const albumMid = s?.album?.mid;
       if (!albumMid || seen.has(albumMid)) continue;
       const songArtists = (s.singer || []).map(si => si.name || "");
-      const score = scoreMatch(s.name || s.title, songArtists, title, artist);
-      if (score < 0.3) continue;
+      const score = scoreMatch(s.name || s.title, songArtists, title, "");
+      if (score < 0.05) continue;
       seen.add(albumMid);
       const coverUrl = `https://y.qq.com/music/photo_new/T002R800x800M000${albumMid}.jpg`;
       results.push({
@@ -547,7 +547,7 @@ ipcMain.handle("music:searchCoverQQ", async (_event, title, artist, album) => {
 // ── Cover Search: iTunes ──
 ipcMain.handle("music:searchCoverITunes", async (_event, title, artist, album) => {
   try {
-    const query = encodeURIComponent([title, artist, album].filter(Boolean).join(" "));
+    const query = encodeURIComponent(title);
     const url = `https://itunes.apple.com/search?term=${query}&entity=song&limit=20`;
     const respText = await httpRequest(url, {
       userAgent: "CodeXaStudio/1.3",
@@ -562,8 +562,8 @@ ipcMain.handle("music:searchCoverITunes", async (_event, title, artist, album) =
       const artUrl = r.artworkUrl100;
       if (!artUrl || seen.has(artUrl)) continue;
       const songArtists = [{ name: r.artistName || "" }];
-      const score = scoreMatch(r.trackName, songArtists, title, artist);
-      if (score < 0.25) continue;
+      const score = scoreMatch(r.trackName, songArtists, title, "");
+      if (score < 0.05) continue;
       seen.add(artUrl);
       // Replace 100x100 with 600x600 for higher quality
       const coverUrl = artUrl.replace(/100x100bb/, "600x600bb");

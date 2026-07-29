@@ -1,4 +1,5 @@
 import { FileAudio, CheckSquare, Square } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { GlassCard, GlassButton, GlassScrollArea, GlassGlow } from "@/design-system/components";
 import { fontSizes } from "@/design-system/tokens";
 import type { NcmFileListProps } from "./types";
@@ -39,10 +40,19 @@ export default function FileList({
           }}>
             {noFilesLabel}
           </div>
-        ) : files.map((file, i) => {
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {files.map((file, i) => {
           const isSelected = selectedFile?.filepath === file.filepath;
           const isChecked = selectedIndices.has(i);
           return (
+            <motion.div
+              key={file.filepath}
+              initial={{ opacity: 0, filter: "blur(6px)", y: -4 }}
+              animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+              exit={{ opacity: 0, filter: "blur(6px)", y: -4 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
             <GlassGlow
               key={file.filepath}
               glowColor="rgba(255,255,255,0.15)"
@@ -78,8 +88,11 @@ export default function FileList({
               </span>
             </div>
             </GlassGlow>
+            </motion.div>
           );
         })}
+          </AnimatePresence>
+        )}
           </div>
       </GlassScrollArea>
 
