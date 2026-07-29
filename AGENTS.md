@@ -1,6 +1,6 @@
 <!--
-  AGENTS.md — CodeXa Studio
-  重构于 2026-07-27
+  AGENTS.md � CodeXa Studio
+  重构于 2026-07-29
 -->
 
 # AGENTS.md — CodeXa Studio
@@ -9,7 +9,7 @@
 **作者:** YOU5A / Y0USA
 **技术栈:** TypeScript 6 · React 19 · Tailwind CSS 4 · Framer Motion 12 · Electron 42 · .NET 10
 **仓库:** https://github.com/YOU5A/CodeXa-Studio
-**版本:** 2.1.0
+**版本:** 2.1.5
 **许可证:** AGPL-3.0
 
 ---
@@ -32,10 +32,7 @@
 
 ### 文件删除安全规则
 
-- **严禁批量删除。** 禁止: del /s、
-d /s、
-mdir /s、Remove-Item -Recurse、
-m -rf。
+- **严禁批量删除。** 禁止: del /s、rd /s、rmdir /s、Remove-Item -Recurse、rm -rf。
 - 只能逐个删除明确路径的文件。需批量删除时停止操作，交用户处理。
 
 ---
@@ -98,28 +95,64 @@ CodeXa-Studio/
 ├── ncm-studio/                  # NCM 解码器（.NET 类库 + CLI + 测试）
 │   ├── NcmStudio.Core.csproj    # 核心类库
 │   ├── Audio/                   # 音频格式检测/流提取/封装
+│   │   ├── AudioFormatDetector.cs
+│   │   ├── AudioStreamExtractor.cs
+│   │   ├── FlacWriter.cs
+│   │   └── Mp3Writer.cs
 │   ├── Crypto/                  # AES-ECB/RC4/密钥派生
+│   │   ├── AesEcbDecryptor.cs
+│   │   ├── NcmKeyDerivation.cs
+│   │   ├── NcmStreamCipher.cs
+│   │   └── Rc4Cipher.cs
 │   ├── Decoder/                 # NCM 文件解析/流读取/解码
+│   │   ├── NcmDecoder.cs
+│   │   ├── NcmFileParser.cs
+│   │   └── NcmStreamReader.cs
 │   ├── Metadata/                # 元数据解析/封面提取/标签
+│   │   ├── CoverArtExtractor.cs
+│   │   ├── NcmMetadataParser.cs
+│   │   └── TagWriter.cs
 │   ├── Models/                  # 数据模型
+│   │   ├── AudioFormat.cs
+│   │   ├── DecryptResult.cs
+│   │   ├── NcmFileHeader.cs
+│   │   └── NcmMetadata.cs
 │   ├── Utils/                   # 哈希校验
+│   │   └── HashVerifier.cs
 │   ├── NcmStudio.Cli/           # 命令行工具
+│   │   ├── NcmStudio.Cli.csproj
+│   │   └── Program.cs
 │   └── NcmStudio.Tests/         # 单元测试（xUnit）
+│       ├── NcmStudio.Tests.csproj
+│       ├── AesEcbDecryptorTests.cs
+│       ├── AudioFormatDetectorTests.cs
+│       ├── HashVerifierTests.cs
+│       ├── NcmFileParserTests.cs
+│       ├── NcmMetadataParserTests.cs
+│       └── Rc4CipherTests.cs
+│
+├── diag-cpu/                    # CPU 诊断小工具 (.NET)
+│   ├── CpuDiag.csproj
+│   └── Program.cs
 │
 ├── resources/                   # Python 回退脚本
 │   ├── Win32PrioritySeparation.pyw
 │   ├── AppCpuPriorityTools.pyw
 │   └── File_Music.pyw
 │
-├── diag-cpu/                    # CPU 诊断小工具 (.NET)
 ├── data/                        # 运行时数据（gitignore 排除）
+├── bridge/                      # Python 桥接缓存
+├── demos/                       # 演示页面
+│   └── demo.html
+├── public/                      # 静态资源
+│   └── icon.png
 │
 └── src/                         # React 19 前端
     ├── main.tsx                  # ReactDOM 入口
     ├── App.tsx                   # 根组件：路由、布局、Provider 嵌套
-    ├── version.ts                # 版本号 (2.1.0)
+    ├── version.ts                # 版本号 (2.1.5)
     │
-    ├── types/index.ts            # 全局类型：SystemInfo · RpcMethod(31) · ElectronAPI
+    ├── types/index.ts            # 全局类型：SystemInfo · RpcMethod(34) · ElectronAPI
     ├── constants/                # storage-keys · default-settings
     ├── styles/globals.css        # Tailwind CSS 4 + 8 套主题
     ├── utils/                    # animations · colorExtractor
@@ -128,11 +161,11 @@ CodeXa-Studio/
     │   ├── index.ts
     │   ├── tokens/               # colors · blur · spacing
     │   ├── materials/            # ultraThin → regular → thick → elevated
-    │   ├── components/           # 17 个 Glass 组件
+    │   ├── components/           # 19 个 Glass 组件
     │   ├── layouts/              # GlassBackground · GlassLayout · GlassMain
     │   └── animations/           # springs · glass variants
     │
-    ├── components/               # 应用级组件（12 个）
+    ├── components/               # 应用级组件（11 个）
     │   ├── TitleBar.tsx
     │   ├── Sidebar.tsx           # 侧边导航 + 预加载
     │   ├── PageLayout.tsx
@@ -145,13 +178,18 @@ CodeXa-Studio/
     │   ├── FluidSettingsPanel.tsx
     │   ├── DevLogPanel.tsx
     │   └── FluidBackground/      # Canvas 2D + SVG 流体背景
+    │       ├── index.tsx
+    │       ├── renderer.ts
+    │       ├── config.ts
+    │       ├── presets.ts
+    │       ├── SvgFluidRenderer.tsx
+    │       └── SvgFluidRenderer.css
     │
-    ├── contexts/                 # 5 个 Context
-    │   ├── ThemeProvider (useTheme.tsx)
-    │   ├── LanguageContext.tsx
-    │   ├── ToastContext.tsx
+    ├── contexts/                 # 4 个 Context
     │   ├── ConfirmContext.tsx
-    │   └── MusicPlayerContext.tsx
+    │   ├── LanguageContext.tsx
+    │   ├── MusicPlayerContext.tsx
+    │   └── ToastContext.tsx
     │
     ├── hooks/                    # 4 个 Hook
     │   ├── useTheme.tsx          # 8 套主题 + CSS 变量注入
@@ -167,11 +205,40 @@ CodeXa-Studio/
     │   ├── NcmStudio.tsx
     │   ├── BackupCenter.tsx
     │   ├── Settings.tsx
-    │   ├── music/                # 音乐子模块 (FileList, PlayerBar, TagEditor, CoverManager, RenamePanel)
-    │   ├── ncm/                  # NCM 子模块 (FileList, DecodeBar, MetadataPanel)
-    │   └── settings/             # 设置子模块 (Appearance, Behavior, Interface, About)
+    │   ├── music/                # 音乐子模块
+    │   │   ├── FileList.tsx
+    │   │   ├── PlayerBar.tsx
+    │   │   ├── TagEditor.tsx
+    │   │   ├── CoverManager.tsx
+    │   │   ├── RenamePanel.tsx
+    │   │   └── types.ts
+    │   ├── ncm/                  # NCM 子模块
+    │   │   ├── FileList.tsx
+    │   │   ├── DecodeBar.tsx
+    │   │   ├── MetadataPanel.tsx
+    │   │   └── types.ts
+    │   └── settings/             # 设置子模块
+    │       ├── AppearanceSection.tsx
+    │       ├── BehaviorSection.tsx
+    │       ├── InterfaceSection.tsx
+    │       ├── AboutSection.tsx
+    │       └── shared.ts
     │
-    └── lyrics/                   # 歌词子系统（9 个文件）
+    ├── developer-unlock/         # 开发者解锁系统
+    │   ├── index.ts
+    │   ├── types.ts
+    │   ├── DeveloperUnlockService.ts
+    │   ├── UnlockGameOverlay.tsx
+    │   ├── LetterParticle.tsx
+    │   ├── UnlockStorage.ts
+    │   └── useDevUnlock.tsx
+    │
+    ├── effects/                  # 视觉效果
+    │   └── SidebarAnimations/
+    │
+    └── lyrics/                   # 歌词子系统（8 个文件）
+        ├── index.ts
+        ├── types.ts
         ├── LyricParser.ts
         ├── LyricManager.tsx
         ├── LyricDisplay.tsx
@@ -210,40 +277,32 @@ React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Pyth
 | 类别 | 数量 | 方法 | .NET 实现 |
 |------|------|------|-----------|
 | 系统信息 | 1 | system.info | SystemInfoService.cs |
-| 注册表 | 3 | 
-egistry.read / write / ackup | RegistryService.cs |
-| 管理员 | 2 | dmin.check / 
-estart | AdminService.cs |
-| 优先级 | 6 | priority.list / dd / edit / delete / export / import_config | PriorityService.cs |
-| 音乐 | 10 | music.scan / get_metadata / save_tags / extract_cover / pply_cover / 
-emove_cover / 
-ead_cover_file / save_cover_file / 
-ename / get_lyrics | MusicService.cs |
-| NCM | 4 | 
-cm.list / get_info / decode / atch_decode | NcmService.cs |
-| 备份 | 6 | ackup.list / dir / export / 
-estore / delete / clear_all | BackupService.cs |
+| 注册表 | 3 | registry.read / write / backup | RegistryService.cs |
+| 管理员 | 2 | admin.check / restart | AdminService.cs |
+| 优先级 | 6 | priority.list / add / edit / delete / export / import_config | PriorityService.cs |
+| 音乐 | 10 | music.scan / get_metadata / save_tags / extract_cover / apply_cover / remove_cover / read_cover_file / save_cover_file / rename / get_lyrics | MusicService.cs |
+| NCM | 4 | ncm.list / get_info / decode / batch_decode | NcmService.cs |
+| 备份 | 6 | backup.list / dir / export / restore / delete / clear_all | BackupService.cs |
 | 配置 | 2 | config.get / set | ConfigService.cs |
 
 ---
 
 ## 四、前端体系
 
-### 4.1 Context（5 个）
+### 4.1 Context（4 个）
 
 | 名称 | 用途 |
 |------|------|
-| ThemeProvider | 8 套主题 + localStorage + CSS 变量注入 + auto 跟随系统 |
-| LanguageContext | 中英文切换 · 同步 Bridge |
-| ToastContext | 全局 Toast (success/warning/error/info) |
 | ConfirmContext | 全局确认对话框 |
+| LanguageContext | 中英文切换 · 同步 Bridge |
 | MusicPlayerContext | HTML5 Audio 播放器 + 播放列表管理 |
+| ToastContext | 全局 Toast (success/warning/error/info) |
 
 ### 4.2 Hook（4 个）
 
 | 名称 | 用途 |
 |------|------|
-| useTheme | 主题读写 · updateSettings · resetSettings · toggleTheme |
+| useTheme | 主题读写 · updateSettings · resetSettings · toggleTheme · 8 套主题 + CSS 变量注入 |
 | useBridge | RPC 调用 · 文件夹/文件对话框 · 文件保存 |
 | useMouseGlow | 鼠标光晕追踪 |
 | useActivityLog | 活动日志记录与导出 |
@@ -254,11 +313,10 @@ estore / delete / clear_all | BackupService.cs |
 |----------|------|------|
 | dashboard | Dashboard.tsx | 系统概览仪表盘 |
 | win32priority | Win32Priority.tsx | Win32 优先级分离 |
-| ppcpupriority | AppCpuPriority.tsx | 进程 CPU 优先级规则 |
+| appcpupriority | AppCpuPriority.tsx | 进程 CPU 优先级规则 |
 | musicmanager | MusicManager.tsx | 音乐标签/封面/播放 |
-| 
-cmstudio | NcmStudio.tsx | NCM 文件解码/格式转换 |
-| ackupcenter | BackupCenter.tsx | 备份浏览/恢复/导出 |
+| ncmstudio | NcmStudio.tsx | NCM 文件解码/格式转换 |
+| backupcenter | BackupCenter.tsx | 备份浏览/恢复/导出 |
 | settings | Settings.tsx | 外观/行为/界面设置 |
 
 页面使用 React.lazy 懒加载，切换动画由 framer-motion AnimatePresence 驱动，当前页持久化到 localStorage key codexa-studio-page。
@@ -296,6 +354,15 @@ cm-studio/ — 独立 .NET 类库，负责网易云音乐 .ncm 文件解码：
 - **CLI:** NcmStudio.Cli 提供命令行批量转换
 - **测试:** xUnit 单元测试覆盖核心密码学、解析器和格式检测
 
+#### 开发者解锁系统
+
+src/developer-unlock/ — 内置彩蛋解锁系统：
+- DeveloperUnlockService — 解锁逻辑与状态管理
+- UnlockGameOverlay — 字母粒子收集游戏覆盖层
+- LetterParticle — 粒子动画组件
+- UnlockStorage — 解锁状态持久化
+- useDevUnlock — React Hook 封装
+
 ---
 
 ## 五、Liquid Glass 设计系统
@@ -317,14 +384,14 @@ cm-studio/ — 独立 .NET 类库，负责网易云音乐 .ncm 文件解码：
 
 | 类别 | 文件 | 说明 |
 |------|------|------|
-| 颜色 | 	okens/colors.ts | 8 套主题 CSS 变量 + 4 级 glass 表面色 |
-| 模糊 | 	okens/blur.ts | glass(24px) → surface(16px) → subtle(8px) → none(0px) |
-| 间距 | 	okens/spacing.ts | 4px 基准 · 圆角 sm/md/lg/xl · 字体 xs~4xl · 图标 · z-index 层级 |
+| 颜色 | tokens/colors.ts | 8 套主题 CSS 变量 + 4 级 glass 表面色 |
+| 模糊 | tokens/blur.ts | glass(24px) → surface(16px) → subtle(8px) → none(0px) |
+| 间距 | tokens/spacing.ts | 4px 基准 · 圆角 sm/md/lg/xl · 字体 xs~4xl · 图标 · z-index 层级 |
 | 材质 | materials/materials.ts | ultraThin → regular → thick → elevated |
 
-### Glass 组件（17 个）
+### Glass 组件（19 个）
 
-GlassSurface · GlassCard · GlassPanel · GlassButton · GlassPillButton · GlassInput · GlassModal · GlassSelect · GlassToggle · GlassProgressBar · GlassBadge · GlassEmptyState · GlassGlow · GlassFloat · GlassTooltip · GlassScrollArea · GlassSlider
+GlassSurface · GlassCard · GlassPanel · GlassButton · GlassPillButton · GlassInput · GlassModal · GlassSelect · GlassToggle · GlassProgressBar · GlassSeekBar · GlassBadge · GlassEmptyState · GlassGlow · GlassFloat · GlassTooltip · GlassScrollArea · GlassSlider · GlassSVGFilter
 
 ---
 
@@ -347,7 +414,8 @@ npm run build        # 生产构建 (Vite + electron-builder)
 
 ### 构建配置
 
-- **Vite:** 端口 5173 · base: ./ · chunk 分包: react-vendor / motion-vendor / icons-vendor · 别名 @ → src/
+- **Vite 8:** 端口 5173 · base: ./ · chunk 分包: react-vendor / motion-vendor / icons-vendor · 别名 @ → src/
+- **TypeScript 6:** target ES2022 · bundler 解析 · strict 模式
 - **Electron Builder:** 输出 portable + NSIS 安装包 · 请求管理员权限 · 单实例锁
 
 ---
@@ -355,7 +423,7 @@ npm run build        # 生产构建 (Vite + electron-builder)
 ## 七、非项目文件（忽略）
 
 
-ode_modules/ · dist/ · dist-electron/ · uild-support/ · __pycache__/ · *.pyc · docs/ · .env* · .vscode/ · main.js（临时）· *.diff / *.patch · .tmp-dev-* · data/config.json · .NET in/ obj/ publish/ publish2/ · 
+ode_modules/ · dist/ · dist-electron/ · uild-support/ · __pycache__/ · *.pyc · docs/ · .env* · .vscode/ · main.js（临时）· *.diff / *.patch · .tmp-dev-* · data/config.json · .NET bin/ obj/ publish/ publish2/ · 
 cm-studio/bin/ 
 cm-studio/obj/
 
