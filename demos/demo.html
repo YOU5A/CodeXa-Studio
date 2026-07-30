@@ -38,7 +38,7 @@
       radius: 120,           // 水滴半径
       edgeZoom: 1.5,         // 边缘最大放大倍数
       centerZoom: 1.0,       // 中心放大倍数（1=不放大/恢复正常）
-      distortionPower: 2,    // 放大曲线幂次（2=抛物线，越大边缘放大越集中）
+      distortionPower: 8,    // 放大曲线幂次（2=抛物线，越大边缘放大越集中）
       dispersion: 3,         // 色散强度
       lerpSpeed: 0.15,       // 跟随速度
       wobbleAmount: 0.04,    // 弹性形变幅度（很小，很克制）
@@ -166,7 +166,7 @@
     // ============================================================
     function magnification(d) {
       // d: 归一化距离 0~1
-      // 幂次曲线：中心低，边缘高
+      // 幂次曲线：中心平坦（不放大区域扩大），仅在边缘陡升
       return CONFIG.centerZoom + (CONFIG.edgeZoom - CONFIG.centerZoom) * Math.pow(d, CONFIG.distortionPower);
     }
 

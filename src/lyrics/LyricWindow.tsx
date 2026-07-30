@@ -28,7 +28,15 @@ export default function LyricWindow({ open, onClose, children, defaultPosition }
       positionKey="lyrics-window-position"
       defaultPosition={defaultPosition}
     >
-      {children}
+      <div
+        style={{
+          height: '100%',
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 28px, black calc(100% - 28px), transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 28px, black calc(100% - 28px), transparent 100%)',
+        }}
+      >
+        {children}
+      </div>
     </GlassFloat>
   );
 }
