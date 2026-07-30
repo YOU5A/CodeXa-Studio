@@ -7,9 +7,9 @@ import type { CoverManagerProps } from "./types";
 
 export default function CoverManager(props: CoverManagerProps) {
   const {
-    coverB64, coverPreviewB64, coverMenuOpen, coverMenuHover,
+    coverB64, coverMenuOpen, coverMenuHover,
     setCoverMenuOpen, setCoverMenuHover, setCoverSearchOpen,
-    pickCover, applyCover, saveCover, removeCover, tx,
+    coverRef, pickCover, applyCover, saveCover, removeCover, tx,
   } = props;
 
   // Blur transition on expand/collapse ? instant blur then smooth clear
@@ -32,7 +32,7 @@ export default function CoverManager(props: CoverManagerProps) {
 
   return (
     <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: space[3] }}>
-      <GlassCard style={{ padding: 0, overflow: "hidden", position: "relative" }}>
+      <GlassCard ref={coverRef} style={{ padding: 0, overflow: "hidden", position: "relative" }}>
         <div style={{
           width: "100%", aspectRatio: "1",
           background: "var(--bg-tertiary)",
@@ -125,14 +125,7 @@ export default function CoverManager(props: CoverManagerProps) {
         )}
       </AnimatePresence>
 
-      {coverPreviewB64 && (
-        <motion.div layout>
-          <GlassCard style={{ padding: 0, overflow: "hidden" }}>
-            <img src={`data:image/jpeg;base64,${coverPreviewB64}`} alt="Cover Preview"
-              style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: radii.lg }} />
-          </GlassCard>
-        </motion.div>
-      )}
+      
     </div>
   );
 }

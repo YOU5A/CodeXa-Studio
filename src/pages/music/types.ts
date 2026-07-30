@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import type { MusicMetadata } from "@/types";
 import type { PlayMode } from "@/contexts/MusicPlayerContext";
 import type { RGB } from "@/utils/colorExtractor";
@@ -6,7 +7,7 @@ import type { LyricsSettingsValues } from "@/lyrics";
 
 export interface CoverManagerProps {
   coverB64: string | null;
-  coverPreviewB64: string | null;
+  coverRef?: RefObject<HTMLDivElement | null>;
   coverMenuOpen: boolean;
   coverMenuHover: boolean;
   setCoverMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void;

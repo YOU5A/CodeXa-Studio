@@ -20,6 +20,7 @@ import { getAnimDuration, EASE_OUT } from "@/utils/animations";
 import { extractDominantColorAsync, type RGB } from "@/utils/colorExtractor";
 import FluidSettingsPanel, { DEFAULT_FLUID_SETTINGS, loadFluidSettings, saveFluidSettings, type FluidSettingsValues } from "@/components/FluidSettingsPanel";
 import CoverSearchPanel from "@/components/CoverSearchPanel";
+import CoverPreviewWindow from "@/components/CoverPreviewWindow";
 
 import CoverManager from "./music/CoverManager";
 import TagEditor from "./music/TagEditor";
@@ -171,6 +172,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [listBlur, setListBlur] = useState(0);
   const [coverMenuHover, setCoverMenuHover] = useState(false);
   const [coverSearchOpen, setCoverSearchOpen] = useState(false);
+  const coverRef = useRef<HTMLDivElement | null>(null);
+  const [coverRect, setCoverRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
 
   const [tagTitle, setTagTitle] = useState("");
   const [tagArtist, setTagArtist] = useState("");
@@ -673,6 +676,14 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     showToast(tx.tagsSaved, "success");
   };
 
+  // Capture cover screen position when preview opens
+  useEffect(() => {
+    if (coverPreviewB64 && coverRef.current) {
+      const rect = coverRef.current.getBoundingClientRect();
+      setCoverRect({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+    }
+  }, [coverPreviewB64]);
+
   // ?? Cover ??
   const pickCover = async () => {
     const p = await window.electronAPI?.dialog.openFile([{ name: "Images", extensions: ["jpg","jpeg","png","bmp","webp"] }]);
@@ -862,7 +873,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
             <div style={{ gridRow: "1 / 4", gridColumn: 1 }}>
               <CoverManager
                 coverB64={coverB64}
-                coverPreviewB64={coverPreviewB64}
+                coverRef={coverRef}
                 coverMenuOpen={coverMenuOpen}
                 coverMenuHover={coverMenuHover}
                 setCoverMenuOpen={setCoverMenuOpen}
@@ -993,6 +1004,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
               settings={lyricsSettings}
             />
           </LyricWindow>
+
+          <CoverPreviewWindow
+            open={coverPreviewB64 !== null}
+            onClose={() => setCoverPreviewB64(null)}
+            coverB64={coverPreviewB64 ?? ''}
+            coverRect={coverRect}
+          />
 
           <CoverSearchPanel
             open={coverSearchOpen}
