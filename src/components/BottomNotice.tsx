@@ -16,6 +16,8 @@ interface BottomNoticeProps {
   children: ReactNode;
   /** 自动消失毫秒数，默认 2000 */
   duration?: number;
+  /** 提示色调 */
+  tone?: "default" | "success" | "error";
   /** 消失后回调 */
   onDone?: () => void;
 }
@@ -27,7 +29,13 @@ const springTransition = {
   mass: 0.8,
 };
 
-export function BottomNotice({ show, children, duration = 2000, onDone }: BottomNoticeProps) {
+const toneStyles: Record<NonNullable<BottomNoticeProps["tone"]>, { background: string; border: string }> = {
+  default: { background: "rgba(18,18,28,0.40)", border: "1px solid rgba(255,255,255,0.12)" },
+  success: { background: "rgba(22,163,74,0.22)", border: "1px solid rgba(74,222,128,0.28)" },
+  error: { background: "rgba(220,38,38,0.22)", border: "1px solid rgba(248,113,113,0.28)" },
+};
+
+export function BottomNotice({ show, children, duration = 2000, tone = "default", onDone }: BottomNoticeProps) {
   // Auto-dismiss after duration
   useEffect(() => {
     if (!show) return;
@@ -54,8 +62,7 @@ export function BottomNotice({ show, children, duration = 2000, onDone }: Bottom
             pointerEvents: "none",
             backdropFilter: "blur(32px) saturate(2.2)",
             WebkitBackdropFilter: "blur(32px) saturate(2.2)",
-            background: "rgba(18,18,28,0.40)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            ...toneStyles[tone],
             borderRadius: 20,
             padding: "8px 20px",
             fontSize: 14,

@@ -149,10 +149,32 @@ let sessionState: {
   folder: string;
   files: string[];
   scanned: boolean;
+  selectedFile: string;
+  metadata: MusicMetadata | null;
+  metadataFile: string;
+  coverB64: string | null;
+  tagTitle: string;
+  tagArtist: string;
+  tagAlbum: string;
+  tagYear: string;
+  tagGenre: string;
+  renameName: string;
+  coverColor: RGB | null;
 } = {
   folder: "",
   files: [],
   scanned: false,
+  selectedFile: "",
+  metadata: null,
+  metadataFile: "",
+  coverB64: null,
+  tagTitle: "",
+  tagArtist: "",
+  tagAlbum: "",
+  tagYear: "",
+  tagGenre: "",
+  renameName: "",
+  coverColor: null,
 };
 
 export default function MusicManager({ onNavigate, fluidSettings: externalSettings, onFluidSettingsChange }: { onNavigate?: (page: Page) => void; fluidSettings?: FluidSettingsValues; onFluidSettingsChange?: (s: FluidSettingsValues) => void }) {
@@ -161,11 +183,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
+  // Whether the cached metadata/cover belongs to the cached selected file
+  const restoredSelection = sessionState.metadataFile === sessionState.selectedFile;
   const [folder, setFolder] = useState(sessionState.folder);
   const [files, setFiles] = useState<string[]>(sessionState.files);
-  const [selectedFile, setSelectedFile] = useState("");
-  const [metadata, setMetadata] = useState<MusicMetadata | null>(null);
-  const [coverB64, setCoverB64] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState(sessionState.selectedFile);
+  const [metadata, setMetadata] = useState<MusicMetadata | null>(restoredSelection ? sessionState.metadata : null);
+  const [coverB64, setCoverB64] = useState<string | null>(restoredSelection ? sessionState.coverB64 : null);
   const [newCoverPath, setNewCoverPath] = useState("");
   const [coverPreviewB64, setCoverPreviewB64] = useState<string | null>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
@@ -175,12 +199,12 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const coverRef = useRef<HTMLDivElement | null>(null);
   const [coverRect, setCoverRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
 
-  const [tagTitle, setTagTitle] = useState("");
-  const [tagArtist, setTagArtist] = useState("");
-  const [tagAlbum, setTagAlbum] = useState("");
-  const [tagYear, setTagYear] = useState("");
-  const [tagGenre, setTagGenre] = useState("");
-  const [renameName, setRenameName] = useState("");
+  const [tagTitle, setTagTitle] = useState(restoredSelection ? sessionState.tagTitle : "");
+  const [tagArtist, setTagArtist] = useState(restoredSelection ? sessionState.tagArtist : "");
+  const [tagAlbum, setTagAlbum] = useState(restoredSelection ? sessionState.tagAlbum : "");
+  const [tagYear, setTagYear] = useState(restoredSelection ? sessionState.tagYear : "");
+  const [tagGenre, setTagGenre] = useState(restoredSelection ? sessionState.tagGenre : "");
+  const [renameName, setRenameName] = useState(restoredSelection ? sessionState.renameName : "");
   const { audioState, playingFile, volume, playMode, playlist, playFile: contextPlayFile, toggle: contextToggle, seek: contextSeek, seekTo, setVolume, setPlaylist, setPlayMode, playNext: contextPlayNext, playPrev: contextPlayPrev, stop: contextStop, releaseHandle, fmtTime } = useMusicPlayer();
   const [saving, setSaving] = useState(false);
   const playingFileRef = useRef(playingFile);
@@ -222,7 +246,21 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [fluidSettingsOpen, setFluidSettingsOpen] = useState(false);
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => externalSettings ?? loadFluidSettings());
   const [lyricsSettings, setLyricsSettings] = useState<LyricsSettingsValues>(() => loadLyricsSettings());
-  const [coverColor, setCoverColor] = useState<RGB | null>(null);
+  const [coverColor, setCoverColor] = useState<RGB | null>(sessionState.coverColor);
+
+  // Sync UI state back to session cache (survives page navigation)
+  useEffect(() => {
+    sessionState.selectedFile = selectedFile;
+    sessionState.metadata = metadata;
+    sessionState.coverB64 = coverB64;
+    sessionState.tagTitle = tagTitle;
+    sessionState.tagArtist = tagArtist;
+    sessionState.tagAlbum = tagAlbum;
+    sessionState.tagYear = tagYear;
+    sessionState.tagGenre = tagGenre;
+    sessionState.renameName = renameName;
+    sessionState.coverColor = coverColor;
+  });
   useEffect(() => {
     saveFluidSettings(fluidSettings);
   }, [fluidSettings]);
@@ -279,6 +317,11 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
           if (saved && !hasScanned.current) { hasScanned.current = true; setFolder(saved); doScan(saved); }
         }
       } catch {}
+      // Re-fetch only when the cached metadata belongs to a different file
+      // (e.g. selection changed while the previous request was still in flight)
+      if (sessionState.selectedFile && sessionState.metadataFile !== sessionState.selectedFile) {
+        selectFile(sessionState.selectedFile);
+      }
       if (playingFile) {
         requestAnimationFrame(() => scrollToFile(playingFile));
       }
@@ -460,6 +503,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     if (seq !== loadSeqRef.current) return;
     if (m && !m.error) {
       setMetadata(m);
+      sessionState.metadataFile = fp;
       setTagTitle(m.title ?? ""); setTagArtist(m.artist ?? "");
       setTagAlbum(m.album ?? ""); setTagYear(m.year ?? ""); setTagGenre(m.genre ?? "");
     }
@@ -543,8 +587,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     };
   }, []);
 
-  // Sync selectedFile and metadata when playingFile changes
+  // Sync selectedFile and metadata when playingFile changes (skip initial mount:
+  // restored session state already reflects the last selection)
+  const prevPlayingFileRef = useRef(playingFile);
   useEffect(() => {
+    const prev = prevPlayingFileRef.current;
+    prevPlayingFileRef.current = playingFile;
+    if (prev === playingFile) return;
     if (playingFile && playingFile !== selectedFile) {
       if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
       selectFile(playingFile);

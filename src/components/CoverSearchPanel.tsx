@@ -23,6 +23,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/contexts/ToastContext";
 import type { Language } from "@/types";
 import type { CoverSearchResult } from "@/types";
+import { BottomNotice } from "@/components/BottomNotice";
 
 export interface CoverSearchPanelProps {
   open: boolean;
@@ -122,13 +123,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
     }
   }, [open]);
 
-  useEffect(() => {
-    if (noticeMsg) {
-      const timer = setTimeout(() => setNoticeMsg(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [noticeMsg]);
-
   const doSearch = useCallback(async () => {
     const q = query.trim();
     if (!q) return;
@@ -214,6 +208,7 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
   }, [selected, onSaveCover, tx]);
 
   return (
+    <>
     <GlassModal open={open} onClose={onClose} maxWidth={480}>
       <div style={{ padding: "28px 28px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
         <h3 style={{ fontSize: 17, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
@@ -381,36 +376,6 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
         ) : null}
 
         <AnimatePresence>
-          {noticeMsg && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: "linear" }}
-              style={{ overflow: "hidden" }}
-            >
-              <div style={{
-                padding: "8px 14px",
-                borderRadius: radii.lg,
-                fontSize: fontSizes.xs,
-                fontWeight: 500,
-                backdropFilter: "blur(32px) saturate(2.2)",
-                WebkitBackdropFilter: "blur(32px) saturate(2.2)",
-                background: noticeMsg.type === "success"
-                  ? "rgba(22,163,74,0.22)"
-                  : "rgba(220,38,38,0.22)",
-                color: "rgba(255,255,255,0.92)",
-                border: "1px solid rgba(255,255,255,0.10)",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                textAlign: "center",
-              }}>
-                {noticeMsg.text}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
           {selected && (
             <motion.div
               initial={{ height: 0, opacity: 0, marginTop: 0 }}
@@ -453,6 +418,17 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
         </AnimatePresence>
       </div>
     </GlassModal>
+
+    <BottomNotice
+      key={noticeMsg?.text ?? "empty"}
+      show={noticeMsg !== null}
+      tone={noticeMsg?.type}
+      duration={2000}
+      onDone={() => setNoticeMsg(null)}
+    >
+      {noticeMsg?.text}
+    </BottomNotice>
+    </>
   );
 };
 

@@ -153,6 +153,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       }
     };
     const onErr = () => {
+      // 主动清空 src（stop/releaseHandle）触发的预期错误，忽略
+      if ((audio.error?.message ?? "").includes("Empty src")) return;
       console.error("[Audio]", audio.error?.message);
       setAudioState({ duration: 0, playing: false, pos: 0 });
       setPlayingFile("");
