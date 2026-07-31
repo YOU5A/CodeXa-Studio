@@ -152,7 +152,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   useEffect(() => {
     const fetchSysInfo = async () => {
       try {
-        const result = await window.electronAPI?.python.call("system.info");
+        const result = await window.electronAPI?.bridge.call("system.info");
         if (result) {
           // Guard: if bridge cold-start returns cpu_percent=0 but we have a
           // reasonable cached value, keep the cached cpu_percent.
@@ -177,7 +177,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   useEffect(() => {
     const fetchBackups = async () => {
-      const result = await window.electronAPI?.python.call("backup.list");
+      const result = await window.electronAPI?.bridge.call("backup.list");
       if (result?.backups) setBackups(result.backups.slice(0, 5));
       setLoadingBackups(false);
     };

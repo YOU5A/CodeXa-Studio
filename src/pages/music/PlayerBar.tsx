@@ -234,7 +234,7 @@ export default function PlayerBar(props: PlayerBarProps) {
               size="sm"
               noAnimation
               onClick={() => {
-                const modes: PlayMode[] = ["loop-all", "shuffle", "stop-after"];
+                const modes: PlayMode[] = ["loop-all", "shuffle", "stop-after", "sequential"];
                 const idx = modes.indexOf(playMode);
                 setPlayMode(modes[(idx + 1) % modes.length]);
               }}

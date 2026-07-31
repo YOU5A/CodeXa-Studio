@@ -200,6 +200,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const hasScanned = useRef(sessionState.scanned);
   const scrollAnimRef = useRef<number | null>(null);
   const scrollGateRef = useRef({ time: 0, fp: "" });
+  const loadSeqRef = useRef(0);
   const userScrolledRef = useRef(false);
   const scrollListenerRef = useRef<(() => void) | null>(null);
 
@@ -254,6 +255,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       localStorage.removeItem("fluidCoverColor");
       window.dispatchEvent(new CustomEvent("fluidCoverColorChanged", { detail: null }));
     }
+    window.dispatchEvent(new CustomEvent("fluidCoverChanged", { detail: coverB64 }));
     return () => { cancelled = true; };
   }, [coverB64]);
 
@@ -278,20 +280,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         }
       } catch {}
       if (playingFile) {
-        setSelectedFile(playingFile);
-        try {
-          const m = await window.electronAPI?.python.call("music.get_metadata", { filepath: playingFile });
-          if (m && !m.error) {
-            setMetadata(m);
-            setTagTitle(m.title ?? ""); setTagArtist(m.artist ?? "");
-            setTagAlbum(m.album ?? ""); setTagYear(m.year ?? ""); setTagGenre(m.genre ?? "");
-          }
-          const c = await window.electronAPI?.python.call("music.extract_cover", { filepath: playingFile });
-          setCoverB64(c?.cover ?? null);
-        } catch {}
-        setNewCoverPath(""); setCoverPreviewB64(null);
-        const fname = playingFile.split("\\").pop() || playingFile;
-        setRenameName(fname.replace(/\.[^.]+$/, ""));
         requestAnimationFrame(() => scrollToFile(playingFile));
       }
     };
@@ -397,7 +385,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const doScan = async (dir?: string) => {
     const d = dir || folder;
     if (!d) return;
-    const r = await window.electronAPI?.python.call("music.scan", { folder: d });
+    const r = await window.electronAPI?.bridge.call("music.scan", { folder: d });
     if (r && !r.error) {
       const newFiles = r.files ?? [];
       setFiles(newFiles);
@@ -465,16 +453,17 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
 
   const selectFile = async (fp: string) => {
+    const seq = ++loadSeqRef.current;
     setSelectedFile(fp);
     scrollToFile(fp);
-    const m = await window.electronAPI?.python.call("music.get_metadata", { filepath: fp });
+    const m = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: fp });
+    if (seq !== loadSeqRef.current) return;
     if (m && !m.error) {
       setMetadata(m);
       setTagTitle(m.title ?? ""); setTagArtist(m.artist ?? "");
       setTagAlbum(m.album ?? ""); setTagYear(m.year ?? ""); setTagGenre(m.genre ?? "");
     }
-    const c = await window.electronAPI?.python.call("music.extract_cover", { filepath: fp });
-    setCoverB64(c?.cover ?? null);
+    setCoverB64(m?.cover ?? null);
     setNewCoverPath(""); setCoverPreviewB64(null);
     const fname = fp.split("\\").pop() || fp;
     setRenameName(fname.replace(/\.[^.]+$/, ""));
@@ -584,20 +573,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
   const playFile = (fp: string) => {
     if (!fp) return;
-    setSelectedFile(fp);
-    (async () => {
-      const m = await window.electronAPI?.python.call("music.get_metadata", { filepath: fp });
-      if (m && !m.error) {
-        setMetadata(m);
-        setTagTitle(m.title ?? ""); setTagArtist(m.artist ?? "");
-        setTagAlbum(m.album ?? ""); setTagYear(m.year ?? ""); setTagGenre(m.genre ?? "");
-      }
-      const c = await window.electronAPI?.python.call("music.extract_cover", { filepath: fp });
-      setCoverB64(c?.cover ?? null);
-      setNewCoverPath(""); setCoverPreviewB64(null);
-      const fname = fp.split("\\").pop() || fp;
-      setRenameName(fname.replace(/\.[^.]+$/, ""));
-    })();
+    selectFile(fp);
     contextPlayFile(fp);
     if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
     scrollToFile(fp);
@@ -657,7 +633,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     const ok = await confirm({ title: tx.saveTagsConfirm });
     if (!ok) return;
     setSaving(true);
-    const r = await window.electronAPI?.python.call("music.save_tags", {
+    const r = await window.electronAPI?.bridge.call("music.save_tags", {
       filepath: selectedFile, title: tagTitle, artist: tagArtist, album: tagAlbum, year: tagYear, genre: tagGenre,
     });
     setSaving(false);
@@ -666,14 +642,34 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   };
   const applyAll = async () => {
     if (files.length === 0) return;
-    ensureFileWritable(files[0] || selectedFile);
     const ok = await confirm({ title: tx.applyAllConfirm, danger: true });
     if (!ok) return;
     setSaving(true);
-    for (const fp of files)
-      await window.electronAPI?.python.call("music.save_tags", { filepath: fp, title: tagTitle, artist: tagArtist, album: tagAlbum, year: tagYear, genre: tagGenre });
-    setSaving(false);
-    showToast(tx.tagsSaved, "success");
+    let okCount = 0;
+    let failCount = 0;
+    let firstError = "";
+    try {
+      for (const fp of files) {
+        ensureFileWritable(fp);
+        try {
+          const r = await window.electronAPI?.bridge.call("music.save_tags", {
+            filepath: fp, title: tagTitle, artist: tagArtist, album: tagAlbum, year: tagYear, genre: tagGenre,
+          });
+          if (r?.success) okCount++;
+          else {
+            failCount++;
+            if (!firstError) firstError = r?.error || "Failed";
+          }
+        } catch (e) {
+          failCount++;
+          if (!firstError) firstError = (e as Error)?.message || String(e);
+        }
+      }
+    } finally {
+      setSaving(false);
+    }
+    if (failCount === 0) showToast(tx.tagsSaved, "success");
+    else showToast(lang === "zh" ? `成功 ${okCount} / 失败 ${failCount}：${firstError}` : `Succeeded ${okCount} / Failed ${failCount}: ${firstError}`, "error");
   };
 
   // Capture cover screen position when preview opens
@@ -689,7 +685,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     const p = await window.electronAPI?.dialog.openFile([{ name: "Images", extensions: ["jpg","jpeg","png","bmp","webp"] }]);
     if (p) {
       setNewCoverPath(p);
-      const r = await window.electronAPI?.python.call("music.read_cover_file", { filepath: p });
+      const r = await window.electronAPI?.bridge.call("music.read_cover_file", { filepath: p });
       setCoverPreviewB64(r?.cover ?? null);
     }
   };
@@ -698,7 +694,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.applyCoverConfirm });
     if (!ok) return;
-    const r = await window.electronAPI?.python.call("music.apply_cover", { filepath: selectedFile, cover_path: newCoverPath });
+    const r = await window.electronAPI?.bridge.call("music.apply_cover", { filepath: selectedFile, cover_path: newCoverPath });
     showToast(r?.success ? tx.coverApplied : (r?.error ?? ""), r?.success ? "success" : "error");
     if (r?.success) selectFile(selectedFile);
   };
@@ -725,7 +721,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.removeCoverConfirm, danger: true });
     if (!ok) return;
-    const r = await window.electronAPI?.python.call("music.remove_cover", { filepath: selectedFile });
+    const r = await window.electronAPI?.bridge.call("music.remove_cover", { filepath: selectedFile });
     showToast(r?.success ? tx.coverRemoved : (r?.error ?? ""), r?.success ? "success" : "error");
     if (r?.success) selectFile(selectedFile);
   };
@@ -734,19 +730,20 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const handleApplyCoverFromUrl = async (urlOrDataUrl: string) => {
     if (!selectedFile) throw new Error(lang === "zh" ? "请先选择文件" : "No file selected");
     ensureFileWritable(selectedFile);
-    let coverPath = urlOrDataUrl;
+    let coverPath = "";
+    let coverBase64 = "";
+    let mimeType = "image/jpeg";
     if (urlOrDataUrl.startsWith("data:")) {
-      const base64 = urlOrDataUrl.split(",")[1];
-      const ext = urlOrDataUrl.includes("image/png") ? ".png" : ".jpg";
-      const tmpDir = await window.electronAPI?.app.getPath("temp");
-      coverPath = tmpDir + "\\codexa_cover_dl_" + Date.now() + ext;
-      const r = await window.electronAPI?.python.call("music.save_cover_file", {
-        filepath: coverPath, base64, ext,
-      });
-      if (r?.error) throw new Error(r.error);
+      coverBase64 = urlOrDataUrl.split(",")[1];
+      mimeType = urlOrDataUrl.includes("image/png") ? "image/png" : "image/jpeg";
+    } else if (urlOrDataUrl.startsWith("http://") || urlOrDataUrl.startsWith("https://")) {
+      throw new Error(lang === "zh" ? "无法应用封面：仅支持本地文件或 base64 数据" : "Cannot apply cover: local file or base64 data only");
+    } else {
+      coverPath = urlOrDataUrl;
+      mimeType = urlOrDataUrl.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
     }
-    const r = await window.electronAPI?.python.call("music.apply_cover", {
-      filepath: selectedFile, cover_path: coverPath,
+    const r = await window.electronAPI?.bridge.call("music.apply_cover", {
+      filepath: selectedFile, cover_path: coverPath, cover_base64: coverBase64, mime_type: mimeType,
     });
     if (!r?.success) throw new Error(r?.error || "Apply failed");
     selectFile(selectedFile);
@@ -761,7 +758,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         filters: [{ name: "Images", extensions: [ext] }],
       });
       if (!savePath) return;
-      await window.electronAPI?.python.call("music.save_cover_file", {
+      await window.electronAPI?.bridge.call("music.save_cover_file", {
         filepath: savePath, base64, ext,
       });
     } else {
@@ -775,7 +772,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         if (dl?.data) {
           const b64 = dl.data.split(",")[1];
           const ext = dl.data.includes("image/png") ? "png" : "jpg";
-          await window.electronAPI?.python.call("music.save_cover_file", {
+          await window.electronAPI?.bridge.call("music.save_cover_file", {
             filepath: savePath, base64: b64, ext,
           });
         }
@@ -790,26 +787,59 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.renameOneConfirm });
     if (!ok) return;
-    const r = await window.electronAPI?.python.call("music.rename", { filepath: selectedFile, new_name: renameName.trim() });
-    if (r?.success) { showToast(tx.renameSuccess, "success"); setSelectedFile(r.new_path); doScan(); }
-    else showToast(r?.error ?? tx.renameFailed, "error");
+    const r = await window.electronAPI?.bridge.call("music.rename", { filepath: selectedFile, new_name: renameName.trim() });
+    if (!r?.success) { showToast(r?.error ?? tx.renameFailed, "error"); return; }
+    const oldPath = selectedFile;
+    const newPath = r.new_path || oldPath;
+    setFiles(files.map(fp => fp === oldPath ? newPath : fp));
+    setPlaylist(playlist.map(fp => fp === oldPath ? newPath : fp));
+    if (oldPath === playingFile) contextStop();
+    showToast(tx.renameSuccess, "success");
+    selectFile(newPath);
+    if (folder) doScan();
   };
   const renameAll = async () => {
-    ensureFileWritable(selectedFile);
     const ok = await confirm({ title: tx.renameAllConfirm });
     if (!ok) return;
-    let c = 0;
-    for (const fp of files) {
-      try {
-        const m = await window.electronAPI?.python.call("music.get_metadata", { filepath: fp });
-        if (!m?.error && m.title) {
+    setSaving(true);
+    let okCount = 0;
+    let failCount = 0;
+    let firstError = "";
+    const pathMap: Record<string, string> = {};
+    try {
+      for (const fp of files) {
+        ensureFileWritable(fp);
+        try {
+          const m = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: fp });
+          if (m?.error || !m.title) continue;
           const nn = (m.artist ?? "") ? `${m.title} - ${m.artist}` : m.title;
-          if ((await window.electronAPI?.python.call("music.rename", { filepath: fp, new_name: nn }))?.success) c++;
+          const r = await window.electronAPI?.bridge.call("music.rename", { filepath: fp, new_name: nn });
+          if (r?.success && r.new_path) {
+            okCount++;
+            pathMap[fp] = r.new_path;
+          } else {
+            failCount++;
+            if (!firstError) firstError = r?.error || "Rename failed";
+          }
+        } catch (e) {
+          failCount++;
+          if (!firstError) firstError = (e as Error)?.message || String(e);
         }
-      } catch {}
+      }
+    } finally {
+      setSaving(false);
     }
-    showToast(lang === "zh" ? `已重命名 ${c} 个文件` : `Renamed ${c} files`, c > 0 ? "success" : "warning");
-    doScan();
+    if (okCount > 0) {
+      setFiles(files.map(fp => pathMap[fp] ?? fp));
+      setPlaylist(playlist.map(fp => pathMap[fp] ?? fp));
+      if (playingFile && pathMap[playingFile]) contextStop();
+    }
+    if (failCount === 0) {
+      showToast(lang === "zh" ? `已重命名 ${okCount} 个文件` : `Renamed ${okCount} files`, okCount > 0 ? "success" : "warning");
+    } else {
+      showToast(lang === "zh" ? `成功 ${okCount} / 失败 ${failCount}：${firstError}` : `Succeeded ${okCount} / Failed ${failCount}: ${firstError}`, "error");
+    }
+    if (folder) doScan();
   };
 
   // ?? Toolbar actions ??

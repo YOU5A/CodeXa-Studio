@@ -15,7 +15,7 @@ export function useBridge() {
       return { error: "Not running in Electron" } as unknown as T;
     }
     try {
-      const result = await api.python.call(method, params);
+      const result = await api.bridge.call(method, params);
       return result as T;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

@@ -69,7 +69,6 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     pos: 0,
   });
   const [playingFile, setPlayingFile] = useState("");
-  const isStoppingRef = useRef(false);
 
   // Play mode & playlist
   const [playMode, setPlayModeState] = useState<PlayMode>(() => {
@@ -135,8 +134,12 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         const shuffIdx = shuff.indexOf(idx);
         const nextShuffIdx = (shuffIdx + 1) % shuff.length;
         nextIdx = shuff[nextShuffIdx];
+      } else if (mode === "sequential") {
+        // sequential: stop after the last track, no wrap
+        if (idx < 0 || idx >= list.length - 1) return;
+        nextIdx = idx + 1;
       } else {
-        // sequential or loop-all: play next, wrap to start
+        // loop-all: play next, wrap to start
         nextIdx = idx >= 0 && idx < list.length - 1 ? idx + 1 : 0;
       }
 
@@ -144,19 +147,16 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       if (nextFile) {
         setPlayingFile(nextFile);
         playingFileRef.current = nextFile;
-        audio.src = window.electronAPI?.python.getFileUrl(nextFile) ?? "";
+        audio.src = window.electronAPI?.bridge.getFileUrl(nextFile) ?? "";
         audio.play().catch(e => console.error("[Audio] Auto-next failed:", e));
         setAudioState(prev => ({ ...prev, pos: 0 }));
       }
     };
     const onErr = () => {
-      if (isStoppingRef.current) {
-        isStoppingRef.current = false;
-        setAudioState({ duration: 0, playing: false, pos: 0 });
-        return;
-      }
       console.error("[Audio]", audio.error?.message);
       setAudioState({ duration: 0, playing: false, pos: 0 });
+      setPlayingFile("");
+      playingFileRef.current = "";
     };
 
     audio.addEventListener("loadedmetadata", onDur);
@@ -209,7 +209,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     if (!fp || !audio) return;
     setPlayingFile(fp);
     playingFileRef.current = fp;
-    audio.src = window.electronAPI?.python.getFileUrl(fp) ?? "";
+    audio.src = window.electronAPI?.bridge.getFileUrl(fp) ?? "";
     audio.play().catch(e => console.error("[Audio] Play failed:", e));
     setAudioState(prev => ({ ...prev, pos: 0 }));
   }, []);
@@ -233,7 +233,6 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const stop = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    isStoppingRef.current = true;
     audio.pause();
     audio.currentTime = 0;
     audio.src = "";
@@ -246,7 +245,6 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const releaseHandle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    isStoppingRef.current = true;
     audio.pause();
     audio.src = "";
   }, []);

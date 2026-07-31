@@ -2,6 +2,7 @@
 const path = require("path");
 const { parseFile } = require("music-metadata");
 const NodeID3 = require("node-id3");
+const iconv = require("iconv-lite");
 
 const SUPPORTED_EXTENSIONS = [".mp3", ".flac", ".ogg", ".m4a", ".mp4a", ".wav", ".opus"];
 
@@ -73,12 +74,16 @@ async function getMetadata(params) {
   try {
     const meta = await parseFile(filepath);
     const common = meta.common || {};
-    let hasCover = !!(common.picture && common.picture.length > 0);
-    // Also try node-id3 for APIC frames on MP3
-    if (!hasCover) {
+    let cover = null;
+    if (common.picture && common.picture.length > 0) {
+      cover = common.picture[0].data.toString("base64");
+    } else {
+      // Fallback: try node-id3 for APIC frames on MP3
       try {
         const id3Tags = NodeID3.read(filepath);
-        if (id3Tags && id3Tags.image) hasCover = true;
+        if (id3Tags && id3Tags.image && id3Tags.image.imageBuffer) {
+          cover = id3Tags.image.imageBuffer.toString("base64");
+        }
       } catch {}
     }
 
@@ -89,10 +94,11 @@ async function getMetadata(params) {
       year: String(common.year || ""),
       genre: (common.genre && common.genre.length > 0) ? common.genre[0] : "",
       track: common.track?.no ? String(common.track.no) : "",
-      has_cover: hasCover,
+      has_cover: !!cover,
+      cover,
     };
   } catch (e) {
-    return { title: "", artist: "", album: "", year: "", genre: "", track: "", has_cover: false, error: e.message };
+    return { title: "", artist: "", album: "", year: "", genre: "", track: "", has_cover: false, cover: null, error: e.message };
   }
 }
 
@@ -163,15 +169,15 @@ async function extractCover(params) {
 
 // ── music.apply_cover ──
 function applyCover(params) {
-  const { filepath, cover_path, mime_type } = params;
-  if (!filepath || !cover_path) return { error: "Missing parameters" };
+  const { filepath, cover_path, cover_base64, mime_type } = params;
+  if (!filepath || (!cover_path && !cover_base64)) return { error: "Missing parameters" };
 
   const ext = path.extname(filepath).toLowerCase();
 
   try {
     try { fs.chmodSync(filepath, 0o666); } catch {}
 
-    const coverData = fs.readFileSync(cover_path);
+    const coverData = cover_path ? fs.readFileSync(cover_path) : Buffer.from(cover_base64, "base64");
     const mime = mime_type || "image/jpeg";
 
     if (ext === ".mp3") {
@@ -283,6 +289,19 @@ async function renameFile(params) {
 }
 
 // ── music.get_lyrics ──
+// Strict lyric decoding: UTF-8 fatal → gbk → gb2312 → shift_jis → latin1
+function decodeLyricsStrict(bytes) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {}
+  for (const enc of ["gbk", "gb2312", "shift_jis"]) {
+    try {
+      return iconv.decode(bytes, enc);
+    } catch {}
+  }
+  return new TextDecoder("latin1").decode(bytes);
+}
+
 async function getLyrics(params) {
   const filepath = params.filepath || "";
   if (!filepath) return { error: "Missing filepath", lyrics_text: null };
@@ -292,16 +311,8 @@ async function getLyrics(params) {
   for (const lrcExt of [".lrc", ".LRC"]) {
     const lrcPath = base + lrcExt;
     if (fs.existsSync(lrcPath)) {
-      for (const enc of ["utf-8", "utf8", "gbk", "gb2312", "latin1"]) {
-        try {
-          const text = fs.readFileSync(lrcPath, enc);
-          return { lyrics_text: text };
-        } catch {}
-      }
-      // If all encodings fail, try as binary
-      try {
-        return { lyrics_text: fs.readFileSync(lrcPath, "utf-8") };
-      } catch {}
+      const text = decodeLyricsStrict(fs.readFileSync(lrcPath));
+      if (text != null) return { lyrics_text: text };
     }
   }
 

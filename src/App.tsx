@@ -70,7 +70,7 @@ function AppContent() {
   });
   const [isMaximized, setIsMaximized] = useState(false);
   const animDuration = getAnimDuration(settings.animationSpeed);
-  const { playingFile, audioState } = useMusicPlayer();
+  const { audioState } = useMusicPlayer();
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
@@ -126,26 +126,15 @@ function AppContent() {
     // Keep previous value; don't remove so overlay always has a valid color
   }, [coverColor]);
 
-  // Fetch cover image for SVG fluid background when playing file changes
+  // Listen for cover image changes from MusicManager (base64 or null)
   useEffect(() => {
-    if (!playingFile) {
-      setCoverImageUrl(null);
-      return;
-    }
-    let cancelled = false;
-    const fetchCover = async () => {
-      try {
-        const result = await window.electronAPI?.python.call("music.extract_cover", { filepath: playingFile });
-        if (!cancelled && result?.cover) {
-          setCoverImageUrl("data:image/jpeg;base64," + result.cover);
-        }
-      } catch {
-        if (!cancelled) setCoverImageUrl(null);
-      }
+    const handler = (e: Event) => {
+      const b64 = (e as CustomEvent<string | null>).detail;
+      setCoverImageUrl(b64 ? "data:image/jpeg;base64," + b64 : null);
     };
-    fetchCover();
-    return () => { cancelled = true; };
-  }, [playingFile]);
+    window.addEventListener("fluidCoverChanged", handler as EventListener);
+    return () => window.removeEventListener("fluidCoverChanged", handler as EventListener);
+  }, []);
 
   // Redirect from NCM page when developer mode is disabled
   const prevDevMode = useRef(isDeveloperMode);

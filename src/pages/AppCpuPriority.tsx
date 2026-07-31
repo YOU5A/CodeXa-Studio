@@ -130,7 +130,7 @@ export default function AppCpuPriority(_props: Props) {
 
   const fetchRules = useCallback(async () => {
     try {
-      const result = await window.electronAPI?.python.call("priority.list");
+      const result = await window.electronAPI?.bridge.call("priority.list");
       if (result && !result.error) setRules(result.applications ?? []);
     } catch { /* bridge not ready, will retry */ }
   }, []);
@@ -160,7 +160,7 @@ export default function AppCpuPriority(_props: Props) {
     setSaving(true);
     try {
       const method = editTarget ? "priority.edit" : "priority.add";
-      const result = await window.electronAPI?.python.call(method, {
+      const result = await window.electronAPI?.bridge.call(method, {
         name: formName.trim(),
         cpu_priority: parseInt(formCpu),
         io_priority: enableIo && formIo ? parseInt(formIo) : null,
@@ -184,7 +184,7 @@ export default function AppCpuPriority(_props: Props) {
     const ok = await confirm({ title: tx.deleteConfirm, danger: true });
         if (!ok) return;
     try {
-      const result = await window.electronAPI?.python.call("priority.delete", { name: rule.name });
+      const result = await window.electronAPI?.bridge.call("priority.delete", { name: rule.name });
       if (result?.error) {
         showToast(result.error, "error");
       } else {
@@ -203,7 +203,7 @@ export default function AppCpuPriority(_props: Props) {
         filters: [{ name: "JSON Files", extensions: ["json"] }],
       });
       if (!dest) return;
-      const result = await window.electronAPI?.python.call("priority.export", { filepath: dest });
+      const result = await window.electronAPI?.bridge.call("priority.export", { filepath: dest });
       if (result?.success) {
         showToast(tx.exported, "success");
       } else {
@@ -222,7 +222,7 @@ export default function AppCpuPriority(_props: Props) {
         name: "JSON Files", extensions: ["json"],
       }]);
       if (!filepath) return;
-      const result = await window.electronAPI?.python.call("priority.import_config", { filepath });
+      const result = await window.electronAPI?.bridge.call("priority.import_config", { filepath });
       if (result && !result.error) {
         const msg = tx.importResult
           .replace("{imported}", String(result.imported ?? 0))

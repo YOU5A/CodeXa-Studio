@@ -10,6 +10,11 @@ namespace CodeXaBridge.Services;
 
 public class MusicService
 {
+    static MusicService()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
     private static readonly string[] DefaultExtensions =
         [".mp3", ".flac", ".ogg", ".m4a", ".mp4a", ".wav", ".opus"];
 
@@ -118,16 +123,19 @@ public class MusicService
     {
         var filepath = GetString(p, "filepath") ?? "";
         var coverPath = GetString(p, "cover_path") ?? "";
+        var coverBase64 = GetString(p, "cover_base64") ?? "";
         var mimeType = GetString(p, "mime_type") ?? "image/jpeg";
 
-        if (string.IsNullOrEmpty(filepath) || string.IsNullOrEmpty(coverPath))
+        if (string.IsNullOrEmpty(filepath) || (string.IsNullOrEmpty(coverPath) && string.IsNullOrEmpty(coverBase64)))
             return Error("Missing parameters");
 
         try
         {
             RemoveReadOnly(filepath);
             var lockErr = CheckFileLock(filepath); if (lockErr != null) return lockErr;
-            var coverData = System.IO.File.ReadAllBytes(coverPath);
+            var coverData = !string.IsNullOrEmpty(coverPath)
+                ? System.IO.File.ReadAllBytes(coverPath)
+                : Convert.FromBase64String(coverBase64);
             coverData = ResizeCoverIfNeeded(coverData, 800);
 
             using var file = TagLib.File.Create(filepath);
@@ -244,28 +252,9 @@ public class MusicService
             var lrcPath = basePath + lrcExt;
             if (System.IO.File.Exists(lrcPath))
             {
-                try
-                {
-                    return new Dictionary<string, object?>
-                        { ["lyrics_text"] = System.IO.File.ReadAllText(lrcPath, Encoding.UTF8) };
-                }
-                catch (Exception ex) { Console.Error.WriteLine($"[MusicService.GetLyrics] {ex.Message}"); }
-            }
-        }
-
-        // 2. Try fallback encodings for LRC
-        var lrcFile = basePath + ".lrc";
-        if (System.IO.File.Exists(lrcFile))
-        {
-            foreach (var encName in new[] { "gbk", "gb2312", "shift_jis", "euc-kr", "iso-8859-1" })
-            {
-                try
-                {
-                    var enc = Encoding.GetEncoding(encName);
-                    return new Dictionary<string, object?>
-                        { ["lyrics_text"] = System.IO.File.ReadAllText(lrcFile, enc) };
-                }
-                catch (Exception ex) { Console.Error.WriteLine($"[MusicService.GetLyrics] {ex.Message}"); }
+                var text = ReadLyricsStrict(lrcPath);
+                if (text != null)
+                    return new Dictionary<string, object?> { ["lyrics_text"] = text };
             }
         }
 
@@ -294,6 +283,28 @@ public class MusicService
         catch (Exception ex) { Console.Error.WriteLine($"[MusicService.GetLyrics] {ex.Message}"); }
 
         return new Dictionary<string, object?> { ["lyrics_text"] = null };
+    }
+
+    private static string? ReadLyricsStrict(string path)
+    {
+        try
+        {
+            var bytes = System.IO.File.ReadAllBytes(path);
+            foreach (var enc in new Encoding[]
+            {
+                new UTF8Encoding(false, true),
+                Encoding.GetEncoding("gbk", EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback),
+                Encoding.GetEncoding("gb2312", EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback),
+                Encoding.GetEncoding("shift_jis", EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback),
+                Encoding.GetEncoding("iso-8859-1", EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback),
+            })
+            {
+                try { return enc.GetString(bytes); }
+                catch (DecoderFallbackException) { }
+            }
+        }
+        catch (Exception ex) { Console.Error.WriteLine($"[MusicService.ReadLyricsStrict] {ex.Message}"); }
+        return null;
     }
 
     // ── File lock detection ─────────────────────────────────
@@ -355,7 +366,10 @@ public class MusicService
             var ratio = Math.Min((double)maxSize / img.Width, (double)maxSize / img.Height);
             img.Mutate(x => x.Resize((int)(img.Width * ratio), (int)(img.Height * ratio)));
             using var ms = new MemoryStream();
-            img.SaveAsJpeg(ms);
+            if (string.Equals(img.Metadata.DecodedImageFormat?.Name, "PNG", StringComparison.OrdinalIgnoreCase))
+                img.SaveAsPng(ms);
+            else
+                img.SaveAsJpeg(ms);
             return ms.ToArray();
         }
         catch (Exception ex) { Console.Error.WriteLine($"[MusicService.ResizeCoverIfNeeded] {ex.Message}"); return data; }

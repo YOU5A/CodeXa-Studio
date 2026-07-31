@@ -107,7 +107,6 @@ npm run build
 * Tailwind CSS 4
 * Framer Motion
 * C#
-* Python（部分工具模块）
 
 ---
 

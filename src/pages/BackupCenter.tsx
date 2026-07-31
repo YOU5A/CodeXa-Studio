@@ -71,17 +71,17 @@ export default function BackupCenter(_props: Props) {
   const [loading, setLoading] = useState(true);
 
   const fetchBackups = useCallback(async () => {
-    const result = await window.electronAPI?.python.call("backup.list");
+    const result = await window.electronAPI?.bridge.call("backup.list");
     if (result && !result.error) setBackups(result.backups ?? []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchBackups(); window.electronAPI?.python.call("backup.dir").then(r => { if (r?.dir) setBackupDir(r.dir); }); }, [fetchBackups]);
+  useEffect(() => { fetchBackups(); window.electronAPI?.bridge.call("backup.dir").then(r => { if (r?.dir) setBackupDir(r.dir); }); }, [fetchBackups]);
 
   const restoreBackup = async (bp: BackupEntry) => {
     const ok = await confirm({ title: tx.restoreConfirm, danger: false });
     if (!ok) return;
-    const result = await window.electronAPI?.python.call("backup.restore", { filepath: bp.filepath });
+    const result = await window.electronAPI?.bridge.call("backup.restore", { filepath: bp.filepath });
     if (result?.success) {
       showToast(tx.restored, "success");
       fetchBackups();
@@ -91,7 +91,7 @@ export default function BackupCenter(_props: Props) {
   const deleteBackup = async (bp: BackupEntry) => {
     const ok = await confirm({ title: tx.deleteConfirm, danger: true });
     if (!ok) return;
-    const result = await window.electronAPI?.python.call("backup.delete", { filename: bp.filename });
+    const result = await window.electronAPI?.bridge.call("backup.delete", { filename: bp.filename });
     if (result?.success) {
       showToast(tx.deleted, "success");
       fetchBackups();
@@ -108,7 +108,7 @@ export default function BackupCenter(_props: Props) {
       filters: [{ name: "Registry Files", extensions: ["reg"] }],
     });
     if (!dest) return;
-    const result = await window.electronAPI?.python.call("backup.export", {
+    const result = await window.electronAPI?.bridge.call("backup.export", {
       filepath: bp.filepath,
       dest: dest,
     });

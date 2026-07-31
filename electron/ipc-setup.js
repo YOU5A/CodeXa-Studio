@@ -259,7 +259,7 @@ async function searchLyricsMultiQuery(title, artist, album, searchFn) {
 }
 
 // ── Music: Online Lyrics Search (Netease) ──
-function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, pythonBridge, dotnetBridge }) {
+function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, dotnetBridge }) {
   // Window controls
     ipcMain.handle("window:minimize", () => mainWindow.current?.minimize());
 
@@ -318,7 +318,7 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
     return { ...electronSettings };
   });
 
-  // All RPC methods routed to .NET bridge, with Python + JS fallback
+  // All RPC methods routed to .NET bridge, with JS fallback
   let _callMethod = null;
   function getCallMethod() {
     if (!_callMethod) {
@@ -328,7 +328,7 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
     return _callMethod;
   }
 
-  ipcMain.handle("python:call", async (_event, method, params) => {
+  ipcMain.handle("bridge:call", async (_event, method, params) => {
     // NCM methods handled natively (no bridge needed)
     if (method === "ncm.list") {
       const { listNcm } = require("./rpc/ncm");
@@ -351,10 +351,6 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
       try { return await dotnetBridge.current.call(method, params); }
       catch (e) { console.warn("[.NET Bridge]", method, "failed:", e.message); }
     }
-    if (pythonBridge.current?.isRunning) {
-      try { return await pythonBridge.current.call(method, params); }
-      catch (e) { console.warn("[Python Bridge]", method, "failed:", e.message); }
-    }
     // Fallback to Node.js routing (electron/rpc/)
     const callMethod = getCallMethod();
     if (callMethod) {
@@ -363,7 +359,7 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
     }
     return { error: "No bridge or JS fallback available" };
   });
-  ipcMain.handle("python:status", () => pythonBridge.current?.isRunning ?? false);
+  ipcMain.handle("bridge:status", () => dotnetBridge.current?.isRunning ?? false);
 
   // Dialogs
   ipcMain.handle("dialog:openFolder", async () => {

@@ -9,7 +9,7 @@
 **作者:** YOU5A / Y0USA
 **技术栈:** TypeScript 6 · React 19 · Tailwind CSS 4 · Framer Motion 12 · Electron 42 · .NET 10
 **仓库:** https://github.com/YOU5A/CodeXa-Studio
-**版本:** 2.1.9
+**版本:** 2.2.0
 **许可证:** AGPL-3.0
 
 ---
@@ -61,8 +61,8 @@ CodeXa-Studio/
 ├── electron/                    # Electron 42 主进程
 │   ├── main.js                  # 窗口、IPC、托盘、提权、单实例锁
 │   ├── preload.js               # contextBridge → window.electronAPI
-│   ├── bridge-manager.js        # 双桥管理器（.NET 优先 → Python 回退）
-│   ├── python-bridge.js         # JSON-RPC 子进程管理器
+│   ├── bridge-manager.js        # 桥接管理器（.NET 主桥 + JS 兜底）
+│   ├── rpc-bridge.js            # JSON-RPC 子进程管理器
 │   ├── ipc-setup.js             # IPC 处理器 + 在线歌词/封面搜索
 │   ├── window.js                # 窗口创建与持久化
 │   ├── tray.js                  # 系统托盘
@@ -105,20 +105,15 @@ CodeXa-Studio/
 │
 ├── diag-cpu/                    # CPU 诊断小工具 (.NET)
 │
-├── resources/                   # Python 回退脚本
-│   ├── Win32PrioritySeparation.pyw
-│   ├── AppCpuPriorityTools.pyw
-│   └── File_Music.pyw
-│
 ├── data/                        # 运行时数据（gitignore 排除）
-├── bridge/                      # Python 桥接缓存
+├── docs/legacy-py/              # 旧 Python 工具存档（gitignore 排除）
 ├── demos/                       # 演示页面
 ├── public/                      # 静态资源
 │
 └── src/                         # React 19 前端
     ├── main.tsx                  # ReactDOM 入口
     ├── App.tsx                   # 根组件：路由、布局、Provider 嵌套
-    ├── version.ts                # 版本号 (2.1.9)
+    ├── version.ts                # 版本号 (2.2.0)
     │
     ├── types/index.ts            # 全局类型：SystemInfo · RpcMethod(34) · ElectronAPI
     ├── constants/                # storage-keys · default-settings
@@ -175,26 +170,25 @@ CodeXa-Studio/
     └── lyrics/                   # 歌词子系统（8 个文件）
 ```
 
-### 3.2 桥接架构（双桥回退）
+### 3.2 桥接架构（.NET 主桥 + JS 兜底）
 
 ```
-React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / Python (回退)
+React 19  ←contextBridge→  Electron 42  ←JSON-RPC→  .NET 10 (主) / JS 路由 (兜底)
                                 │
                ┌────────────────┼────────────────┐
                │  electron/rpc/ (路由分发)         │
                │  callMethod() 34 方法              │
                └────────────────┬────────────────┘
                                 │
-              ┌─────────────────┼─────────────────┐
-              ▼                                    ▼
-    .NET 10 Bridge (主)                  Python Bridge (回退)
-    dotnet-bridge/publish-sc/           resources/*.pyw
-    CodeXaBridge.exe                    3 个 .pyw 脚本
+              ▼
+    .NET 10 Bridge (主)
+    dotnet-bridge/publish-sc/
+    CodeXaBridge.exe
     8 个 .cs 服务
 ```
 
 - **主桥接:** .NET 10 CodeXaBridge.exe，JSON-RPC over stdin/stdout，8 个 C# 服务类。
-- **回退桥接:** Python .pyw 脚本，.NET 不可用时自动切换（bridge-manager.js: 3s 延迟 + 最多 3 次重试）。
+- **兜底:** electron/rpc/ JS 路由，.NET 桥不可用时直接由 Node 实现同 34 个方法。
 - **路由层:** electron/rpc/ 9 个 JS 模块，统一分发 34 个 RPC 方法。
 - **IPC 通道:** electron/preload.js → contextBridge.exposeInMainWorld → window.electronAPI。
 - **在线搜索:** Electron 主进程集成 NeteaseCloudMusicApi（歌词） + 原生 HTTPS（封面：网易云/QQ/iTunes）。

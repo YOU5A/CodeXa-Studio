@@ -6,7 +6,7 @@ import { defaultSettings } from "@/constants/default-settings";
 
 /** Sync a partial settings object to the Bridge layer (non-blocking, best-effort). */
 function syncSettingsToBridge(partial: Partial<AppSettings>) {
-  window.electronAPI?.python.call("config.set", partial).catch(() => {});
+  window.electronAPI?.bridge.call("config.set", partial).catch(() => {});
 }
 
 /* ----- Dynamic theme CSS injection ----- */

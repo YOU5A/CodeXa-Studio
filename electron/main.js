@@ -4,7 +4,6 @@ const path = require("path");
 const { spawnSync, exec } = require("child_process");
 
 const mainWindow = { current: null };
-const pythonBridge = { current: null };
 const dotnetBridge = { current: null };
 const quittingRef = { current: false };
 
@@ -107,13 +106,13 @@ ensureAdmin();
 
 const { createWindow } = require("./window");
 const { setupIPC } = require("./ipc-setup");
-const { setupBridges } = require("./bridge-manager");
+const { setupBridge } = require("./bridge-manager");
 const { createTray } = require("./tray");
 
 // ---- App lifecycle ----
 app.whenReady().then(() => {
-  setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, pythonBridge, dotnetBridge });
-  setupBridges({ isDev, dotnetBridge, pythonBridge, app });
+  setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, dotnetBridge });
+  setupBridge({ isDev, dotnetBridge, app });
   mainWindow.current = createWindow({ electronSettings, saveElectronSettings, isQuittingRef: quittingRef, mainWindowRef: mainWindow });
   createTray({ isDev, mainWindowRef: mainWindow, quittingRef });
 

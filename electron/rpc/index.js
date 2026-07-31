@@ -9,7 +9,7 @@ const ncm = require("./ncm");
 
 /**
  * Route an RPC method call and return the result.
- * Mirrors the Python bridge/server.py METHOD dispatch.
+ * Mirrors the .NET bridge METHOD dispatch.
  * @param {string} method - RPC method name (e.g. "system.info")
  * @param {object} params - Parameters object
  * @returns {Promise<object>} Result object

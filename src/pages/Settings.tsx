@@ -57,7 +57,7 @@ const t: Record<Language, Record<string, string>> = {
     aboutTitle: "CodeXa Studio",
     aboutDesc: "统一 Windows 系统管理工具",
     aboutAuthor: "作者: Y0USA",
-    aboutTech: "Electron + React + Python",
+    aboutTech: "Electron + React + .NET",
     github: "GitHub",
     bilibili: "B站",
     usertool: "UserTool",
@@ -101,7 +101,7 @@ const t: Record<Language, Record<string, string>> = {
     aboutTitle: "CodeXa Studio",
     aboutDesc: "Unified Windows System Management Tool",
     aboutAuthor: "Author: Y0USA",
-    aboutTech: "Electron + React + Python",
+    aboutTech: "Electron + React + .NET",
     github: "GitHub",
     bilibili: "Bilibili",
     usertool: "UserTool",
@@ -169,7 +169,7 @@ export default function Settings() {
   const [electronSettings, setElectronSettings] = useState({ autoStart: false, closeToTray: false });
 
   useEffect(() => {
-    window.electronAPI?.python.call("config.get").then((_cfg: unknown) => {
+    window.electronAPI?.bridge.call("config.get").then((_cfg: unknown) => {
     }).catch(() => {});
     window.electronAPI?.settings.getAll().then((s) => {
       const autoStart = s?.autoStart;

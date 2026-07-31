@@ -23,7 +23,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const setLang = useCallback((l: Language) => {
     setLangState(l);
     localStorage.setItem(STORAGE_LANG, l);
-    window.electronAPI?.python.call("config.set", { language: l });
+    window.electronAPI?.bridge.call("config.set", { language: l });
   }, []);
 
   return (

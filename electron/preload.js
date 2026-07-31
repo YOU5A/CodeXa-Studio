@@ -20,12 +20,12 @@ const api = {
     getAll: () => ipcRenderer.invoke("settings:getAll"),
     resetBounds: () => ipcRenderer.invoke("settings:resetBounds"),
   },
-  python: {
+  bridge: {
     // Convert local file path to playable URL via custom protocol
     getFileUrl: (filepath) => 'file:///' + filepath.replace(/\\/g, '/'),
 
-    call: (method, params) => ipcRenderer.invoke("python:call", method, params),
-    status: () => ipcRenderer.invoke("python:status"),
+    call: (method, params) => ipcRenderer.invoke("bridge:call", method, params),
+    status: () => ipcRenderer.invoke("bridge:status"),
   },
   dialog: {
     openFolder: () => ipcRenderer.invoke("dialog:openFolder"),

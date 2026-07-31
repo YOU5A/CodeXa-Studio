@@ -1,8 +1,7 @@
-﻿const { spawn } = require("child_process");
+const { spawn } = require("child_process");
 
-class PythonBridge {
-  constructor(bridgePath) {
-    this.bridgePath = bridgePath;
+class RpcBridge {
+  constructor() {
     this.process = null;
     this.pending = new Map();
     this.requestId = 0;
@@ -10,19 +9,22 @@ class PythonBridge {
     this._isRunning = false;
     this.restartTimer = null;
     this._stopping = false;
+    this.command = null;
+    this.args = [];
   }
 
   get isRunning() {
     return this._isRunning;
   }
 
-  start() {
-    const pythonPath = process.env.PYTHON_PATH || "python";
+  start(command, args = []) {
+    this.command = command;
+    this.args = args;
 
     try {
-      this.process = spawn(pythonPath, [this.bridgePath], {
+      this.process = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+        env: { ...process.env },
       });
 
       this._isRunning = true;
@@ -33,30 +35,30 @@ class PythonBridge {
       });
 
       this.process.stderr?.on("data", (data) => {
-        console.error("[Python Bridge]", data.toString("utf-8"));
+        console.error("[Rpc Bridge]", data.toString("utf-8"));
       });
 
       this.process.on("close", (code) => {
-        console.log(`[Python Bridge] Exited with code ${code}`);
+        console.log(`[Rpc Bridge] Exited with code ${code}`);
         this._isRunning = false;
         this.process = null;
         for (const [id, call] of this.pending) {
           clearTimeout(call.timer);
-          call.reject(new Error("Python bridge disconnected"));
+          call.reject(new Error("RPC bridge disconnected"));
           this.pending.delete(id);
         }
-        if (!this._stopping) {
-          this.restartTimer = setTimeout(() => this.start(), 2000);
+        if (!this._stopping && this.command) {
+          this.restartTimer = setTimeout(() => this.start(this.command, this.args), 2000);
         }
       });
 
       this.process.on("error", (err) => {
-        console.error("[Python Bridge] Failed to start:", err.message);
+        console.error("[Rpc Bridge] Failed to start:", err.message);
         this._isRunning = false;
         this.process = null;
       });
     } catch (err) {
-      console.error("[Python Bridge] Spawn failed:", err.message);
+      console.error("[Rpc Bridge] Spawn failed:", err.message);
       this._isRunning = false;
     }
   }
@@ -86,7 +88,7 @@ class PythonBridge {
   call(method, params) {
     return new Promise((resolve, reject) => {
       if (!this.process || !this._isRunning) {
-        reject(new Error("Python bridge not running"));
+        reject(new Error("RPC bridge not running"));
         return;
       }
 
@@ -140,4 +142,4 @@ class PythonBridge {
   }
 }
 
-module.exports = { PythonBridge };
+module.exports = { RpcBridge };

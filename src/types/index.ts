@@ -139,7 +139,7 @@ export type Page =
   | "ncmstudio"
   | "settings";
 
-/** All JSON-RPC methods routed through electron/rpc -> .NET Bridge (or Python fallback). */
+/** All JSON-RPC methods routed through electron/rpc -> .NET Bridge (or JS fallback). */
 export type RpcMethod =
   | "system.info"
   | "registry.read" | "registry.write" | "registry.backup"
@@ -188,7 +188,7 @@ export interface ElectronAPI {
     getPosition: () => Promise<[number, number]>;
     getSize: () => Promise<[number, number]>;
   };
-  python: {
+  bridge: {
     call: <T = any>(method: RpcMethod, params?: Record<string, unknown>) => Promise<T>;
     status: () => Promise<boolean>;
     getFileUrl: (filepath: string) => string;

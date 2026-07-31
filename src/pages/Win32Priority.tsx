@@ -148,7 +148,7 @@ export default function Win32Priority(_props: Props) {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const result = await window.electronAPI?.python.call("registry.read");
+    const result = await window.electronAPI?.bridge.call("registry.read");
     if (result && !result.error) {
       // Normalize hex from bridge format "0x0000002A" to "2A" for preset matching
       const normalizedHex = result.hex
@@ -156,7 +156,7 @@ export default function Win32Priority(_props: Props) {
         : result.hex;
       setRegistry({ ...result, hex: normalizedHex });
     }
-    const bkResult = await window.electronAPI?.python.call("backup.list");
+    const bkResult = await window.electronAPI?.bridge.call("backup.list");
     if (bkResult?.backups) setBackups(bkResult.backups);
     setLoading(false);
   }, []);
@@ -179,7 +179,7 @@ export default function Win32Priority(_props: Props) {
     } else {
       parsedValue = parseInt(raw, 10);
     }
-    const result = await window.electronAPI?.python.call("registry.write", { value: parsedValue });
+    const result = await window.electronAPI?.bridge.call("registry.write", { value: parsedValue });
     if (result && !result.error) {
       showToast(tx.success, "success");
       recordActivity("win32priority", lang === "zh" ? `Win32 优先级已设置为 ${result.value}` : `Win32 priority set to ${result.value}`);
@@ -191,7 +191,7 @@ export default function Win32Priority(_props: Props) {
   };
 
   const createBackup = async () => {
-    const result = await window.electronAPI?.python.call("registry.backup");
+    const result = await window.electronAPI?.bridge.call("registry.backup");
     if (result && !result.error) {
       showToast(tx.backupCreated, "success");
       fetchData();
@@ -203,7 +203,7 @@ export default function Win32Priority(_props: Props) {
   const restoreBackup = async (bp: BackupEntry) => {
     const ok = await confirm({ title: tx.restoreConfirm, danger: false });
     if (!ok) return;
-    const result = await window.electronAPI?.python.call("backup.restore", { filepath: bp.filepath, module: "win32" });
+    const result = await window.electronAPI?.bridge.call("backup.restore", { filepath: bp.filepath, module: "win32" });
     if (result?.success) showToast(tx.success, "success");
     else showToast(result?.error || tx.failed, "error");
     fetchData();
@@ -212,7 +212,7 @@ export default function Win32Priority(_props: Props) {
   const deleteBackup = async (bp: BackupEntry) => {
     const ok = await confirm({ title: tx.deleteConfirm, danger: true });
     if (!ok) return;
-    const result = await window.electronAPI?.python.call("backup.delete", { filename: bp.filename });
+    const result = await window.electronAPI?.bridge.call("backup.delete", { filename: bp.filename });
     if (result?.success) fetchData();
   };
 
@@ -221,7 +221,7 @@ export default function Win32Priority(_props: Props) {
     if (!ok) return;
     let n = 0;
     for (const bp of backups) {
-      try { await window.electronAPI?.python.call("backup.delete", { filename: bp.filename }); n++; } catch {}
+      try { await window.electronAPI?.bridge.call("backup.delete", { filename: bp.filename }); n++; } catch {}
     }
     showToast(tx.clearAllDone.replace("{n}", String(n)), "success");
     fetchData();

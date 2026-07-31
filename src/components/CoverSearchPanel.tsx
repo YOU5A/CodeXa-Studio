@@ -59,6 +59,7 @@ const t: Record<Language, Record<string, string>> = {
     appliedOk: "封面已替换",
     saveFailed: "保存失败",
     applyFailed: "替换失败",
+    downloadFailed: "封面下载失败，请检查网络后重试",
   },
   en: {
     title: "Search Cover Online",
@@ -82,6 +83,7 @@ const t: Record<Language, Record<string, string>> = {
     appliedOk: "Cover applied",
     saveFailed: "Save failed",
     applyFailed: "Apply failed",
+    downloadFailed: "Cover download failed, please check your network",
   },
 };
 
@@ -178,15 +180,12 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
     setApplying(true);
     setNoticeMsg(null);
     try {
-      if (window.electronAPI?.music?.downloadCoverImage) {
-        const dl = await window.electronAPI.music.downloadCoverImage(selected.coverUrl);
-        if (dl?.data) {
-          await onApplyCover(dl.data);
-          setNoticeMsg({ text: tx.appliedOk, type: "success" });
-          return;
-        }
+      const dl = await window.electronAPI?.music?.downloadCoverImage(selected.coverUrl);
+      if (!dl?.data) {
+        setNoticeMsg({ text: tx.downloadFailed, type: "error" });
+        return;
       }
-      await onApplyCover(selected.coverUrl);
+      await onApplyCover(dl.data);
       setNoticeMsg({ text: tx.appliedOk, type: "success" });
     } catch (e: any) {
       setNoticeMsg({ text: e?.message || tx.applyFailed, type: "error" });
@@ -200,15 +199,12 @@ const CoverSearchPanel: FC<CoverSearchPanelProps> = ({
     setSaving(true);
     setNoticeMsg(null);
     try {
-      if (window.electronAPI?.music?.downloadCoverImage) {
-        const dl = await window.electronAPI.music.downloadCoverImage(selected.coverUrl);
-        if (dl?.data) {
-          await onSaveCover(dl.data);
-          setNoticeMsg({ text: tx.savedOk, type: "success" });
-          return;
-        }
+      const dl = await window.electronAPI?.music?.downloadCoverImage(selected.coverUrl);
+      if (!dl?.data) {
+        setNoticeMsg({ text: tx.downloadFailed, type: "error" });
+        return;
       }
-      await onSaveCover(selected.coverUrl);
+      await onSaveCover(dl.data);
       setNoticeMsg({ text: tx.savedOk, type: "success" });
     } catch (e: any) {
       setNoticeMsg({ text: e?.message || tx.saveFailed, type: "error" });

@@ -1,7 +1,7 @@
 /**
  * LyricManager — Lyrics state management hook
  *
- * Fetches lyrics via local Python bridge or online search.
+ * Fetches lyrics via local .NET bridge or online search.
  * Integrates global offset from lyrics settings.
  *
  * @module lyrics/LyricManager
@@ -100,7 +100,7 @@ export function useLyricManager() {
     let artist = extractArtistFromPath(filePath);
     let album = "";
     try {
-      const metaResult = await window.electronAPI?.python.call("music.get_metadata", { filepath: filePath });
+      const metaResult = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: filePath });
       if (metaResult?.title) title = metaResult.title;
       if (metaResult?.artist) artist = metaResult.artist;
       if (metaResult?.album) album = metaResult.album;
@@ -129,7 +129,7 @@ export function useLyricManager() {
 
     // Helper: fetch from local LRC file
     const fetchLocalLrc = async (): Promise<LyricData | null> => {
-      const localResult = await window.electronAPI?.python.call("music.get_lyrics", { filepath: filePath });
+      const localResult = await window.electronAPI?.bridge.call("music.get_lyrics", { filepath: filePath });
       if (localResult?.lyrics_text) {
         return parseLyricData(localResult.lyrics_text);
       }
