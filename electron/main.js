@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, nativeTheme } = require("electron");
+const { app, BrowserWindow, nativeTheme } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync, exec } = require("child_process");
@@ -131,6 +131,17 @@ app.whenReady().then(() => {
     });
     mainWindow.current.on("unmaximize", () => {
       mainWindow.current?.webContents.send("window:maximizeChange", false);
+    });
+    mainWindow.current.on("enter-full-screen", () => {
+      mainWindow.current?.webContents.send("window:fullscreenChange", true);
+    });
+    mainWindow.current.on("leave-full-screen", () => {
+      mainWindow.current?.webContents.send("window:fullscreenChange", false);
+    });
+    // Windows 无边框窗口 enter/leave-full-screen 事件可能不触发，
+    // 用 resize 兜底同步真实全屏状态（重复发送同值无害）
+    mainWindow.current.on("resize", () => {
+      mainWindow.current?.webContents.send("window:fullscreenChange", mainWindow.current?.isFullScreen() ?? false);
     });
   }
 });

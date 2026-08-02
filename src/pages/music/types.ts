@@ -74,6 +74,7 @@ export interface PlayerBarProps {
   playingFile: string | null;
   metadata: MusicMetadata | null;
   coverB64: string | null;
+  onOpenNowPlaying: () => void;
   progressHover: boolean;
   isDragging: boolean;
   playBtnGlow: { x: number; y: number; visible: boolean };

@@ -1,6 +1,8 @@
 /**
  * SvgFluidRenderer — SVG feTurbulence + feDisplacementMap 流体背景渲染器
  * 将输入图片分成 4 象限，通过 SVG 滤镜扭曲 + CSS 旋转动画产生有机流体效果
+ * 位移量固定 400（原项目为音频驱动，未接入音频时保持静止）；
+ * 帧率经 CSS steps() 限制（与 refined-now-playing-netease-next 一致）。
  * 参考: refined-now-playing-netease-next (SUlTlUS)
  */
 
@@ -12,14 +14,14 @@ export interface SvgFluidRendererProps {
   imageUrl: string;
   /** 总开关 */
   enabled?: boolean;
-  /** 是否固定位移量 (true=固定400, false=随时间正弦变化) */
-  static?: boolean;
-  /** 速度倍率 0.1-3.0 */
+  /** 速度倍率 0.1-3.0（旋转动画时长倍率） */
   speedMultiplier?: number;
   /** 是否暂停动画 */
   paused?: boolean;
-  /** 目标帧率 (30/60) */
+  /** 目标帧率 (30/60/0)，0=不限帧率；通过 CSS steps() 限制旋转动画 */
   targetFps?: number;
+  /** 模糊程度 0-1（作用于流体上的 backdrop blur，最大 64px） */
+  blurAmount?: number;
   /** 额外 CSS 类名 */
   className?: string;
 }
@@ -29,10 +31,10 @@ const CANVAS_SIZE = 100;
 const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
   imageUrl,
   enabled = true,
-  static: isStatic = false,
   speedMultiplier = 1.0,
   paused = false,
   targetFps = 60,
+  blurAmount = 0,
   className,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,10 +42,7 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
   const canvas2Ref = useRef<HTMLCanvasElement>(null);
   const canvas3Ref = useRef<HTMLCanvasElement>(null);
   const canvas4Ref = useRef<HTMLCanvasElement>(null);
-  const feDisplacementMapRef = useRef<SVGFEDisplacementMapElement>(null);
   const feTurbulenceRef = useRef<SVGFETurbulenceElement>(null);
-  const rafRef = useRef<number>(0);
-  const startTimeRef = useRef<number>(0);
 
   // 绘制 4 象限到 canvas
   const drawQuadrants = useCallback((src: string) => {
@@ -84,46 +83,6 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
     }
   }, [imageUrl, drawQuadrants]);
 
-  // 动态位移量动画 (含帧率限制)
-  useEffect(() => {
-    if (isStatic || !enabled || paused) return;
-
-    startTimeRef.current = performance.now();
-    const frameInterval = 1000 / targetFps;
-    let lastFrameTime = 0;
-
-    const animate = (now: number) => {
-      if (now - lastFrameTime < frameInterval) {
-        rafRef.current = requestAnimationFrame(animate);
-        return;
-      }
-      lastFrameTime = now;
-
-      const elapsed = (now - startTimeRef.current) * 0.001 * speedMultiplier;
-      // 正弦波 200-600 范围, 周期约 8 秒
-      const scale = 400 + Math.sin(elapsed * Math.PI * 0.25) * 200;
-      if (feDisplacementMapRef.current) {
-        feDisplacementMapRef.current.setAttribute("scale", String(Math.round(scale)));
-      }
-      rafRef.current = requestAnimationFrame(animate);
-    };
-
-    rafRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [isStatic, enabled, paused, speedMultiplier, targetFps]);
-
-  // 暂停/恢复时重置位移
-  useEffect(() => {
-    if (paused || !enabled) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (feDisplacementMapRef.current) {
-        feDisplacementMapRef.current.setAttribute("scale", "400");
-      }
-    }
-  }, [paused, enabled]);
-
   if (!enabled || !imageUrl) return null;
 
   return (
@@ -147,11 +106,8 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
             numOctaves="1"
             seed="0"
           />
-          <feDisplacementMap
-            ref={feDisplacementMapRef}
-            in="SourceGraphic"
-            scale={isStatic ? "400" : "400"}
-          />
+          {/* 位移固定 400：原项目为音频驱动，未接音频时保持此值 */}
+          <feDisplacementMap in="SourceGraphic" scale="400" />
         </filter>
       </svg>
 
@@ -161,6 +117,7 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
         style={{
           backgroundImage: `url(${imageUrl})`,
           display: enabled ? undefined : "none",
+          ["--svg-fluid-blur" as string]: `${Math.round(blurAmount * 64)}px`,
         }}
       >
         <div
@@ -168,6 +125,9 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
           className={`svg-fluid-rect${paused ? " paused" : ""}`}
           style={{
             animationDuration: `${150 / speedMultiplier}s`,
+            // 原项目帧率限制：150s 旋转 → fps*150 步；60s 块旋转 → fps*60 步
+            ["--svg-fluid-steps-rect" as string]: targetFps > 0 ? `steps(${Math.round(targetFps * 150)})` : undefined,
+            ["--svg-fluid-steps-block" as string]: targetFps > 0 ? `steps(${Math.round(targetFps * 60)})` : undefined,
           }}
         >
           <canvas ref={canvas1Ref} className="svg-fluid-canvas" width={CANVAS_SIZE} height={CANVAS_SIZE} />

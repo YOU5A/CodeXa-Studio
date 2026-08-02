@@ -13,11 +13,13 @@ interface GlassTooltipProps {
   text: string;
   children: ReactNode;
   placement?: "right" | "left";
+  /** 附加到外层包裹 span 的样式（如需要撑满 flex 行） */
+  style?: React.CSSProperties;
 }
 
 const SHOW_DELAY = 400;
 
-export function GlassTooltip({ text, children, placement = "right" }: GlassTooltipProps) {
+export function GlassTooltip({ text, children, placement = "right", style }: GlassTooltipProps) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,7 +61,7 @@ export function GlassTooltip({ text, children, placement = "right" }: GlassToolt
       onMouseEnter={onEnter}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
-      style={{ display: "inline-flex" }}
+      style={{ display: "inline-flex", ...style }}
     >
       {children}
       {visible && pos && text && createPortal(

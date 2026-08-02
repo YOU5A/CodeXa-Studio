@@ -15,7 +15,8 @@ import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import { GlassLayout, GlassMain, GlassEmptyState, pageTransition } from "./design-system";
 import ErrorBoundary from "./components/ErrorBoundary";
-import FluidBackground from "./components/FluidBackground";
+import NowPlayingBackground from "./components/NowPlaying/NowPlayingBackground";
+import NowPlayingOverlay from "./components/NowPlaying/NowPlayingOverlay";
 import { loadFluidSettings, type FluidSettingsValues } from "./components/FluidSettingsPanel";
 import type { RGB } from "./utils/colorExtractor";
 
@@ -69,6 +70,9 @@ function AppContent() {
     return (localStorage.getItem(STORAGE_PAGE) as Page) || "dashboard";
   });
   const [isMaximized, setIsMaximized] = useState(false);
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  // 主窗口流体启停：NowPlaying 展开（含背景淡入）完成后再隐藏，关闭时立即恢复，保证动画期间底层流体可见
+  const [mainFluidEnabled, setMainFluidEnabled] = useState(true);
   const animDuration = getAnimDuration(settings.animationSpeed);
   const { audioState } = useMusicPlayer();
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
@@ -136,6 +140,19 @@ function AppContent() {
     return () => window.removeEventListener("fluidCoverChanged", handler as EventListener);
   }, []);
 
+
+  // NowPlaying 打开时延迟 500ms（覆盖展开动画 0.38s + 背景淡入 0.45s）再停用主窗口流体；
+  // 关闭时立即恢复，让主窗口流体在收起动画期间已在底层显示
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (nowPlayingOpen) {
+      timer = setTimeout(() => setMainFluidEnabled(false), 500);
+    } else {
+      setMainFluidEnabled(true);
+    }
+    return () => { if (timer) clearTimeout(timer); };
+  }, [nowPlayingOpen]);
+
   // Redirect from NCM page when developer mode is disabled
   const prevDevMode = useRef(isDeveloperMode);
   useEffect(() => {
@@ -169,7 +186,7 @@ function AppContent() {
     dashboard: <Dashboard onNavigate={handleNavigate} />,
     win32priority: <Win32Priority />,
     appcpupriority: <AppCpuPriority />,
-    musicmanager: <MusicManager onNavigate={handleNavigate} fluidSettings={fluidSettings} onFluidSettingsChange={setFluidSettings} />,
+    musicmanager: <MusicManager onNavigate={handleNavigate} fluidSettings={fluidSettings} onFluidSettingsChange={setFluidSettings} onOpenNowPlaying={() => setNowPlayingOpen(true)} />,
     backupcenter: <BackupCenter />,
     ncmstudio: <NcmStudio />,
     settings: <Settings />,
@@ -178,20 +195,16 @@ function AppContent() {
   return (
     <GlassLayout>
       {/* Fluid background layer - covers entire window */}
-      <FluidBackground
-        enabled={fluidSettings.enabled}
-        preset={fluidSettings.style}
-        intensity={fluidSettings.intensity}
-        speedMultiplier={fluidSettings.speedMultiplier}
-        blurAmount={fluidSettings.blurAmount}
-        quality={fluidSettings.fps === 30 ? "low" : "high"}
-        targetFps={fluidSettings.fps}
-        colorMode={fluidSettings.colorMode}
-        coverColor={coverColor}
-        coverImageUrl={coverImageUrl}
-        playing={audioState.playing}
-        interactive={false}
-      />
+      {mainFluidEnabled && (
+        <NowPlayingBackground
+          coverColor={coverColor}
+          coverImageUrl={coverImageUrl}
+          playing={audioState.playing}
+          dim={fluidSettings.backgroundDim}
+          type={fluidSettings.backgroundType}
+          dynamicFluid={fluidSettings.dynamicFluid}
+        />
+      )}
       {/* Title Bar — sits above the body grid */}
       <div style={{ position: "relative", zIndex: 30, flexShrink: 0 }}>
         <TitleBar
@@ -258,6 +271,12 @@ function AppContent() {
 
       <ToastContainer />
       <ConfirmDialog />
+
+      {/* 全窗口播放覆盖层 */}
+      <NowPlayingOverlay
+        open={nowPlayingOpen}
+        onClose={() => setNowPlayingOpen(false)}
+      />
     </GlassLayout>
   );
 }

@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
   Volume2, Music, Settings,
+  Maximize2,
 } from "lucide-react";
 import { GlassSurface, GlassButton, GlassSeekBar, GlassTooltip } from "@/design-system/components";
 import { radii, space, fontSizes } from "@/design-system/tokens";
@@ -13,6 +15,7 @@ export default function PlayerBar(props: PlayerBarProps) {
   const {
     playback, pct, volume, playMode,
     playingFile, metadata, coverB64,
+    onOpenNowPlaying,
     progressHover, isDragging, playBtnGlow, volumeHover, volGlow, isDraggingVolume,
     lyricsVisible, lyricsBtnHover,
     toggle, playPrev, playNext, setPlayMode,
@@ -22,6 +25,8 @@ export default function PlayerBar(props: PlayerBarProps) {
     progressRef, volumeRef, lyricsGearTimer,
     fmtTime, tx, lang,
   } = props;
+
+  const [coverHover, setCoverHover] = useState(false);
 
   const modeTooltip =
     playMode === "sequential" ? tx.modeSequential :
@@ -51,17 +56,50 @@ export default function PlayerBar(props: PlayerBarProps) {
       <div style={{ display: "flex", alignItems: "center", gap: space[4] }}>
         {/* Left: Cover + Track Info */}
         <div style={{ display: "flex", alignItems: "center", gap: space[3], flex: 1, minWidth: 0 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: radii.md,
-            overflow: "hidden", flexShrink: 0,
-            background: "rgba(128,128,128,0.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            {coverB64 ? (
-              <img src={`data:image/jpeg;base64,${coverB64}`} alt="cover"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <Music size={20} style={{ color: "var(--text-tertiary)", opacity: 0.5 }} />
+          {/* 封面 48×48：悬停显示全窗口播放展开图标 */}
+          <div
+            style={{ position: "relative", flexShrink: 0 }}
+            onMouseEnter={() => setCoverHover(true)}
+            onMouseLeave={() => setCoverHover(false)}
+          >
+            <div style={{
+              width: 48, height: 48, borderRadius: radii.md,
+              overflow: "hidden",
+              background: "rgba(128,128,128,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {coverB64 ? (
+                <img src={`data:image/jpeg;base64,${coverB64}`} alt="cover"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <Music size={20} style={{ color: "var(--text-tertiary)", opacity: 0.5 }} />
+              )}
+            </div>
+            {playingFile && (
+              <button
+                onClick={onOpenNowPlaying}
+                aria-label="展开全窗口播放"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: radii.md,
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(0,0,0,0.45)",
+                  color: "#fff",
+                  opacity: coverHover ? 1 : 0,
+                  pointerEvents: coverHover ? "auto" : "none",
+                  transition: "opacity 0.15s ease",
+                }}
+              >
+                <Maximize2 size={16} />
+              </button>
             )}
           </div>
           <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -234,7 +272,7 @@ export default function PlayerBar(props: PlayerBarProps) {
               size="sm"
               noAnimation
               onClick={() => {
-                const modes: PlayMode[] = ["loop-all", "shuffle", "stop-after", "sequential"];
+                const modes: PlayMode[] = ["loop-all", "shuffle", "stop-after"];
                 const idx = modes.indexOf(playMode);
                 setPlayMode(modes[(idx + 1) % modes.length]);
               }}

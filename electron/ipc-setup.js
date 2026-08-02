@@ -1,6 +1,7 @@
 const { ipcMain, dialog, shell, app } = require("electron");
 const https = require("https");
-const { cloudsearch, lyric } = require("NeteaseCloudMusicApi");
+const { cloudsearch, lyric } = require("./netease-eapi");
+const { toRomajiLrc } = require("./romaji");
 
 
 
@@ -283,6 +284,28 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
   ipcMain.handle("window:getSize", () => mainWindow.current?.getSize());
   ipcMain.handle("window:setPosition", (_e, x, y) => { mainWindow.current?.setPosition(x, y); });
 
+  // 全屏前窗口 bounds：无边框/透明窗口在 Windows 退出全屏后尺寸可能不自动恢复
+  let preFullscreenBounds = null;
+  ipcMain.handle("window:toggleFullscreen", (_e, force) => {
+    const win = mainWindow.current;
+    if (!win) return false;
+    // 支持强制进入/退出（force 为 boolean）；不传则按当前状态切换
+    const next = typeof force === "boolean" ? force : !win.isFullScreen();
+    if (next && !win.isFullScreen()) {
+      preFullscreenBounds = win.getBounds();
+    }
+    win.setFullScreen(next);
+    if (!next && preFullscreenBounds) {
+      const bounds = preFullscreenBounds;
+      preFullscreenBounds = null;
+      // 等全屏退出动画完成后再显式还原窗口尺寸/位置，避免窗口卡在全屏
+      setTimeout(() => {
+        if (win.isDestroyed() || win.isFullScreen()) return;
+        win.setBounds(bounds);
+      }, 150);
+    }
+    return next;
+  });
   // Electron settings (autoStart, minimizeToTray, closeToTray)
   ipcMain.handle("settings:get", (_e, key) => {
     return electronSettings[key];
@@ -388,8 +411,8 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
   const searchNetease = async (t, a, al) => {
     try {
       const keywords = a ? `${t} ${a}` : t;
-      const searchRes = await cloudsearch({ keywords, type: 1, limit: 50 });
-      const songs = searchRes?.body?.result?.songs;
+      const searchRes = await cloudsearch({ keywords, type: 1, limit: 100 });
+      const songs = searchRes?.result?.songs;
       if (!songs || songs.length === 0) return null;
 
       let best = null;
@@ -421,12 +444,23 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
 
       if (!best || bestScore < 0.3) return null;
 
-      const lyricRes = await lyric({ id: best.id });
-      const body = lyricRes?.body;
+      const body = await lyric({ id: best.id });
       const lrc = body?.lrc?.lyric;
       const tlyric = body?.tlyric?.lyric;
-      const romalrc = body?.romalrc?.lyric;
+      let romalrc = body?.romalrc?.lyric;
       const yrc = body?.yrc?.lyric;
+      // 缺少 romalrc 时本地生成罗马音（仅日文歌词）
+      if (!romalrc && lrc) {
+        try {
+          const generated = await toRomajiLrc(lrc);
+          if (generated) {
+            romalrc = generated;
+            console.log(`[Lyrics:Netease] Generated romaji, id=${best.id}`);
+          }
+        } catch (e) {
+          console.warn("[Lyrics:Romaji]", e.message);
+        }
+      }
       if (lrc) {
         console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}, album="${best.al?.name || ""}", hasTrans=${!!tlyric}, hasRoma=${!!romalrc}, hasDyn=${!!yrc}`);
         return { text: lrc, translated_text: tlyric || "", roman_text: romalrc || "", dynamic_text: yrc || "", source: "netease" };
@@ -462,8 +496,8 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
 ipcMain.handle("music:searchCoverNetease", async (_event, title, artist, album) => {
   try {
     const keywords = title;
-    const searchRes = await cloudsearch({ keywords, type: 1, limit: 50 });
-    const songs = searchRes?.body?.result?.songs;
+    const searchRes = await cloudsearch({ keywords, type: 1, limit: 100 });
+    const songs = searchRes?.result?.songs;
     if (!songs || songs.length === 0) return { results: [] };
 
     const seen = new Set();

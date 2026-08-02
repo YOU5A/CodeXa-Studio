@@ -87,6 +87,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const playlistRef = useRef(playlist);
   const shuffleOrderRef = useRef(shuffleOrder);
   const playingFileRef = useRef(playingFile);
+  // 供音频事件闭包（onEnd 自动下一首）复用 playFile，避免行为分叉
+  const playFileRef = useRef<(fp: string) => void>(() => {});
 
   useEffect(() => { playModeRef.current = playMode; }, [playMode]);
   useEffect(() => { playlistRef.current = playlist; }, [playlist]);
@@ -114,9 +116,38 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       if (isFinite(d) && d > 0) setAudioState(prev => ({ ...prev, duration: d }));
     };
     const onTime = () => setAudioState(prev => ({ ...prev, pos: audio.currentTime }));
-    const onPlay = () => setAudioState(prev => ({ ...prev, playing: true }));
-    const onPause = () => setAudioState(prev => ({ ...prev, playing: false }));
+
+    // rAF 平滑驱动播放位置：timeupdate 约 250ms 才触发一次且不稳定，
+    // 播放中每 ~100ms 用 audio.currentTime 刷新 pos，避免进度条/时间显示“顿一下”
+    let rafId = 0;
+    let lastTickTs = 0;
+    const tick = (ts: number) => {
+      if (ts - lastTickTs >= 100) {
+        lastTickTs = ts;
+        const t = audio.currentTime;
+        setAudioState(prev => (Math.abs(prev.pos - t) >= 0.02 ? { ...prev, pos: t } : prev));
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    const startRaf = () => {
+      cancelAnimationFrame(rafId);
+      lastTickTs = 0;
+      rafId = requestAnimationFrame(tick);
+    };
+    const stopRaf = () => {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+    const onPlay = () => {
+      startRaf();
+      setAudioState(prev => ({ ...prev, playing: true }));
+    };
+    const onPause = () => {
+      stopRaf();
+      setAudioState(prev => ({ ...prev, playing: false }));
+    };
     const onEnd = () => {
+      stopRaf();
       setAudioState(prev => ({ ...prev, playing: false, pos: 0 }));
       // Auto-advance based on play mode
       const mode = playModeRef.current;
@@ -144,13 +175,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       }
 
       const nextFile = list[nextIdx];
-      if (nextFile) {
-        setPlayingFile(nextFile);
-        playingFileRef.current = nextFile;
-        audio.src = window.electronAPI?.bridge.getFileUrl(nextFile) ?? "";
-        audio.play().catch(e => console.error("[Audio] Auto-next failed:", e));
-        setAudioState(prev => ({ ...prev, pos: 0 }));
-      }
+      // 与手动播放走同一路径（含 load() 重置），避免 ended 状态直接换源导致播放失败
+      if (nextFile) playFileRef.current(nextFile);
     };
     const onErr = () => {
       // 主动清空 src（stop/releaseHandle）触发的预期错误，忽略
@@ -173,6 +199,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       audio.removeEventListener("loadedmetadata", onDur);
       audio.removeEventListener("durationchange", onDur);
       audio.removeEventListener("timeupdate", onTime);
+      cancelAnimationFrame(rafId);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("ended", onEnd);
@@ -208,13 +235,22 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   const playFile = useCallback((fp: string) => {
     const audio = audioRef.current;
+    // 防御：非字符串路径（历史崩溃：getFileUrl 内 filepath.replace 报错）
+    if (typeof fp !== "string") {
+      console.warn("[MusicPlayer] playFile 收到非字符串", fp);
+      return;
+    }
     if (!fp || !audio) return;
     setPlayingFile(fp);
     playingFileRef.current = fp;
     audio.src = window.electronAPI?.bridge.getFileUrl(fp) ?? "";
+    // 强制重置媒体管线：ended 后直接换 src 立即 play 在 Electron 中可能失败
+    audio.load();
     audio.play().catch(e => console.error("[Audio] Play failed:", e));
     setAudioState(prev => ({ ...prev, pos: 0 }));
   }, []);
+  // 保持 ref 指向最新 playFile（音频事件闭包使用）
+  useEffect(() => { playFileRef.current = playFile; }, [playFile]);
 
   const toggle = useCallback((currentSelectedFile?: string) => {
     const audio = audioRef.current;

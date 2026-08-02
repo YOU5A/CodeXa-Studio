@@ -4,6 +4,10 @@
  * Fetches lyrics via local .NET bridge or online search.
  * Integrates global offset from lyrics settings.
  *
+ * 网络获取链路为模块级共享：已完成结果进 lyricCache，
+ * 在途请求进 pendingLyric（Promise 去重），多实例（悬浮窗 + NowPlaying）
+ * 切歌时同一首歌只会发起一次网络请求。
+ *
  * @module lyrics/LyricManager
  */
 
@@ -14,6 +18,8 @@ import type { LyricData, LyricLine, OnlineLyricResult } from "./types";
 import { loadLyricsSettings } from "./types";
 
 const lyricCache = new Map<string, LyricData>();
+/** 在途请求去重表：同一文件同时只保留一个获取任务 */
+const pendingLyric = new Map<string, Promise<LyricResult>>();
 
 export type LyricSourceOption = "auto" | "netease" | "lrc";
 
@@ -33,6 +39,11 @@ export interface LyricManagerState {
   currentTime: number;
 }
 
+interface LyricResult {
+  data: LyricData | null;
+  error: string | null;
+}
+
 function extractTitleFromPath(filePath: string): string {
   const name = filePath.replace(/\\/g, "/").split("/").pop() || "";
   return name.replace(/\.[^.]+$/, "");
@@ -47,6 +58,106 @@ function extractArtistFromPath(filePath: string): string {
     if (artist.trim()) return artist.trim();
   }
   return "";
+}
+
+/**
+ * 模块级歌词获取：已完成缓存 → 在途 Promise → 新建请求。
+ * 多实例并发调用同一文件时共享同一个请求，避免重复网络调用。
+ */
+async function requestLyricData(filePath: string): Promise<LyricResult> {
+  if (lyricCache.has(filePath)) {
+    return { data: lyricCache.get(filePath)!, error: null };
+  }
+
+  const pending = pendingLyric.get(filePath);
+  if (pending) return pending;
+
+  const promise = (async (): Promise<LyricResult> => {
+    try {
+      const source = getLyricSource();
+
+      // Resolve title/artist from metadata
+      let title = extractTitleFromPath(filePath);
+      let artist = extractArtistFromPath(filePath);
+      let album = "";
+      try {
+        const metaResult = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: filePath });
+        if (metaResult?.title) title = metaResult.title;
+        if (metaResult?.artist) artist = metaResult.artist;
+        if (metaResult?.album) album = metaResult.album;
+      } catch {
+        /* use filename fallback */
+      }
+
+      // Helper: fetch from Netease online
+      const fetchNetease = async (): Promise<LyricData | null> => {
+        if (!window.electronAPI?.music?.searchLyrics) { console.log("[LyricManager] searchLyrics API not available"); return null; }
+        console.log("[LyricManager] Calling searchLyrics:", { title, artist, album });
+        const result: OnlineLyricResult | null = await window.electronAPI.music.searchLyrics(
+          title, artist || undefined, album || undefined, "netease"
+        );
+        console.log("[LyricManager] searchLyrics result:", result?.lyrics_text ? "got lyrics" : "null");
+        if (result?.lyrics_text) {
+          return parseLyricData(
+            result.lyrics_text,
+            result.translated_text || undefined,
+            result.roman_text || undefined,
+            result.dynamic_text || undefined
+          );
+        }
+        return null;
+      };
+
+      // Helper: fetch from local LRC file
+      const fetchLocalLrc = async (): Promise<LyricData | null> => {
+        const localResult = await window.electronAPI?.bridge.call("music.get_lyrics", { filepath: filePath });
+        if (localResult?.lyrics_text) {
+          return parseLyricData(localResult.lyrics_text);
+        }
+        return null;
+      };
+
+      if (source === "lrc") {
+        // Only local LRC
+        const data = await fetchLocalLrc();
+        if (data) {
+          lyricCache.set(filePath, data);
+          return { data, error: null };
+        }
+        return { data: null, error: "暂无本地歌词" };
+      }
+
+      if (source === "netease") {
+        // Only Netease online
+        const data = await fetchNetease();
+        if (data) {
+          lyricCache.set(filePath, data);
+          return { data, error: null };
+        }
+        return { data: null, error: "暂无歌词" };
+      }
+
+      // "auto": Netease first, fallback to local LRC
+      const neteaseData = await fetchNetease();
+      if (neteaseData) {
+        lyricCache.set(filePath, neteaseData);
+        return { data: neteaseData, error: null };
+      }
+      const localData = await fetchLocalLrc();
+      if (localData) {
+        lyricCache.set(filePath, localData);
+        return { data: localData, error: null };
+      }
+      return { data: null, error: "暂无歌词" };
+    } catch (e: any) {
+      return { data: null, error: e?.message || "获取歌词失败" };
+    }
+  })();
+
+  pendingLyric.set(filePath, promise);
+  // 无论成功失败都从在途表移除，允许下次重试；额外 catch 防止 finally 链产生未处理 rejection
+  promise.finally(() => { pendingLyric.delete(filePath); }).catch(() => {});
+  return promise;
 }
 
 export function useLyricManager() {
@@ -77,6 +188,7 @@ export function useLyricManager() {
   const fetchLyrics = useCallback(async (filePath: string) => {
     if (!filePath) return;
 
+    // 已完成缓存：同步命中，直接使用
     if (lyricCache.has(filePath)) {
       const data = lyricCache.get(filePath)!;
       setLyricData(data);
@@ -93,117 +205,22 @@ export function useLyricManager() {
     setLoading(true);
     setError(null);
 
-    const source = getLyricSource();
+    // 共享请求链路：在途去重由 requestLyricData 内部处理
+    const { data, error: fetchError } = await requestLyricData(filePath);
 
-    // Resolve title/artist from metadata
-    let title = extractTitleFromPath(filePath);
-    let artist = extractArtistFromPath(filePath);
-    let album = "";
-    try {
-      const metaResult = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: filePath });
-      if (metaResult?.title) title = metaResult.title;
-      if (metaResult?.artist) artist = metaResult.artist;
-      if (metaResult?.album) album = metaResult.album;
-    } catch {
-      /* use filename fallback */
-    }
-
-    // Helper: fetch from Netease online
-    const fetchNetease = async (): Promise<LyricData | null> => {
-      if (!window.electronAPI?.music?.searchLyrics) { console.log("[LyricManager] searchLyrics API not available"); return null; }
-      console.log("[LyricManager] Calling searchLyrics:", { title, artist, album });
-      const result: OnlineLyricResult | null = await window.electronAPI.music.searchLyrics(
-        title, artist || undefined, album || undefined, "netease"
-      );
-      console.log("[LyricManager] searchLyrics result:", result?.lyrics_text ? "got lyrics" : "null");
-      if (result?.lyrics_text) {
-        return parseLyricData(
-          result.lyrics_text,
-          result.translated_text || undefined,
-          result.roman_text || undefined,
-          result.dynamic_text || undefined
-        );
-      }
-      return null;
-    };
-
-    // Helper: fetch from local LRC file
-    const fetchLocalLrc = async (): Promise<LyricData | null> => {
-      const localResult = await window.electronAPI?.bridge.call("music.get_lyrics", { filepath: filePath });
-      if (localResult?.lyrics_text) {
-        return parseLyricData(localResult.lyrics_text);
-      }
-      return null;
-    };
-
-    try {
-      if (source === "lrc") {
-        // Only local LRC
-        const data = await fetchLocalLrc();
-        if (data) {
-          lyricCache.set(filePath, data);
-          setLyricData(data);
-          const rt = audioState.pos ?? 0;
-          const idx = computeLineIndex(rt, data.lines);
-          lastIndexRef.current = idx;
-          setCurrentLineIndex(idx);
-          setCurrentTime(rt);
-          setLoading(false);
-          return;
-        }
-        setLyricData(null);
-        setError("暂无本地歌词");
-      } else if (source === "netease") {
-        // Only Netease online
-        const data = await fetchNetease();
-        if (data) {
-          lyricCache.set(filePath, data);
-          setLyricData(data);
-          const rt = audioState.pos ?? 0;
-          const idx = computeLineIndex(rt, data.lines);
-          lastIndexRef.current = idx;
-          setCurrentLineIndex(idx);
-          setCurrentTime(rt);
-          setLoading(false);
-          return;
-        }
-        setLyricData(null);
-        setError("暂无歌词");
-      } else {
-        // "auto": Netease first, fallback to local LRC
-        const neteaseData = await fetchNetease();
-        if (neteaseData) {
-          lyricCache.set(filePath, neteaseData);
-          setLyricData(neteaseData);
-          const rawTime3 = audioState.pos ?? 0;
-          const idx3 = computeLineIndex(rawTime3, neteaseData.lines);
-          lastIndexRef.current = idx3;
-          setCurrentLineIndex(idx3);
-          setCurrentTime(rawTime3);
-          setLoading(false);
-          return;
-        }
-        const localData = await fetchLocalLrc();
-        if (localData) {
-          lyricCache.set(filePath, localData);
-          setLyricData(localData);
-          const rawTime4 = audioState.pos ?? 0;
-          const idx4 = computeLineIndex(rawTime4, localData.lines);
-          lastIndexRef.current = idx4;
-          setCurrentLineIndex(idx4);
-          setCurrentTime(rawTime4);
-          setLoading(false);
-          return;
-        }
-        setLyricData(null);
-        setError("暂无歌词");
-      }
-    } catch (e: any) {
-      setError(e?.message || "获取歌词失败");
+    if (data) {
+      setLyricData(data);
+      const rawTime = audioState.pos ?? 0;
+      const idx = computeLineIndex(rawTime, data.lines);
+      lastIndexRef.current = idx;
+      setCurrentLineIndex(idx);
+      setCurrentTime(rawTime);
+      setError(null);
+    } else {
       setLyricData(null);
-    } finally {
-      setLoading(false);
+      setError(fetchError ?? "暂无歌词");
     }
+    setLoading(false);
   }, []);
 
   // Song change detection
@@ -238,6 +255,7 @@ export function useLyricManager() {
       if (newSource !== prevSourceRef.current) {
         prevSourceRef.current = newSource;
         lyricCache.clear();
+        pendingLyric.clear();
         if (lastFileRef.current) {
           fetchLyrics(lastFileRef.current);
         }
@@ -277,7 +295,10 @@ export function useLyricManager() {
   }, [audioState.pos, computeLineIndex]);
 
   const getLiveCurrentTime = useCallback(() => currentTimeRef.current, []);
-  const clearCache = useCallback(() => lyricCache.clear(), []);
+  const clearCache = useCallback(() => {
+    lyricCache.clear();
+    pendingLyric.clear();
+  }, []);
 
   return {
     lyricData,

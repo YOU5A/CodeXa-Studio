@@ -50,6 +50,16 @@ export function hslToRgb([h, s, l]: HSL): RGB {
   }
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
+
+/**
+ * 判断颜色是否偏亮（用于背景亮度自适应切换深/浅文本）
+ * 使用感知相对亮度权重：0.299R + 0.587G + 0.114B，归一化到 0-1
+ * @param threshold 阈值，默认 0.6（约 RGB 153），高于视为亮色
+ */
+export function isLightColor(rgb: RGB, threshold = 0.6): boolean {
+  const [r, g, b] = rgb;
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > threshold;
+}
 // --- ?????? ---
 
 /**

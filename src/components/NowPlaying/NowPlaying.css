@@ -1,0 +1,283 @@
+/**
+ * NowPlaying — 全窗口播放覆盖层专属样式
+ *
+ * 仅存放覆盖层专属动画：标题/艺术家/专辑自动滚动、闲置淡入淡出等。
+ * 其余布局一律使用 design-system tokens 与内联样式。
+ * 跑马灯动画由 NowPlayingInfo 的 Web Animations API 驱动（带起点停顿）。
+ */
+
+/* 注册渐变宽度变量：让左侧渐变在停顿结束/滚动开始时平滑淡入淡出 */
+@property --np-fade-l {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --np-fade-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* 覆盖层文本/控件随背景亮度自适应：
+   默认（暗背景）使用白色系变量；np-bg-light（封面/流体偏亮）切换为深色系。
+   统一走变量后，LyricsSettingsContent / GlassPillButton / GlassSlider / LyricBlock
+   等共享组件在覆盖层内自动跟随，不再受应用主题影响。 */
+.np-overlay {
+  --text-primary: rgba(255,255,255,0.92);
+  --text-secondary: rgba(255,255,255,0.72);
+  --text-tertiary: rgba(255,255,255,0.52);
+  --border-color: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.12);
+  --bg-tertiary: rgba(30,30,32,0.06);
+  --slider-track: rgba(255,255,255,0.15);
+  /* 覆盖层专属可切换视觉变量 */
+  --np-row-hover-bg: rgba(255,255,255,0.08);
+  --np-disc-bg: rgba(255,255,255,0.08);
+  --np-row-glow: rgba(255,255,255,0.12);
+  --np-play-glow: rgba(255,255,255,0.18);
+  /* 发光加强：文字已带封面色，阴影需更强才能显出光晕 */
+  --np-title-glow: 0 3px 14px rgba(var(--np-glow-rgb), 0.65), 0 1px 4px rgba(var(--np-glow-rgb), 0.45), 0 0 28px rgba(var(--np-glow-rgb), 0.28);
+  --lyric-text-shadow: 0 3px 14px rgba(var(--lyric-glow-rgb), 0.65), 0 1px 4px rgba(var(--lyric-glow-rgb), 0.45), 0 0 28px rgba(var(--lyric-glow-rgb), 0.28);
+  /* 歌词/音乐信息文本色：封面主色 + 白色柔和（亮背景由下方覆盖为压暗版） */
+  --np-cover-text: color-mix(in srgb, rgb(var(--np-cover-rgb)) 25%, white);
+  --np-cover-text-soft: color-mix(in srgb, rgb(var(--np-cover-rgb)) 20%, white);
+}
+.np-overlay.np-bg-light {
+  --text-primary: rgba(0,0,0,0.88);
+  --text-secondary: rgba(0,0,0,0.68);
+  --text-tertiary: rgba(0,0,0,0.52);
+  --border-color: rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.16);
+  --bg-tertiary: rgba(242,241,238,0.14);
+  --slider-track: rgba(0,0,0,0.12);
+  --np-row-hover-bg: rgba(0,0,0,0.06);
+  --np-disc-bg: rgba(0,0,0,0.06);
+  --np-row-glow: rgba(0,0,0,0.10);
+  --np-play-glow: rgba(0,0,0,0.12);
+  /* 亮背景：改用压暗的封面色做柔和光晕，发光不再关闭 */
+  --np-title-glow: 0 2px 10px color-mix(in srgb, rgb(var(--np-glow-rgb)) 30%, transparent), 0 1px 3px color-mix(in srgb, rgb(var(--np-glow-rgb)) 20%, transparent);
+  --lyric-text-shadow: 0 2px 10px color-mix(in srgb, rgb(var(--lyric-glow-rgb)) 30%, transparent), 0 1px 3px color-mix(in srgb, rgb(var(--lyric-glow-rgb)) 20%, transparent);
+  --np-cover-text: color-mix(in srgb, rgb(var(--np-cover-rgb)) 25%, black);
+  --np-cover-text-soft: color-mix(in srgb, rgb(var(--np-cover-rgb)) 20%, black);
+}
+
+.np-auto-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/* ── 传输按钮透明度：上一首/播放/下一首默认稍暗、悬浮还原；模式/列表默认不变、悬浮稍暗 ── */
+.np-ctrl-dim {
+  color: var(--text-secondary);
+}
+.np-ctrl-dim:hover {
+  color: var(--text-primary);
+}
+.np-ctrl-dim.np-play-core {
+  color: var(--text-primary);
+}
+.np-ctrl-dim.np-play-core:hover {
+  color: var(--text-primary);
+}
+.np-ctrl-fade {
+  color: var(--text-secondary);
+}
+.np-ctrl-fade:hover {
+  color: var(--text-tertiary);
+}
+
+/* ── 传输按钮跟随封面主色：--np-glow-rgb 为封面色柔化，无封面时回退主题强调色 ── */
+.np-ctrl-cover {
+  color: color-mix(in srgb, rgb(var(--np-glow-rgb)) 50%, white);
+}
+.np-ctrl-cover:hover {
+  color: var(--text-primary);
+}
+.np-ctrl-cover.np-play-core {
+  color: color-mix(in srgb, rgb(var(--np-glow-rgb)) 50%, white);
+}
+/* 亮背景（封面色偏亮）压暗一档，保证按钮可读 */
+.np-overlay.np-bg-light .np-ctrl-cover,
+.np-overlay.np-bg-light .np-ctrl-cover.np-play-core {
+  color: color-mix(in srgb, rgb(var(--np-glow-rgb)) 31%, black);
+}
+
+/* ── 闲置淡入淡出（由设置面板“闲置自动隐藏”开关控制） ── */
+/* ── 播放列表抽屉行 ── */
+.np-playlist-row {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.np-playlist-row:hover {
+  background: var(--np-row-hover-bg);
+}
+.np-playlist-row.current {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--text-primary);
+}
+.np-playlist-row.current:hover {
+  background: rgba(var(--accent-rgb), 0.22);
+}
+.np-playlist-index {
+  color: var(--text-tertiary);
+}
+.np-playlist-index-current {
+  color: var(--accent);
+}
+.np-info,
+.np-controls,
+.np-close,
+.np-settings-btn,
+.np-fullscreen-btn,
+.np-ctrl-row {
+  transition: opacity 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* 闲置隐藏：保留歌曲信息，隐藏整个播放控制区（进度条+时间行+传输/音量）与右上角按钮 */
+.np-idle .np-close,
+.np-idle .np-settings-btn,
+.np-idle .np-controls,
+.np-idle .np-fullscreen-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.np-idle {
+  cursor: none;
+}
+
+/* 覆盖层内滚动条跟随背景亮度（覆盖 GlassScrollArea 全局白色滚动条） */
+.np-overlay .glass-scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(255,255,255,0.10);
+}
+.np-overlay .glass-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255,255,255,0.22);
+}
+.np-overlay.np-bg-light .glass-scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,0.18);
+}
+.np-overlay.np-bg-light .glass-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0,0,0,0.30);
+}
+
+/* ── 右下角歌词快捷按钮（译/音/逐字/复制） ── */
+.np-lyrics-switch {
+  transition: opacity 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.np-idle .np-lyrics-switch {
+  opacity: 0;
+  pointer-events: none;
+}
+.np-lyrics-switch-btn:hover {
+  color: var(--text-primary);
+}
+.np-lyrics-switch-btn.active {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.16);
+}
+
+/* ── 进度条悬停歌词预览 ── */
+.np-progressbar-preview {
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.44);
+  backdrop-filter: saturate(130%) blur(10px);
+  -webkit-backdrop-filter: saturate(130%) blur(10px);
+  color: rgba(255, 255, 255, 0.95);
+  padding: 10px 15px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 0.15s ease;
+}
+.np-progressbar-preview.invisible {
+  opacity: 0;
+}
+.np-progressbar-preview > * {
+  white-space: nowrap;
+}
+.np-progressbar-preview-number {
+  font-size: 70%;
+  opacity: 0.45;
+}
+.np-progressbar-preview-word {
+  display: inline-block;
+}
+.np-progressbar-preview-word.current {
+  -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 45.45%, rgba(0,0,0,0.4) 54.54%);
+  -webkit-mask-size: 220% 100%;
+  -webkit-mask-repeat: no-repeat;
+  will-change: -webkit-mask-position-x;
+}
+.np-progressbar-preview-word.upcoming {
+  opacity: 0.4;
+}
+.np-progressbar-preview-original {
+  opacity: 0.9;
+}
+.np-progressbar-preview-translated {
+  opacity: 0.7;
+  font-size: 90%;
+}
+.np-progressbar-preview-subbar {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 100px;
+  overflow: hidden;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+.np-progressbar-preview-subbar-inner {
+  height: 100%;
+  background: #fff;
+  border-radius: 100px;
+}
+.np-progressbar-preview-time {
+  font-size: 70%;
+  opacity: 0.45;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* ── 逐字歌词动画（仅 NowPlaying：useKaraokeLyrics=true 时启用） ── */
+.np-overlay .lyric-karaoke-float .lyric-karaoke-word {
+  transition-property: opacity, transform;
+  transition-timing-function: linear, ease;
+  will-change: opacity, transform;
+}
+.np-overlay .lyric-karaoke-slide .lyric-karaoke-word {
+  transition-property: -webkit-mask-position-x, transform;
+  transition-timing-function: linear, ease;
+  will-change: transform;
+}
+.np-overlay .lyric-karaoke-slide .lyric-karaoke-word > span:first-child {
+  opacity: 0.4;
+}
+.np-overlay .lyric-karaoke-slide .lyric-karaoke-word-filler {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--np-cover-text, var(--text-primary));
+  pointer-events: none;
+  will-change: -webkit-mask-position-x;
+  -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 45.45%, rgba(0,0,0,0) 54.54%);
+  -webkit-mask-size: 220% 100%;
+  -webkit-mask-repeat: no-repeat;
+  /* 播放中由 np-karaoke-wipe 动画控制 100% → 0% 滑动；此值仅作为无动画时的兜底 */
+  -webkit-mask-position-x: 0%;
+  transition-property: -webkit-mask-position-x, transform, opacity;
+  transition-timing-function: linear, ease, ease;
+}
+
+/* 逐词滑动擦除：从隐藏（100%）滑到全亮（0%），由 JS 按词设置 duration/delay；
+   负 delay 直接定位到当前进度，切换动画类型时不会残留旧样式 */
+@keyframes np-karaoke-wipe {
+  from { -webkit-mask-position-x: 100%; }
+  to { -webkit-mask-position-x: 0%; }
+}

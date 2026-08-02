@@ -23,6 +23,8 @@ export interface GlassSliderProps {
   defaultVal?: number;
   disabled?: boolean;
   style?: React.CSSProperties;
+  /** 拖动过程中实时上报（默认仅在松开/触摸结束时上报） */
+  live?: boolean;
 }
 
 const rowStyle: React.CSSProperties = {
@@ -49,6 +51,7 @@ const valueStyle: React.CSSProperties = {
 
 export function GlassSlider({
   label, value, min, max, step, onChange, display, defaultVal, disabled, style,
+  live = false,
 }: GlassSliderProps) {
   const parse = useCallback(
     (raw: string) => (step >= 1 ? parseInt(raw) : parseFloat(raw)),
@@ -88,8 +91,8 @@ export function GlassSlider({
         min={min}
         max={max}
         step={step}
-        defaultValue={value}
-        key={value}
+        key={live ? undefined : value}
+        {...(live ? { value } : { defaultValue: value })}
         disabled={disabled}
         style={{
           width: "100%",
@@ -106,6 +109,8 @@ export function GlassSlider({
             "--slider-fill",
             pct + "%",
           );
+          // 实时模式：拖动过程中持续上报，让歌词/设置即时同步
+          if (live) onChange(parse((e.target as HTMLInputElement).value));
         }}
         onMouseUp={(e) =>
           onChange(parse((e.target as HTMLInputElement).value))

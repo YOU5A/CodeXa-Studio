@@ -177,7 +177,7 @@ let sessionState: {
   coverColor: null,
 };
 
-export default function MusicManager({ onNavigate, fluidSettings: externalSettings, onFluidSettingsChange }: { onNavigate?: (page: Page) => void; fluidSettings?: FluidSettingsValues; onFluidSettingsChange?: (s: FluidSettingsValues) => void }) {
+export default function MusicManager({ onNavigate, fluidSettings: externalSettings, onFluidSettingsChange, onOpenNowPlaying }: { onNavigate?: (page: Page) => void; fluidSettings?: FluidSettingsValues; onFluidSettingsChange?: (s: FluidSettingsValues) => void; onOpenNowPlaying: () => void }) {
   const { lang } = useLanguage();
   const tx = t[lang];
   const { showToast } = useToast();
@@ -246,6 +246,20 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [fluidSettingsOpen, setFluidSettingsOpen] = useState(false);
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => externalSettings ?? loadFluidSettings());
   const [lyricsSettings, setLyricsSettings] = useState<LyricsSettingsValues>(() => loadLyricsSettings());
+
+  // 与其他歌词设置实例（如 NowPlaying 覆盖层面板）同步：任何设置保存都会广播事件
+  useEffect(() => {
+    const handler = () => setLyricsSettings(loadLyricsSettings());
+    window.addEventListener("lyricsSettingsChanged", handler);
+    return () => window.removeEventListener("lyricsSettingsChanged", handler);
+  }, []);
+
+  // 与其他流体设置实例（如 NowPlaying 覆盖层面板）同步：任何设置保存都会广播事件
+  useEffect(() => {
+    const handler = () => setFluidSettings(loadFluidSettings());
+    window.addEventListener("fluidSettingsChanged", handler);
+    return () => window.removeEventListener("fluidSettingsChanged", handler);
+  }, []);
   const [coverColor, setCoverColor] = useState<RGB | null>(sessionState.coverColor);
 
   // Sync UI state back to session cache (survives page navigation)
@@ -1039,6 +1053,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
             playingFile={playingFile}
             metadata={metadata}
             coverB64={coverB64}
+            onOpenNowPlaying={onOpenNowPlaying}
             progressHover={progressHover}
             isDragging={isDragging}
             playBtnGlow={playBtnGlow}

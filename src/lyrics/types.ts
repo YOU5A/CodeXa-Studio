@@ -24,6 +24,8 @@ export interface LyricLine {
   originalLyric: string;
   /** 翻译歌词（来自 tlyric/ytlrc/ttlrc） */
   translatedLyric?: string;
+  /** 翻译来自行内拆分（日文原文 （中文翻译）），视为可信翻译不参与同脚本抑制 */
+  inlineTranslated?: boolean;
   /** 罗马音歌词（来自 romalrc/yromalrc） */
   romanLyric?: string;
   /** 原始 LRC 行（保留原始格式） */
@@ -110,7 +112,7 @@ export const DEFAULT_LYRICS_SETTINGS: LyricsSettingsValues = {
   fontBold: true,
   fontSize: 20,
   romajiFontSize: 0.6,
-  translationFontSize: 0.6,
+  translationFontSize: 0.5,
   alignmentPercentage: 50,
   animationTiming: "smooth",
   lyricSource: "auto",
@@ -131,12 +133,9 @@ export function loadLyricsSettings(): LyricsSettingsValues {
 
 export function saveLyricsSettings(values: LyricsSettingsValues): void {
   try {
-    const old = loadLyricsSettings();
     localStorage.setItem(LYRICS_SETTINGS_KEY, JSON.stringify(values));
-    // Only dispatch when source or global offset changes
-    // Display-only changes (fontSize, toggles, etc.) propagate via React props
-    if (old.lyricSource !== values.lyricSource || old.globalOffset !== values.globalOffset) {
-      window.dispatchEvent(new CustomEvent("lyricsSettingsChanged"));
-    }
+    // 所有设置变化都广播：MusicManager 面板与 NowPlaying 覆盖层各自持有状态副本，
+    // 需要跨实例同步刷新（显示类变化不再只依赖 React props 传递）
+    window.dispatchEvent(new CustomEvent("lyricsSettingsChanged"));
   } catch { /* ignore */ }
 }

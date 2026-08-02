@@ -16,9 +16,11 @@ import type { LyricLine, LyricData, DynamicLyricWord } from "./types";
 const LRC_TIME_RE = /\u005B(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\u005D/g;
 const LRC_TAG_ONLY_RE = /^\u005B(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\u005D\s*$/;
 const META_TIME_REGEX = /^\u005B(offset|ti|ar|al|by|la|ve|re):/i;
+// 标准 LRC 信息行（作词/作曲/编曲等）
+const STANDARD_CREDIT_RE = /^(?:作词|作曲|编曲|作詞|作曲|編曲|翻唱|制作人|制作|混音|录音|監修|原唱|演唱|OP|SP|出品)[:：]/;
 
-// YRC format: (lineTime,duration)word1(word1Time,duration,flag)word2...
-const YRC_LINE_REGEX = /^\((\d+),(\d+)\)/;
+// YRC format: [lineTime,duration](wordTime,duration,flag)word1(wordTime,duration,flag)word2...
+const YRC_LINE_REGEX = /^\[(\d+),(\d+)\]/;
 const YRC_WORD_TIME_REGEX = /\((\d+),(\d+),(\d*)\)([^()]*)/g;
 
 // ── Helpers ──
@@ -60,11 +62,38 @@ function replaceChineseSymbolsToEnglish(str: string): string {
     .replace(/\uFF1B/g, ";");
 }
 
-const findLast = <T>(items: T[], predicate: (item: T, index: number, items: T[]) => boolean): T | null => {
-  for (let i = items.length - 1; i >= 0; i--)
-    if (predicate(items[i], i, items)) return items[i];
-  return null;
-};
+// 歌词行就近一对一挂载：yrc 与 lrc/tlyric 时间基准存在 ~0.3-0.4s 偏移，不能按相等时间匹配
+const ATTACH_MAX_DIFF = 1.0; // 秒
+function attachNearest(
+  processed: LyricLine[],
+  lines: LyricPureLine[],
+  field: "originalLyric" | "translatedLyric" | "romanLyric"
+): void {
+  const used = new Set<number>();
+  for (const line of lines) {
+    if (!line.lyric) continue;
+    let bestIdx = -1;
+    let bestDiff = Infinity;
+    for (let i = 0; i < processed.length; i++) {
+      if (used.has(i)) continue;
+      const diff = Math.abs(processed[i].time - line.time);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx >= 0 && bestDiff <= ATTACH_MAX_DIFF) {
+      used.add(bestIdx);
+      const target = processed[bestIdx];
+      if (field === "originalLyric") {
+        target.originalLyric = line.lyric;
+        target.text = line.lyric;
+      } else {
+        target[field] = line.lyric;
+      }
+    }
+  }
+}
 
 
 // ── Bilingual smart-split helpers (local LRC) ──
@@ -187,6 +216,30 @@ function splitBilingualLine(text: string): { original: string; translation?: str
   return { original: text };
 }
 
+/**
+ * 拆分行内“日文原文 （中文翻译）”样式的双语（全角/半角括号）。
+ * 括号内容不含假名且含汉字时视为中文翻译（日文括号注音如（かんじ）不会被拆）。
+ */
+function splitInlineCjkTranslation(text: string): { original: string; translation?: string } {
+  const groups = [...text.matchAll(/[（(]([^（）()]*)[）)]/g)];
+  const translationParts: string[] = [];
+  for (const g of groups) {
+    const content = g[0].slice(1, -1).trim();
+    // 排除舞台说明类括号内容，避免把中文注释当翻译
+    if (/(?:间奏|前奏|尾奏|对白|独白|旁白|音效|演奏)/.test(content)) continue;
+    if (content.length >= 2 && !hasJapaneseKana(content) && /[\u4E00-\u9FFF]/.test(content)) {
+      translationParts.push(g[0]);
+    }
+  }
+  if (translationParts.length === 0) return { original: text };
+  let original = text;
+  for (const part of translationParts) original = original.replace(part, " ");
+  original = original.replace(/\s+/g, " ").trim();
+  if (!/[\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]/.test(original)) return { original: text };
+  const translation = translationParts.map((p) => p.slice(1, -1).trim()).join(" ");
+  return { original, translation };
+}
+
 /** Detect if text looks like Japanese romaji */
 function looksLikeRomaji(text: string): boolean {
   if (!isDominantlyLatin(text)) return false;
@@ -217,6 +270,16 @@ function mergeSameTimeLines(lines: LyricPureLine[]): LyricPureLine[] {
   for (const [time, group] of groups) {
     if (group.length === 1) {
       const line = group[0];
+      // 信息行（作词/作曲等）不参与双语拆分，原样保留
+      if (STANDARD_CREDIT_RE.test(line.lyric)) {
+        result.push(line);
+        continue;
+      }
+      const inline = splitInlineCjkTranslation(line.lyric);
+      if (inline.translation) {
+        result.push({ time: line.time, lyric: inline.original, originalLyric: inline.original, translatedLyric: inline.translation, inlineTranslated: true, unsynced: line.unsynced });
+        continue;
+      }
       if (isMixedBilingual(line.lyric)) {
         const split = splitBilingualLine(line.lyric);
         if (split.translation) {
@@ -281,16 +344,51 @@ interface LyricPureLine {
   translatedLyric?: string;
   romanLyric?: string;
   unsynced?: boolean;
+  inlineTranslated?: boolean;
+}
+
+// 解析 NetEase 新版歌词信息行：{"t":<ms>,"c":[{"tx":"..."},...]}
+function parseJsonMetaLine(line: string): { time: number; text: string } | null {
+  if (!line.startsWith('{"t":')) return null;
+  try {
+    const obj = JSON.parse(line);
+    if (typeof obj?.t !== "number" || !Array.isArray(obj?.c)) return null;
+    const text = obj.c
+      .map((chunk: { tx?: unknown }) => (typeof chunk?.tx === "string" ? chunk.tx : ""))
+      .join("")
+      .trim();
+    if (!text) return null;
+    // obj.t 为毫秒，与 LyricPureLine.time 的秒单位保持一致
+    return { time: Math.max(0, Math.floor(obj.t)) / 1000, text };
+  } catch {
+    return null;
+  }
 }
 
 function parsePureLyric(raw: string): LyricPureLine[] {
   let result: LyricPureLine[] = [];
   let unsynced = false;
 
+  // 若歌词已有标准 [mm:ss]作词：xxx 信息行，跳过 JSON 信息行避免重复
+  let hasStandardCredits = false;
+  for (const probe of raw.split(/\r?\n/)) {
+    const p = probe.trim();
+    if (p && STANDARD_CREDIT_RE.test(p.replace(LRC_TIME_RE, "").trim())) {
+      hasStandardCredits = true;
+      break;
+    }
+  }
+
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     if (META_TIME_REGEX.test(trimmed)) continue;
+    if (hasStandardCredits && trimmed.startsWith('{"t":')) continue;
+    const jsonMeta = hasStandardCredits ? null : parseJsonMetaLine(trimmed);
+    if (jsonMeta) {
+      result.push({ time: jsonMeta.time, lyric: jsonMeta.text });
+      continue;
+    }
 
     const matches = [...trimmed.matchAll(LRC_TIME_RE)];
     if (matches.length === 0) {
@@ -327,10 +425,17 @@ function parsePureDynamicLyric(raw: string): LyricLine[] {
   const result: LyricLine[] = [];
   for (const line of raw.trim().split(/\r?\n/)) {
     let tmp = line.trim();
+    // yrc 开头同样带 JSON 信息行（作词/作曲等），解析为静态歌词行
+    const jsonMeta = parseJsonMetaLine(tmp);
+    if (jsonMeta) {
+      result.push({ time: jsonMeta.time, duration: 0, originalLyric: jsonMeta.text, text: jsonMeta.text });
+      continue;
+    }
     const lineMatch = tmp.match(YRC_LINE_REGEX);
     if (!lineMatch) continue;
 
-    const time = parseInt(lineMatch[1] || "0");
+    const rawTime = parseInt(lineMatch[1] || "0");
+    const time = rawTime / 1000; // 行索引/点击跳转统一用秒（dynamicLyricTime 保留毫秒）
     const duration = parseInt(lineMatch[2] || "0");
     tmp = tmp.slice(lineMatch[0].length);
 
@@ -341,9 +446,16 @@ function parsePureDynamicLyric(raw: string): LyricLine[] {
       const wordTime = parseInt(wordMatch[1] || "0");
       const wordDuration = parseInt(wordMatch[2] || "0");
       const flag = parseInt(wordMatch[3] || "0");
-      const word = (wordMatch[4] || "").trimStart();
+      const rawWord = wordMatch[4] || "";
+      const startsWithSpace = /^\s+/.test(rawWord);
+      const hasTrailingSpace = /\s$/.test(rawWord);
+      const word = rawWord.trimStart();
       const splitedWords = word.split(/\s+/).filter((v: string) => v.trim().length > 0);
       if (splitedWords.length > 0) {
+        // 组前空白属于上一个词后的词间间隔
+        if (startsWithSpace && words.length > 0) {
+          words[words.length - 1].endsWithSpace = true;
+        }
         const splitedDuration = wordDuration / splitedWords.length;
         splitedWords.forEach((subWord: string, i: number) => {
           words.push({
@@ -351,18 +463,56 @@ function parsePureDynamicLyric(raw: string): LyricLine[] {
             duration: splitedDuration,
             flag,
             word: subWord.trimStart(),
+            // 组内中间词后面原本有空格；末词看组文本是否以空白结尾
+            endsWithSpace: i < splitedWords.length - 1 || (i === splitedWords.length - 1 && hasTrailingSpace),
           });
         });
+      } else if (startsWithSpace && words.length > 0) {
+        // 纯空白组：并入前一个词的词间间隔
+        words[words.length - 1].endsWithSpace = true;
       }
     }
+
+    // 标记 CJK 字符（与参考项目一致：汉字/假名），用于逐字歌词词间距
+    const CJKRegex = /([\p{Unified_Ideograph}\u3040-\u309F\u30A0-\u30FF])/u;
+    for (const w of words) {
+      if (CJKRegex.test(w.word)) w.isCJK = true;
+    }
+
+    // 标记尾部拖长音（与 RNP 一致）：词尾/标点分段后，每段末个非标点词时长 ≥ 1000ms 视为长音
+    const LONG_NOTE_PUNCT_RE = /[\,\.\，\。\!\?\？\、\；\：\…\—\~\～\·\‘\’\“\”\ﾞ]/;
+    const LONG_NOTE_ENGLISH_RE = /[a-zA-Z]+(['‘’])*[a-zA-Z]*/;
+    const searchIndexes: number[] = [-1];
+    for (let j = 0; j < words.length - 1; j++) {
+      if (words[j].endsWithSpace || LONG_NOTE_PUNCT_RE.test(words[j].word)) {
+        if (!LONG_NOTE_ENGLISH_RE.test(words[j].word)) {
+          searchIndexes.push(j);
+        }
+      }
+    }
+    searchIndexes.push(words.length - 1);
+    for (let j = searchIndexes.length - 1; j >= 1; j--) {
+      let targetIndex: number | null = null;
+      for (let k = searchIndexes[j]; k > searchIndexes[j - 1]; k--) {
+        const word = words[k].word.trim();
+        if (LONG_NOTE_PUNCT_RE.test(word) || word.length === 0) continue;
+        targetIndex = k;
+        break;
+      }
+      if (targetIndex === null) continue;
+      if (words[targetIndex].duration >= 1000) {
+        words[targetIndex].trailing = true;
+      }
+    }
+
 
     result.push({
       time,
       duration,
-      originalLyric: words.map((v) => v.word).join(""),
-      text: words.map((v) => v.word).join(""),
+      originalLyric: words.map((v) => v.word + (v.endsWithSpace ? " " : "")).join(""),
+      text: words.map((v) => v.word + (v.endsWithSpace ? " " : "")).join(""),
       dynamicLyric: words,
-      dynamicLyricTime: time,
+      dynamicLyricTime: rawTime,
     });
   }
   return result.sort((a, b) => a.time - b.time);
@@ -457,6 +607,7 @@ export function parseLyric(
       text: v.originalLyric || v.lyric,
       translatedLyric: v.translatedLyric,
       romanLyric: v.romanLyric,
+      ...(v.inlineTranslated ? { inlineTranslated: true } : {}),
       duration: 0,
       ...(v.unsynced ? { unsynced: true } : {}),
     }));
@@ -492,49 +643,9 @@ export function parseLyric(
   } else {
     // ── Has dynamic lyrics: use YRC as base, attach originals ──
     const processed = parsePureDynamicLyric(dynamic);
-    const originalLyrics = parsePureLyric(original);
-
-    // Determine matching mode: equal-time vs closest
-    let attachMatchingMode: "equal" | "closest" = "equal";
-    const lyricTimeSet = new Set(processed.map((v) => v.time));
-    const originalLyricTimeSet = new Set(originalLyrics.map((v) => v.time));
-    const intersection = new Set([...lyricTimeSet].filter((v) => originalLyricTimeSet.has(v)));
-    if (intersection.size / lyricTimeSet.size < 0.1) {
-      attachMatchingMode = "closest";
-    }
-
-    originalLyrics.forEach((line) => {
-      let target: LyricPureLine | null = null;
-      if (attachMatchingMode === "equal") {
-        target = findLast(originalLyrics, (v) => Math.abs(v.time - line.time) < 20);
-      } else {
-        for (const v of originalLyrics) {
-          if (!target || Math.abs(target.time - line.time) > Math.abs(v.time - line.time)) {
-            target = v;
-          }
-        }
-      }
-      if (target) {
-        const dynLine = processed.find((v) => v.time === target!.time);
-        if (dynLine) {
-          dynLine.originalLyric = line.lyric;
-          dynLine.text = line.lyric;
-        }
-      }
-    });
-
-    // Attach translation and romaji
-    const translations = parsePureLyric(translated);
-    translations.forEach((line) => {
-      const target = findLast(processed, (v) => Math.abs(v.time - line.time) < 20);
-      if (target && !target.translatedLyric) target.translatedLyric = line.lyric;
-    });
-
-    const romans = parsePureLyric(roman);
-    romans.forEach((line) => {
-      const target = findLast(processed, (v) => Math.abs(v.time - line.time) < 20);
-      if (target && !target.romanLyric) target.romanLyric = line.lyric;
-    });
+    // yrc 与 lrc/tlyric 时间基准存在偏移，翻译/音译按就近一对一挂载（原文直接用 yrc 词句）
+    attachNearest(processed, parsePureLyric(translated), "translatedLyric");
+    attachNearest(processed, parsePureLyric(roman), "romanLyric");
 
     const finalResult = processLyric(processed);
 
@@ -569,6 +680,7 @@ export function parseLyricData(
   // Suppress same-script translations (e.g., Chinese original + Chinese "translation")
   // Allow cross-CJK translations (e.g., Japanese original + Chinese translation)
   for (const line of lines) {
+    if (line.inlineTranslated) continue;
     if (line.translatedLyric && line.originalLyric) {
       const origIsCJK = isDominantlyCJK(line.originalLyric);
       const transIsCJK = isDominantlyCJK(line.translatedLyric);

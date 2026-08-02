@@ -7,12 +7,20 @@ const api = {
     close: () => ipcRenderer.invoke("window:close"),
     isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
     onMaximizeChange: (callback) => {
-      ipcRenderer.on("window:maximizeChange", (_event, maximized) => callback(maximized));
+      const listener = (_event, maximized) => callback(maximized);
+      ipcRenderer.on("window:maximizeChange", listener);
+      return () => ipcRenderer.removeListener("window:maximizeChange", listener);
     },
     setOpacity: (opacity) => ipcRenderer.invoke("window:setOpacity", opacity),
     getPosition: () => ipcRenderer.invoke("window:getPosition"),
     getSize: () => ipcRenderer.invoke("window:getSize"),
     setPosition: (x, y) => ipcRenderer.invoke("window:setPosition", x, y),
+    toggleFullscreen: (force) => ipcRenderer.invoke("window:toggleFullscreen", force),
+    onFullscreenChange: (callback) => {
+      const listener = (_event, fullscreen) => callback(fullscreen);
+      ipcRenderer.on("window:fullscreenChange", listener);
+      return () => ipcRenderer.removeListener("window:fullscreenChange", listener);
+    },
   },
   settings: {
     get: (key) => ipcRenderer.invoke("settings:get", key),

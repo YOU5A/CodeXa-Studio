@@ -1,4 +1,4 @@
-﻿const { Tray, Menu } = require("electron");
+const { Tray, Menu } = require("electron");
 const path = require("path");
 
 function createTray({ isDev, mainWindowRef, quittingRef }) {

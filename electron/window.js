@@ -54,7 +54,7 @@ function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, m
   }
   let saveBoundsTimeout = null;
   const saveBounds = () => {
-    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isMinimized()) return;
+    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isMinimized() || mainWindow.isFullScreen()) return;
     const b = electronSettings.windowBounds || {};
     if (electronSettings.rememberPosition) {
       const [x, y] = mainWindow.getPosition();
@@ -76,7 +76,7 @@ function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, m
       mainWindow.hide();
       return;
     }
-    if (!mainWindow.isMaximized() && !mainWindow.isMinimized()) {
+    if (!mainWindow.isMaximized() && !mainWindow.isMinimized() && !mainWindow.isFullScreen()) {
       const [x, y] = mainWindow.getPosition();
       const [w, h] = mainWindow.getSize();
       electronSettings.windowBounds = { x, y, width: w, height: h };

@@ -326,7 +326,7 @@ export function UnlockGameOverlay({ onSuccess, onClose }: UnlockGameOverlayProps
           <CloseButton onClick={handleClose} />
 
           <div style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", width: 300, height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 9999, overflow: "hidden", zIndex: 10 }}>
-            <motion.div initial={{ width: "100%" }} animate={{ width: "0%" }} transition={{ duration: 30, ease: "linear" }} style={{ height: "100%", background: "var(--accent)", borderRadius: 9999 }} />
+            <motion.div initial={{ width: "100%" }} animate={{ width: "0%" }} transition={{ duration: 30, ease: "linear" }} style={{ height: "100%", background: "linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.02) 100%), color-mix(in srgb, var(--accent) 35%, transparent)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 0 10px color-mix(in srgb, var(--accent) 20%, transparent)", borderRadius: 9999 }} />
           </div>
         </>
       )}

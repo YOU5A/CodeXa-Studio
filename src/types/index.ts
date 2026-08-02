@@ -181,12 +181,14 @@ export interface ElectronAPI {
     maximize: () => Promise<boolean>;
     close: () => Promise<void>;
     isMaximized: () => Promise<boolean>;
-    onMaximizeChange: (callback: (maximized: boolean) => void) => void;
+    onMaximizeChange: (callback: (maximized: boolean) => void) => () => void;
     setOpacity: (opacity: number) => Promise<void>;
     setMinimizable: (v: boolean) => Promise<void>;
     setPosition: (x: number, y: number) => Promise<void>;
     getPosition: () => Promise<[number, number]>;
     getSize: () => Promise<[number, number]>;
+    toggleFullscreen: (force?: boolean) => Promise<boolean>;
+    onFullscreenChange: (callback: (fullscreen: boolean) => void) => () => void;
   };
   bridge: {
     call: <T = any>(method: RpcMethod, params?: Record<string, unknown>) => Promise<T>;
