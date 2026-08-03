@@ -183,13 +183,17 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
+  const { audioState, playingFile, volume, playMode, playlist, playFile: contextPlayFile, toggle: contextToggle, seek: contextSeek, seekTo, setVolume, setPlaylist, setPlayMode, playNext: contextPlayNext, playPrev: contextPlayPrev, stop: contextStop, releaseHandle, fmtTime, playingMeta, playingCover } = useMusicPlayer();
+
   // Whether the cached metadata/cover belongs to the cached selected file
   const restoredSelection = sessionState.metadataFile === sessionState.selectedFile;
+  // 离开音乐页期间自动切歌：会话缓存可能属于旧曲目，初始化时直接以正在播放的曲目为准
+  const playingDiffersFromCache = !!playingFile && playingFile !== sessionState.selectedFile;
   const [folder, setFolder] = useState(sessionState.folder);
   const [files, setFiles] = useState<string[]>(sessionState.files);
-  const [selectedFile, setSelectedFile] = useState(sessionState.selectedFile);
-  const [metadata, setMetadata] = useState<MusicMetadata | null>(restoredSelection ? sessionState.metadata : null);
-  const [coverB64, setCoverB64] = useState<string | null>(restoredSelection ? sessionState.coverB64 : null);
+  const [selectedFile, setSelectedFile] = useState(playingDiffersFromCache ? playingFile : sessionState.selectedFile);
+  const [metadata, setMetadata] = useState<MusicMetadata | null>(playingDiffersFromCache ? playingMeta : (restoredSelection ? sessionState.metadata : null));
+  const [coverB64, setCoverB64] = useState<string | null>(playingDiffersFromCache ? playingCover : (restoredSelection ? sessionState.coverB64 : null));
   const [newCoverPath, setNewCoverPath] = useState("");
   const [coverPreviewB64, setCoverPreviewB64] = useState<string | null>(null);
   const [coverMenuOpen, setCoverMenuOpen] = useState(false);
@@ -199,13 +203,12 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const coverRef = useRef<HTMLDivElement | null>(null);
   const [coverRect, setCoverRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
 
-  const [tagTitle, setTagTitle] = useState(restoredSelection ? sessionState.tagTitle : "");
-  const [tagArtist, setTagArtist] = useState(restoredSelection ? sessionState.tagArtist : "");
-  const [tagAlbum, setTagAlbum] = useState(restoredSelection ? sessionState.tagAlbum : "");
-  const [tagYear, setTagYear] = useState(restoredSelection ? sessionState.tagYear : "");
-  const [tagGenre, setTagGenre] = useState(restoredSelection ? sessionState.tagGenre : "");
-  const [renameName, setRenameName] = useState(restoredSelection ? sessionState.renameName : "");
-  const { audioState, playingFile, volume, playMode, playlist, playFile: contextPlayFile, toggle: contextToggle, seek: contextSeek, seekTo, setVolume, setPlaylist, setPlayMode, playNext: contextPlayNext, playPrev: contextPlayPrev, stop: contextStop, releaseHandle, fmtTime } = useMusicPlayer();
+  const [tagTitle, setTagTitle] = useState(playingDiffersFromCache ? (playingMeta?.title ?? "") : (restoredSelection ? sessionState.tagTitle : ""));
+  const [tagArtist, setTagArtist] = useState(playingDiffersFromCache ? (playingMeta?.artist ?? "") : (restoredSelection ? sessionState.tagArtist : ""));
+  const [tagAlbum, setTagAlbum] = useState(playingDiffersFromCache ? (playingMeta?.album ?? "") : (restoredSelection ? sessionState.tagAlbum : ""));
+  const [tagYear, setTagYear] = useState(playingDiffersFromCache ? (playingMeta?.year ?? "") : (restoredSelection ? sessionState.tagYear : ""));
+  const [tagGenre, setTagGenre] = useState(playingDiffersFromCache ? (playingMeta?.genre ?? "") : (restoredSelection ? sessionState.tagGenre : ""));
+  const [renameName, setRenameName] = useState(playingDiffersFromCache ? ((playingFile.split("\\").pop() || playingFile).replace(/\.[^.]+$/, "")) : (restoredSelection ? sessionState.renameName : ""));
   const [saving, setSaving] = useState(false);
   const playingFileRef = useRef(playingFile);
   playingFileRef.current = playingFile; // sync every render, not async via useEffect
@@ -331,9 +334,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
           if (saved && !hasScanned.current) { hasScanned.current = true; setFolder(saved); doScan(saved); }
         }
       } catch {}
-      // Re-fetch only when the cached metadata belongs to a different file
-      // (e.g. selection changed while the previous request was still in flight)
-      if (sessionState.selectedFile && sessionState.metadataFile !== sessionState.selectedFile) {
+      // 离开音乐页期间自动切歌：会话缓存可能属于旧曲目，以正在播放的曲目为准刷新元数据并同步缓存
+      if (playingFile && playingFile !== sessionState.selectedFile) {
+        selectFile(playingFile);
+      } else if (sessionState.selectedFile && sessionState.metadataFile !== sessionState.selectedFile) {
         selectFile(sessionState.selectedFile);
       }
       if (playingFile) {

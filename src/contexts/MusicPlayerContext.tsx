@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { STORAGE_PLAYMODE, STORAGE_VOLUME } from "@/constants/storage-keys";
+import type { MusicMetadata } from "@/types";
+import { extractDominantColorAsync } from "@/utils/colorExtractor";
 export type PlayMode = "sequential" | "loop-all" | "shuffle" | "stop-after";
 
 interface AudioState {
@@ -11,6 +13,8 @@ interface AudioState {
 interface MusicPlayerContextValue {
   audioState: AudioState;
   playingFile: string;
+  playingMeta: MusicMetadata | null;
+  playingCover: string | null;
   volume: number;
   playMode: PlayMode;
   playlist: string[];
@@ -31,6 +35,8 @@ interface MusicPlayerContextValue {
 const MusicPlayerContext = createContext<MusicPlayerContextValue>({
   audioState: { duration: 0, playing: false, pos: 0 },
   playingFile: "",
+  playingMeta: null,
+  playingCover: null,
   volume: 40,
   playMode: "loop-all",
   playlist: [],
@@ -69,6 +75,11 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     pos: 0,
   });
   const [playingFile, setPlayingFile] = useState("");
+
+  // 正在播放曲目的元数据/封面：页面卸载后自动切歌时仍由本处全局拉取并广播，
+  // 保证主窗口背景、歌词光晕与重新进入音乐页时的显示一致
+  const [playingMeta, setPlayingMeta] = useState<MusicMetadata | null>(null);
+  const [playingCover, setPlayingCover] = useState<string | null>(null);
 
   // Play mode & playlist
   const [playMode, setPlayModeState] = useState<PlayMode>(() => {
@@ -208,6 +219,45 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       audio.src = "";
     };
   }, []); // Only on App mount/unmount
+
+  // 切歌（含自动下一首）时拉取新曲目元数据/封面并广播，替代 MusicManager 卸载后失效的封面事件
+  useEffect(() => {
+    let cancelled = false;
+    if (!playingFile) {
+      setPlayingMeta(null);
+      setPlayingCover(null);
+      return;
+    }
+    const load = async () => {
+      try {
+        const m = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: playingFile });
+        if (cancelled) return;
+        const valid = !!m && typeof m === "object" && !m.error;
+        const cover = valid ? (m.cover ?? null) : null;
+        setPlayingMeta(valid ? (m as MusicMetadata) : null);
+        setPlayingCover(cover);
+        window.dispatchEvent(new CustomEvent("fluidCoverChanged", { detail: cover }));
+        if (cover) {
+          const color = await extractDominantColorAsync(`data:image/jpeg;base64,${cover}`);
+          if (cancelled) return;
+          localStorage.setItem("fluidCoverColor", JSON.stringify(color));
+          window.dispatchEvent(new CustomEvent("fluidCoverColorChanged", { detail: color }));
+        } else {
+          localStorage.removeItem("fluidCoverColor");
+          window.dispatchEvent(new CustomEvent("fluidCoverColorChanged", { detail: null }));
+        }
+      } catch {
+        if (cancelled) return;
+        setPlayingMeta(null);
+        setPlayingCover(null);
+        window.dispatchEvent(new CustomEvent("fluidCoverChanged", { detail: null }));
+        localStorage.removeItem("fluidCoverColor");
+        window.dispatchEvent(new CustomEvent("fluidCoverColorChanged", { detail: null }));
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [playingFile]);
 
   // Sync volume to audio element
   useEffect(() => {
@@ -368,6 +418,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     <MusicPlayerContext.Provider
       value={{
         audioState, playingFile, volume, playMode, playlist,
+        playingMeta, playingCover,
           playFile, toggle, stop, releaseHandle, seek, seekTo, setVolume,
         setPlaylist, setPlayMode, playNext, playPrev, fmtTime,
       }}
