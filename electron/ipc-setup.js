@@ -1,4 +1,4 @@
-const { ipcMain, dialog, shell, app } = require("electron");
+const { ipcMain, dialog, shell, app, screen } = require("electron");
 const https = require("https");
 const { cloudsearch, lyric } = require("./netease-eapi");
 const { toRomajiLrc } = require("./romaji");
@@ -260,7 +260,7 @@ async function searchLyricsMultiQuery(title, artist, album, searchFn) {
 }
 
 // ── Music: Online Lyrics Search (Netease) ──
-function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, dotnetBridge }) {
+function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, dotnetBridge, fullscreenStateRef }) {
   // Window controls
     ipcMain.handle("window:minimize", () => mainWindow.current?.minimize());
 
@@ -284,27 +284,80 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
   ipcMain.handle("window:getSize", () => mainWindow.current?.getSize());
   ipcMain.handle("window:setPosition", (_e, x, y) => { mainWindow.current?.setPosition(x, y); });
 
-  // 全屏前窗口 bounds：无边框/透明窗口在 Windows 退出全屏后尺寸可能不自动恢复
+  // 全屏：不依赖 OS setFullScreen（Windows 透明无边框窗口退出不可靠，曾出现窗口卡全屏、
+  // 只有字号在切换）。改为在工作区内做边界平滑补间 + 自定义状态事件，从根上消除状态错位。
   let preFullscreenBounds = null;
+  let fullscreenAnimTimer = null;
+  const FULLSCREEN_ANIM_MS = 260;
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+  const animateWindowBounds = (win, from, to, onDone) => {
+    const start = Date.now();
+    const step = () => {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) { onDone?.(); return; }
+      const t = Math.min(1, (Date.now() - start) / FULLSCREEN_ANIM_MS);
+      const e = easeOutCubic(t);
+      win.setBounds({
+        x: Math.round(from.x + (to.x - from.x) * e),
+        y: Math.round(from.y + (to.y - from.y) * e),
+        width: Math.max(1, Math.round(from.width + (to.width - from.width) * e)),
+        height: Math.max(1, Math.round(from.height + (to.height - from.height) * e)),
+      }, false);
+      if (t < 1) {
+        fullscreenAnimTimer = setTimeout(step, 16);
+      } else {
+        onDone?.();
+      }
+    };
+    step();
+  };
+
+  // 单次补间执行体：next 与当前目标不同才真正动画，同向重复请求直接短路
+  const runFullscreenTransition = (win, next) => new Promise((resolve) => {
+    if (win.isDestroyed()) { resolve(false); return; }
+    if (next === fullscreenStateRef.current) { resolve(next); return; }
+    const from = win.getBounds();
+    const display = screen.getDisplayMatching(from);
+    const fullBounds = {
+      x: display.workArea.x, y: display.workArea.y,
+      width: display.workArea.width, height: display.workArea.height,
+    };
+    if (next) {
+      preFullscreenBounds = from;
+    } else if (!preFullscreenBounds) {
+      preFullscreenBounds = from;
+    }
+    const to = next ? fullBounds : preFullscreenBounds;
+    fullscreenStateRef.current = next;
+    fullscreenStateRef.animating = true;
+    // 先同步渲染层状态：字号/圆角/布局随窗口补间一起过渡
+    if (!win.webContents.isDestroyed()) win.webContents.send("window:fullscreenChange", next);
+    animateWindowBounds(win, from, to, () => {
+      fullscreenStateRef.animating = false;
+      fullscreenAnimTimer = null;
+      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+        if (!next) preFullscreenBounds = null;
+        // 结束校准一次，防止 Windows 圆角吸附等造成几像素残留
+        const cur = win.getBounds();
+        if (Math.abs(cur.x - to.x) > 2 || Math.abs(cur.y - to.y) > 2 ||
+            Math.abs(cur.width - to.width) > 2 || Math.abs(cur.height - to.height) > 2) {
+          win.setBounds(to);
+        }
+        win.webContents.send("window:fullscreenChange", next);
+      }
+      resolve(next);
+    });
+  });
+
+  // 全屏请求串行链：动画期间到达的相反请求（如进入中点击关闭）排队等待，完成后继续执行
+  let fullscreenChain = Promise.resolve();
   ipcMain.handle("window:toggleFullscreen", (_e, force) => {
     const win = mainWindow.current;
-    if (!win) return false;
-    // 支持强制进入/退出（force 为 boolean）；不传则按当前状态切换
-    const next = typeof force === "boolean" ? force : !win.isFullScreen();
-    if (next && !win.isFullScreen()) {
-      preFullscreenBounds = win.getBounds();
-    }
-    win.setFullScreen(next);
-    if (!next && preFullscreenBounds) {
-      const bounds = preFullscreenBounds;
-      preFullscreenBounds = null;
-      // 等全屏退出动画完成后再显式还原窗口尺寸/位置，避免窗口卡在全屏
-      setTimeout(() => {
-        if (win.isDestroyed() || win.isFullScreen()) return;
-        win.setBounds(bounds);
-      }, 150);
-    }
-    return next;
+    if (!win || win.isDestroyed()) return Promise.resolve(false);
+    const requested = typeof force === "boolean" ? force : !fullscreenStateRef.current;
+    // 串行执行：进入/退出/关闭期间的相反请求都会排队，最终状态与最后一次请求一致
+    fullscreenChain = fullscreenChain.then(() => runFullscreenTransition(win, requested));
+    return fullscreenChain;
   });
   // Electron settings (autoStart, minimizeToTray, closeToTray)
   ipcMain.handle("settings:get", (_e, key) => {

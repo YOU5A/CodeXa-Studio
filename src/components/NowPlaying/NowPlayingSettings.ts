@@ -1,8 +1,20 @@
 /**
  * NowPlaying — 覆盖层专属设置（localStorage 持久化）
  *
- * 仅存放覆盖层自身行为开关；歌词显示设置仍复用 lyrics/types.ts 的共享设置。
+ * 存放覆盖层自身行为开关与专属歌词样式；全局偏移/词库源仍复用 lyrics/types.ts 的共享设置。
  */
+
+import type { LyricsSettingsValues } from "@/lyrics";
+
+/** NowPlaying 与共享歌词设置隔离的样式字段（主字号 lyricsFontSize 与对齐 lyricsAlign 单独存储） */
+type NowPlayingLyricStyleKeys =
+  | "showTranslation" | "showRomaji" | "fontBold"
+  | "enableScale" | "enableBlur" | "enableGlow" | "enableStagger"
+  | "animationTiming" | "romajiFontSize" | "translationFontSize"
+  | "alignmentPercentage";
+
+/** NowPlaying 专属歌词样式（悬浮歌词窗不受影响） */
+export type NowPlayingLyricStyles = Pick<LyricsSettingsValues, NowPlayingLyricStyleKeys>;
 
 export interface NowPlayingSettingsValues {
   /** 鼠标停止移动 1.5 秒后淡出界面元素（信息/控件/右上角按钮） */
@@ -25,6 +37,8 @@ export interface NowPlayingSettingsValues {
   lyricGlow: boolean;
   /** NowPlaying 专属歌词对齐方式：left / center / right */
   lyricsAlign: "left" | "center" | "right";
+  /** NowPlaying 专属歌词样式（字号/显隐/动画等，与共享 lyricsSettings 隔离） */
+  lyricStyles: NowPlayingLyricStyles;
   /** NowPlaying 专属歌词字号（默认 38px，设置面板可自由调整） */
   lyricsFontSize: number;
 }
@@ -40,11 +54,22 @@ export const DEFAULT_NOW_PLAYING_SETTINGS: NowPlayingSettingsValues = {
   karaokeAnimation: "float",
   lyricGlow: false,
   lyricsAlign: "center",
+  lyricStyles: {
+    showTranslation: true,
+    showRomaji: true,
+    fontBold: true,
+    enableScale: true,
+    enableBlur: true,
+    enableGlow: true,
+    enableStagger: true,
+    animationTiming: "smooth",
+    romajiFontSize: 0.6,
+    translationFontSize: 0.8,
+    alignmentPercentage: 50,
+  },
   lyricsFontSize: 38,
 };
 
-/** NowPlaying 全屏固定歌词字号（全屏时覆盖用户设置，设置面板置灰同步显示该值） */
-export const NOW_PLAYING_FULLSCREEN_FONT_SIZE = 48;
 
 const NOW_PLAYING_SETTINGS_KEY = "nowplaying-settings";
 /** 设置存储版本：v2 起闲置自动隐藏默认关闭（旧数据为 true 时重置一次）；v3 起新增显示模式/预览/封面/暗化/逐字等字段 */
@@ -77,4 +102,38 @@ export function saveNowPlayingSettings(values: NowPlayingSettingsValues): void {
   } catch {
     /* ignore */
   }
+}
+
+/** 取共享歌词设置中的 NowPlaying 专属样式子集 */
+function pickLyricStyles(v: NowPlayingLyricStyles): NowPlayingLyricStyles {
+  return {
+    showTranslation: v.showTranslation,
+    showRomaji: v.showRomaji,
+    fontBold: v.fontBold,
+    enableScale: v.enableScale,
+    enableBlur: v.enableBlur,
+    enableGlow: v.enableGlow,
+    enableStagger: v.enableStagger,
+    animationTiming: v.animationTiming,
+    romajiFontSize: v.romajiFontSize,
+    translationFontSize: v.translationFontSize,
+    alignmentPercentage: v.alignmentPercentage,
+  };
+}
+
+/** 合并共享歌词设置与 NowPlaying 专属样式：样式字段以专属为准，全局字段（偏移/词库源）保留共享 */
+export function mergeLyricsSettings(shared: LyricsSettingsValues, np: NowPlayingSettingsValues): LyricsSettingsValues {
+  return { ...shared, ...np.lyricStyles };
+}
+
+/** 拆分面板变更：样式字段写回 NowPlaying 专属设置，全局字段写回共享设置 */
+export function splitLyricsChange(
+  shared: LyricsSettingsValues,
+  np: NowPlayingSettingsValues,
+  next: LyricsSettingsValues
+): { shared: LyricsSettingsValues; np: NowPlayingSettingsValues } {
+  return {
+    shared: { ...shared, globalOffset: next.globalOffset, lyricSource: next.lyricSource },
+    np: { ...np, lyricStyles: pickLyricStyles(next) },
+  };
 }

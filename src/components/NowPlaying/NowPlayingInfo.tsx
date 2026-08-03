@@ -35,7 +35,14 @@ const MARQUEE_FADE_IN_MS = 600;
  * 布局动画等一切时序；flex 子项默认 min-width:auto 会按内容撑开，
  * 因此显式 minWidth:0 / maxWidth:100% 保证 clientWidth 是真实容器宽度。
  */
-function MarqueeText({ text, style }: { text: string; style: CSSProperties }) {
+interface MarqueeTextProps {
+  text: string;
+  style: CSSProperties;
+  /** 上下扩展 overflow 裁剪盒（px）：容纳标题 text-shadow 光晕；负 margin 抵消布局，滚动层用同值 top 对齐 */
+  clipPaddingY?: number;
+}
+
+function MarqueeText({ text, style, clipPaddingY = 0 }: MarqueeTextProps) {
   const spanRef = useRef<HTMLSpanElement | null>(null);
   const marqueeRef = useRef<HTMLDivElement | null>(null);
   const [measure, setMeasure] = useState<{ containerW: number; textW: number } | null>(null);
@@ -106,7 +113,13 @@ function MarqueeText({ text, style }: { text: string; style: CSSProperties }) {
         position: "relative",
         width: "100%",
         minWidth: 0,
-        overflow: "hidden",
+        // 未溢出时无需裁剪（光晕完全可见）；滚动时才裁剪文本
+        overflow: overflow ? "hidden" : "visible",
+        // 上下扩展裁剪盒容纳光晕；负 margin 抵消，不影响行高与间距
+        paddingTop: clipPaddingY || undefined,
+        paddingBottom: clipPaddingY || undefined,
+        marginTop: clipPaddingY ? -clipPaddingY : undefined,
+        marginBottom: clipPaddingY ? -clipPaddingY : undefined,
         whiteSpace: "nowrap",
         // 右侧渐变常开；左侧渐变仅在滚动阶段显示：进入停顿时瞬间隐藏，滚动开始时平滑淡入
         maskImage: overflow ? fadeGradient : undefined,
@@ -117,15 +130,13 @@ function MarqueeText({ text, style }: { text: string; style: CSSProperties }) {
         transition: overflow && scrolling ? `--np-fade-l ${MARQUEE_FADE_IN_MS}ms ease` : undefined,
       }}
     >
-      {/* 可见层：未滚动时省略号；滚动时隐藏但保留占位用于测量 */}
+      {/* 可见层：未滚动时直接显示；滚动时隐藏但保留占位用于测量 */}
       <span
         ref={spanRef}
         style={{
           display: "block",
           minWidth: 0,
           maxWidth: "100%",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
           whiteSpace: "nowrap",
           visibility: overflow ? "hidden" : "visible",
           ...style,
@@ -140,7 +151,7 @@ function MarqueeText({ text, style }: { text: string; style: CSSProperties }) {
           key={text}
           ref={marqueeRef}
           className="np-auto-marquee"
-          style={{ position: "absolute", left: 0, top: 0 }}
+          style={{ position: "absolute", left: 0, top: clipPaddingY || 0 }}
         >
           <span style={style}>{text}</span>
         </div>
@@ -164,6 +175,7 @@ export default function NowPlayingInfo({ title, artist, album }: NowPlayingInfoP
       {/* 标题：大字号 + 与歌词一致的发光；严格溢出时自动滚动 */}
       <MarqueeText
         text={title}
+        clipPaddingY={28}
         style={{
           fontSize: 26,
           fontWeight: 700,
@@ -179,7 +191,9 @@ export default function NowPlayingInfo({ title, artist, album }: NowPlayingInfoP
         text={artist}
         style={{
           fontSize: 15,
+          marginTop: 8,
           color: "var(--np-cover-text, var(--text-secondary))",
+          opacity: 0.5,
           whiteSpace: "nowrap",
         }}
       />
@@ -191,6 +205,7 @@ export default function NowPlayingInfo({ title, artist, album }: NowPlayingInfoP
           style={{
             fontSize: 13,
             color: "var(--np-cover-text, var(--text-tertiary))",
+            opacity: 0.5,
             whiteSpace: "nowrap",
           }}
         />

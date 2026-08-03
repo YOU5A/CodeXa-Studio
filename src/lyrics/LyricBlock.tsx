@@ -87,6 +87,26 @@ const LYRIC_SUB_TEXT_SHADOW =
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
+/** 自定义比较：offset 仅写入 data-offset 调试属性（全项目无人读取），
+ *  忽略它可避免切行时全部歌词行（含逐字 span）跟着重渲染 */
+function lyricBlockPropsEqual(prev: LyricBlockProps, next: LyricBlockProps): boolean {
+  return (
+    prev.line === next.line &&
+    prev.isCurrent === next.isCurrent &&
+    prev.currentTime === next.currentTime &&
+    prev.id === next.id &&
+    prev.getCurrentTime === next.getCurrentTime &&
+    prev.seekCounter === next.seekCounter &&
+    prev.playState === next.playState &&
+    prev.pageOpen === next.pageOpen &&
+    prev.onClick === next.onClick &&
+    prev.settings === next.settings &&
+    prev.useKaraokeLyrics === next.useKaraokeLyrics &&
+    prev.karaokeAnimation === next.karaokeAnimation &&
+    prev.lyricGlow === next.lyricGlow
+  );
+}
+
 const LyricBlock = memo(function LyricBlock({
   line,
   offset,
@@ -105,7 +125,7 @@ const LyricBlock = memo(function LyricBlock({
 }: LyricBlockProps) {
   const pressStartTime = useRef(0);
   const karaokeRef = useRef<HTMLSpanElement | null>(null);
-  const glowAnimRefs = useRef<{ anim: Animation; start: number }[]>([]);
+  const glowAnimRefs = useRef<{ anim: Animation; start: number; total: number }[]>([]);
 
   // 字号不再直接参与样式：由 LyricDisplay 通过 --lyric-font-size / --lyric-romaji-scale / --lyric-trans-scale
   // CSS 变量驱动（JS 插值动画），保证行几何与 wrapper 位移同帧一致
@@ -139,7 +159,7 @@ const LyricBlock = memo(function LyricBlock({
         { duration, fill: "forwards", easing: "linear" }
       );
       anim.pause();
-      return { anim, start: getWordAbsoluteTime(word) };
+      return { anim, start: getWordAbsoluteTime(word), total: duration };
     };
 
     glowAnimRefs.current = trailingIndexes
@@ -147,19 +167,21 @@ const LyricBlock = memo(function LyricBlock({
         const el = container.children[i] as HTMLElement | null;
         return el && line.dynamicLyric ? createGlow(el, line.dynamicLyric[i]) : null;
       })
-      .filter((v): v is { anim: Animation; start: number } => v !== null);
+      .filter((v): v is { anim: Animation; start: number; total: number } => v !== null);
 
-    const apply = () => {
-      const t = (getCurrentTime?.() ?? currentTime) * 1000;
-      for (const a of glowAnimRefs.current) {
-        a.anim.currentTime = Math.max(0, t - a.start);
-      }
-    };
-    apply();
+    // 所有长音发光结束后停止 rAF，避免当前行常驻空转
     let raf = 0;
     const loop = () => {
-      apply();
-      raf = requestAnimationFrame(loop);
+      const t = (getCurrentTime?.() ?? currentTime) * 1000;
+      const refs = glowAnimRefs.current;
+      let pending = false;
+      for (let i = refs.length - 1; i >= 0; i--) {
+        const a = refs[i];
+        a.anim.currentTime = Math.max(0, t - a.start);
+        if (t - a.start < a.total) pending = true;
+        else refs.splice(i, 1);
+      }
+      if (pending) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => {
@@ -305,7 +327,7 @@ const LyricBlock = memo(function LyricBlock({
       <span
         key={karaokeAnimation}
         ref={karaokeRef}
-        className={`lyric-karaoke lyric-karaoke-${karaokeAnimation}`}
+        className={`lyric-karaoke lyric-karaoke-${karaokeAnimation} lyric-original-switch`}
         style={{ display: "inline-block" }}
       >
         {words.map(renderKaraokeWord)}
@@ -327,7 +349,11 @@ const LyricBlock = memo(function LyricBlock({
       );
     });
   } else {
-    originalLayer = displayText;
+    originalLayer = useKaraokeLyrics === undefined ? displayText : (
+      <span key="plain" className="lyric-original-switch" style={{ display: "inline-block" }}>
+        {displayText}
+      </span>
+    );
   }
 
 
@@ -396,7 +422,8 @@ const LyricBlock = memo(function LyricBlock({
             color: subColor,
             // 跟随“发光效果”开关：仅当前行发光
             textShadow: isCurrent && enableGlow ? LYRIC_SUB_TEXT_SHADOW : "none",
-            transition: "color 0.5s ease, text-shadow 0.5s ease",
+            // 展开/收起过渡与缩放效果同曲线：高度/边距/透明度由 LyricDisplay 写入的目标变量驱动
+            transition: "height 0.5s var(--lyric-timing-function, ease), margin-bottom 0.5s var(--lyric-timing-function, ease), opacity 0.5s ease, color 0.5s ease, text-shadow 0.5s ease",
           }}
         >
           <div style={{ minHeight: 0 }}>{line.romanLyric}</div>
@@ -419,14 +446,15 @@ const LyricBlock = memo(function LyricBlock({
             color: subColor,
             // 跟随“发光效果”开关：仅当前行发光
             textShadow: isCurrent && enableGlow ? LYRIC_SUB_TEXT_SHADOW : "none",
-            transition: "color 0.5s ease, text-shadow 0.5s ease",
+            // 展开/收起过渡与缩放效果同曲线：高度/边距/透明度由 LyricDisplay 写入的目标变量驱动
+            transition: "height 0.5s var(--lyric-timing-function, ease), margin-bottom 0.5s var(--lyric-timing-function, ease), opacity 0.5s ease, color 0.5s ease, text-shadow 0.5s ease",
           }}
         >
           <div style={{ minHeight: 0 }}>{line.translatedLyric}</div>
         </div>
       )}
-    </div>
-  );
-});
+      </div>
+    );
+}, lyricBlockPropsEqual);
 
 export default LyricBlock;

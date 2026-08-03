@@ -3,6 +3,7 @@
  *
  * 建立「所有行 ↔ 非间奏行」映射（参照 RNP preProcessMapping），
  * 缩略块高度 max(containerHeight / 总步数, 30)，拖动回调 onFocusLine(行索引)。
+ * 轨道空白处点击不跳转；拖拽（超过 4px 位移）或滚轮滚动才跳转。
  *
  * @module lyrics/Scrollbar
  */
@@ -17,10 +18,16 @@ interface ScrollbarProps {
   onFocusLine: (lineIndex: number) => void;
 }
 
+/** 判定为“拖动”的最小位移（px）：小于该位移视为点击，不跳转 */
+const DRAG_THRESHOLD = 4;
+
 export default function Scrollbar({ lines, currentLineIndex, containerHeight, onFocusLine }: ScrollbarProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
+  const dragStartYRef = useRef(0);
+  const dragMovedRef = useRef(false);
   const [dragging, setDragging] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   // 非间奏行序列：拖拽目标只落在真实歌词行上
   const nonInterlude = useMemo(
@@ -55,6 +62,9 @@ export default function Scrollbar({ lines, currentLineIndex, containerHeight, on
 
   const apply = (clientY: number) => onFocusLine(lineFromY(clientY));
 
+  // 高亮颜色复用 LyricDisplay 容器上的封面发光色（--lyric-glow-rgb）
+  const coverRgb = "var(--lyric-glow-rgb, var(--accent-rgb))";
+
   return (
     <div
       ref={trackRef}
@@ -67,30 +77,51 @@ export default function Scrollbar({ lines, currentLineIndex, containerHeight, on
         width: 14,
         display: "flex",
         justifyContent: "center",
-        cursor: "pointer",
-        touchAction: "none",
+        cursor: dragging ? "grabbing" : "grab",
+        touchAction: dragging ? "none" : "auto",
         zIndex: 2,
       }}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       onPointerDown={(e) => {
         e.preventDefault();
         draggingRef.current = true;
+        dragStartYRef.current = e.clientY;
+        dragMovedRef.current = false;
         setDragging(true);
         trackRef.current?.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (!draggingRef.current) return;
+        if (!dragMovedRef.current && Math.abs(e.clientY - dragStartYRef.current) < DRAG_THRESHOLD) return;
+        dragMovedRef.current = true;
         apply(e.clientY);
       }}
-      onPointerMove={(e) => { if (draggingRef.current) apply(e.clientY); }}
       onPointerUp={() => { draggingRef.current = false; setDragging(false); }}
       onPointerCancel={() => { draggingRef.current = false; setDragging(false); }}
     >
       <div
         style={{
           position: "absolute",
-          top: thumbTop,
+          top: 0,
+          transform: `translateY(${thumbTop}px)`,
           height: thumbHeight,
-          width: dragging ? 6 : 4,
+          width: dragging ? 10 : hovered ? 9 : 8,
           borderRadius: 999,
-          background: dragging ? "rgba(var(--accent-rgb), 0.9)" : "rgba(128,128,128,0.45)",
-          transition: "width 0.15s ease, background 0.15s ease",
+          background: dragging
+            ? `rgba(${coverRgb}, 0.95)`
+            : hovered
+              ? `rgba(${coverRgb}, 0.7)`
+              : "rgba(128,128,128,0.45)",
+          boxShadow: dragging
+            ? `0 0 14px rgba(${coverRgb}, 0.45), inset 0 0 0 1px rgba(255,255,255,0.22)`
+            : hovered
+              ? `0 0 10px rgba(${coverRgb}, 0.28)`
+              : "0 1px 4px rgba(0,0,0,0.18)",
+          transition: dragging
+            ? "transform 0.08s linear, width 0.2s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.25s ease, box-shadow 0.25s ease"
+            : "transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), width 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 0.61, 0.36, 1)",
+          willChange: "transform",
           pointerEvents: "none",
         }}
       />

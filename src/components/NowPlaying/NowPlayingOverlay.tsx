@@ -11,11 +11,11 @@ import { createPortal } from "react-dom";
 import { Maximize, Minimize, Settings, X } from "lucide-react";
 import { Copy } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { GlassButton } from "@/design-system";
+import { GlassButton, GlassTooltip } from "@/design-system";
+import BottomNotice from "@/components/BottomNotice";
 import { useMusicPlayer } from "@/contexts/MusicPlayerContext";
 import { useLyricManager, loadLyricsSettings, saveLyricsSettings } from "@/lyrics";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useToast } from "@/contexts/ToastContext";
 import type { LyricsSettingsValues } from "@/lyrics";
 import { extractDominantColorAsync, isLightColor, softenColorForGlow, type RGB } from "@/utils/colorExtractor";
 import { useTheme } from "@/hooks/useTheme";
@@ -26,8 +26,8 @@ import NowPlayingControls from "./NowPlayingControls";
 import NowPlayingSettingsWindow from "./NowPlayingSettingsWindow";
 import NowPlayingPlaylist from "./NowPlayingPlaylist";
 import NowPlayingLyrics from "./NowPlayingLyrics";
+import NowPlayingLyricsCopyMode from "./NowPlayingLyricsCopyMode";
 import { loadNowPlayingSettings, saveNowPlayingSettings } from "./NowPlayingSettings";
-import { NOW_PLAYING_FULLSCREEN_FONT_SIZE } from "./NowPlayingSettings";
 import { loadFluidSettings, type FluidSettingsValues } from "@/components/FluidSettingsPanel";
 import type { NowPlayingSettingsValues } from "./NowPlayingSettings";
 import "./NowPlaying.css";
@@ -47,6 +47,9 @@ interface TrackMeta {
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const formatClock = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 
+/** 全屏时歌词字号在用户设置基础上追加的增量 */
+const FULLSCREEN_FONT_BOOST = 20;
+
 export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayProps) {
   const {
     audioState, playingFile, volume, playMode, playlist,
@@ -54,7 +57,6 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     playFile,
   } = useMusicPlayer();
   const { lang } = useLanguage();
-  const { showToast } = useToast();
   const T = (zh: string, en: string) => (lang === "zh" ? zh : en);
   // 覆盖层内部独立实例；模块级 lyricCache 与 MusicManager 共享，不产生重复网络请求
   const { lyricData, loading: lyricsLoading, error: lyricsError, currentLineIndex, currentTime, getCurrentTime, seekCounter } = useLyricManager();
@@ -66,8 +68,12 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [copyMode, setCopyMode] = useState(false);
+  const [copyNotice, setCopyNotice] = useState(false);
+  const copyListRef = useRef<HTMLDivElement | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [fsHover, setFsHover] = useState(false);
+  const [fsBusy, setFsBusy] = useState(false); // 全屏窗口补间动画中：禁止连点
   const fullscreenBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // 无封面时跟随流体动态主色（与 LyricDisplay 的 glow 同源），用于背景亮度判断
@@ -100,42 +106,43 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
   const hasRomaji = !!lyricData?.hasRomaji || !!lyricData?.lines.some((l) => !!l.romanLyric);
   const hasKaraoke = !!lyricData?.hasKaraoke || !!lyricData?.lines.some((l) => !!l.dynamicLyric && l.dynamicLyric.length > 0);
 
+  // 更新 NowPlaying 专属歌词样式（与共享 lyricsSettings 隔离，不广播到悬浮歌词窗）
+  const updateLyricStyles = (patch: Partial<NowPlayingSettingsValues["lyricStyles"]>) => {
+    const next = { ...npSettings, lyricStyles: { ...npSettings.lyricStyles, ...patch } };
+    setNpSettings(next);
+    saveNowPlayingSettings(next);
+  };
   const toggleTranslation = () => {
-    const next = { ...lyricsSettings, showTranslation: !lyricsSettings.showTranslation };
-    saveLyricsSettings(next);
-    setLyricsSettings(next);
+    updateLyricStyles({ showTranslation: !npSettings.lyricStyles.showTranslation });
   };
   const toggleRomaji = () => {
-    const next = { ...lyricsSettings, showRomaji: !lyricsSettings.showRomaji };
-    saveLyricsSettings(next);
-    setLyricsSettings(next);
+    updateLyricStyles({ showRomaji: !npSettings.lyricStyles.showRomaji });
   };
   const toggleKaraoke = () => {
     const next = { ...npSettings, useKaraokeLyrics: !npSettings.useKaraokeLyrics };
     setNpSettings(next);
     saveNowPlayingSettings(next);
   };
-  const copyCurrentLine = async () => {
-    const line = lyricData?.lines?.[currentLineIndex];
-    if (!line || !(line.originalLyric || line.text)) return;
-    const parts = [line.originalLyric || line.text];
-    if (lyricsSettings.showRomaji && line.romanLyric) parts.push(line.romanLyric);
-    if (lyricsSettings.showTranslation && line.translatedLyric) parts.push(line.translatedLyric);
-    const text = parts.join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
-    showToast(T("已复制歌词", "Lyrics copied"), "success");
+  const toggleCopyMode = () => setCopyMode((v) => !v);
+  const selectAllLyrics = () => {
+    const container = copyListRef.current;
+    if (!container) return;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   };
+
+  // 右下角快捷按钮状态样式：统一封面+白色柔和色（开启不透明、关闭半透明 1/2）；不可用为灰色且透明度与关闭一致
+  const switchBtnStyle = (active: boolean, disabled = false): React.CSSProperties => ({
+    width: 28, height: 28, minWidth: 28, padding: 0, borderRadius: "50%",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 12, fontWeight: 600,
+    color: disabled ? "rgb(140, 144, 150)" : "var(--np-cover-text)",
+    opacity: active ? 1 : 0.5,
+    transition: "color 0.25s ease, opacity 0.25s ease",
+  });
 
   // ESC：设置面板打开时先关面板，再关覆盖层
   useEffect(() => {
@@ -193,6 +200,14 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     }
   }, [open]);
 
+  // 复制模式：关闭覆盖层时退出平铺模式并清空提示
+  useEffect(() => {
+    if (!open) {
+      setCopyMode(false);
+      setCopyNotice(false);
+    }
+  }, [open]);
+
   // 元数据 + 封面取色：playingFile 变化时刷新（含自动下一首）
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +243,14 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     window.addEventListener("lyricsSettingsChanged", handler);
     return () => window.removeEventListener("lyricsSettingsChanged", handler);
   }, []);
+
+  // 复制模式：用户实际触发复制（选中文本后 Ctrl+C）时弹底部成功提示
+  useEffect(() => {
+    if (!open || !copyMode) return;
+    const handler = () => setCopyNotice(true);
+    document.addEventListener("copy", handler);
+    return () => document.removeEventListener("copy", handler);
+  }, [open, copyMode]);
 
   // 流体动态颜色变化时刷新亮度判断来源
   useEffect(() => {
@@ -299,6 +322,8 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     zIndex: 200,
     overflow: "hidden",
     borderRadius: fullscreen ? 0 : "var(--radius)",
+    // 圆角随窗口补间平滑过渡（约 260ms，与主进程全屏动画同步）
+    transition: "border-radius 0.26s cubic-bezier(0.22, 0.61, 0.36, 1)",
     WebkitAppRegion: "no-drag",
     ["--np-glow-rgb" as string]: glowRgb || "var(--accent-rgb)",
     ["--np-cover-rgb" as string]: coverRgb || "var(--accent-rgb)",
@@ -472,10 +497,16 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
             ref={fullscreenBtnRef}
             aria-label={fullscreen ? "退出全屏" : "全屏"}
             onClick={async () => {
-              // 直接按主进程返回值同步状态，避免 enter/leave-full-screen 事件在
-              // Windows 无边框窗口上不触发导致按钮图标卡住
-              const next = await window.electronAPI?.window.toggleFullscreen(!fullscreen);
-              if (typeof next === "boolean") setFullscreen(next);
+              if (fsBusy) return;
+              setFsBusy(true);
+              try {
+                // 主进程在补间开始即广播全屏状态事件（字号/圆角同步过渡），
+                // 返回值在动画结束后到达，这里再同步一次保证与窗口实际状态一致
+                const next = await window.electronAPI?.window.toggleFullscreen(!fullscreen);
+                if (typeof next === "boolean") setFullscreen(next);
+              } finally {
+                setFsBusy(false);
+              }
             }}
             style={{
               width: 36,
@@ -488,7 +519,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
               justifyContent: "center",
               color: "var(--text-secondary)",
               opacity: fsHover ? 1 : 0,
-              pointerEvents: fsHover ? "auto" : "none",
+              pointerEvents: fsBusy ? "none" : (fsHover ? "auto" : "none"),
               WebkitAppRegion: "no-drag",
               transition: "opacity 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)",
             }}
@@ -579,32 +610,62 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
         {/* 右列：歌词（满高居中；内部水平内边距收窄歌词宽度，不改变整体布局） */}
         {/* 顶部/底部渐隐用 mask 只作用于歌词内容，不影响背景与其他元素 */}
         <div style={{ flex: displayMode === "song-info-only" ? "0 1 0%" : "1 1 0%", minWidth: 0, opacity: displayMode === "song-info-only" ? 0 : 1, pointerEvents: displayMode === "song-info-only" ? "none" : "auto", overflow: "hidden", position: "relative", height: "100%", padding: "0 clamp(20px, 2.5vw, 44px)", boxSizing: "border-box", maskImage: "linear-gradient(to bottom, transparent 0%, black 40px, black calc(100% - 40px), transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 40px, black calc(100% - 40px), transparent 100%)", transition: "flex-grow 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.5s cubic-bezier(0.22, 0.61, 0.36, 1)" }}>
-          <NowPlayingLyrics
-            lyricData={lyricData}
-            currentTime={currentTime}
-            currentLineIndex={currentLineIndex}
-            getCurrentTime={getCurrentTime}
-            seekCounter={seekCounter}
-            playState={audioState.playing}
-            pageOpen={open}
-            loading={lyricsLoading}
-            error={lyricsError}
-            loadingText="加载歌词…"
-            noLyricsText="暂无歌词"
-            instrumentalText="纯音乐，请欣赏"
-            onLineClick={seekTo}
-            settings={lyricsSettings}
-            align={npSettings.lyricsAlign}
-            // 全屏字号固定 48px，普通状态使用用户设置字号
-            fontSize={fullscreen ? NOW_PLAYING_FULLSCREEN_FONT_SIZE : npSettings.lyricsFontSize}
-            alignmentPercentage={fullscreen ? 50 : undefined}
-            glowBorderRadius={fullscreen ? 0 : "var(--radius)"}
-            useKaraokeLyrics={npSettings.useKaraokeLyrics}
-            karaokeAnimation={npSettings.karaokeAnimation}
-            lyricGlow={npSettings.lyricGlow}
-            scrollbar
-            onSeek={seekTo}
-          />
+          <AnimatePresence mode="wait" initial={false}>
+            {copyMode ? (
+              <motion.div
+                key="np-copy-mode"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ type: "tween", duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+                style={{ height: "100%" }}
+              >
+                <NowPlayingLyricsCopyMode
+                  ref={copyListRef}
+                  lines={lyricData?.lines ?? []}
+                  showRomaji={npSettings.lyricStyles.showRomaji}
+                  showTranslation={npSettings.lyricStyles.showTranslation}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="np-normal-lyrics"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ type: "tween", duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+                style={{ height: "100%" }}
+              >
+                <NowPlayingLyrics
+                  lyricData={lyricData}
+                  currentTime={currentTime}
+                  currentLineIndex={currentLineIndex}
+                  getCurrentTime={getCurrentTime}
+                  seekCounter={seekCounter}
+                  playState={audioState.playing}
+                  pageOpen={open}
+                  loading={lyricsLoading}
+                  error={lyricsError}
+                  loadingText="加载歌词…"
+                  noLyricsText="暂无歌词"
+                  instrumentalText="纯音乐，请欣赏"
+                  onLineClick={seekTo}
+                  settings={lyricsSettings}
+                  npSettings={npSettings}
+                  align={npSettings.lyricsAlign}
+                  // 全屏时在当前字号基础上 +20px，退出全屏回到用户设置
+                  fontSize={fullscreen ? npSettings.lyricsFontSize + FULLSCREEN_FONT_BOOST : npSettings.lyricsFontSize}
+                  alignmentPercentage={fullscreen ? 50 : undefined}
+                  glowBorderRadius={fullscreen ? 0 : "var(--radius)"}
+                  useKaraokeLyrics={npSettings.useKaraokeLyrics}
+                  karaokeAnimation={npSettings.karaokeAnimation}
+                  lyricGlow={npSettings.lyricGlow}
+                  scrollbar
+                  onSeek={seekTo}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -622,74 +683,92 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
           pointerEvents: "auto",
         }}
       >
-        <GlassButton
-          variant="ghost"
-          size="sm"
-          noAnimation
-          className={`np-lyrics-switch-btn${lyricsSettings.showTranslation ? " active" : ""}`}
-          aria-label={T("翻译", "Translation")}
-          title={T("翻译", "Translation")}
-          disabled={!hasTranslation}
-          onClick={toggleTranslation}
-          style={{
-            width: 28, height: 28, minWidth: 28, padding: 0, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 600, color: "var(--text-secondary)",
-          }}
-        >
-          译
-        </GlassButton>
-        <GlassButton
-          variant="ghost"
-          size="sm"
-          noAnimation
-          className={`np-lyrics-switch-btn${lyricsSettings.showRomaji ? " active" : ""}`}
-          aria-label={T("音译", "Romaji")}
-          title={T("音译", "Romaji")}
-          disabled={!hasRomaji}
-          onClick={toggleRomaji}
-          style={{
-            width: 28, height: 28, minWidth: 28, padding: 0, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 600, color: "var(--text-secondary)",
-          }}
-        >
-          音
-        </GlassButton>
-        <GlassButton
-          variant="ghost"
-          size="sm"
-          noAnimation
-          className={`np-lyrics-switch-btn${npSettings.useKaraokeLyrics ? " active" : ""}`}
-          aria-label={T("逐字", "Karaoke")}
-          title={T("逐字", "Karaoke")}
-          disabled={!hasKaraoke}
-          onClick={toggleKaraoke}
-          style={{
-            width: 28, height: 28, minWidth: 28, padding: 0, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 600, color: "var(--text-secondary)",
-          }}
-        >
-          逐字
-        </GlassButton>
-        <GlassButton
-          variant="ghost"
-          size="sm"
-          noAnimation
-          className="np-lyrics-switch-btn"
-          aria-label={T("复制", "Copy")}
-          title={T("复制歌词", "Copy lyrics")}
-          disabled={!lyricData?.lines?.length}
-          onClick={copyCurrentLine}
-          style={{
-            width: 28, height: 28, minWidth: 28, padding: 0, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--text-secondary)",
-          }}
-        >
-          <Copy size={14} />
-        </GlassButton>
+        <GlassTooltip text={T("翻译", "Translation")} placement="left">
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            noAnimation
+            className="np-lyrics-switch-btn"
+            aria-label={T("翻译", "Translation")}
+            aria-pressed={npSettings.lyricStyles.showTranslation}
+            disabled={!hasTranslation}
+            onClick={toggleTranslation}
+            style={switchBtnStyle(npSettings.lyricStyles.showTranslation, !hasTranslation)}
+          >
+            译
+          </GlassButton>
+        </GlassTooltip>
+        <GlassTooltip text={T("音译", "Romaji")} placement="left">
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            noAnimation
+            className="np-lyrics-switch-btn"
+            aria-label={T("音译", "Romaji")}
+            aria-pressed={npSettings.lyricStyles.showRomaji}
+            disabled={!hasRomaji}
+            onClick={toggleRomaji}
+            style={switchBtnStyle(npSettings.lyricStyles.showRomaji, !hasRomaji)}
+          >
+            音
+          </GlassButton>
+        </GlassTooltip>
+        <GlassTooltip text={T("逐字", "Karaoke")} placement="left">
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            noAnimation
+            className="np-lyrics-switch-btn"
+            aria-label={T("逐字", "Karaoke")}
+            aria-pressed={npSettings.useKaraokeLyrics}
+            disabled={!hasKaraoke}
+            onClick={toggleKaraoke}
+            style={switchBtnStyle(npSettings.useKaraokeLyrics, !hasKaraoke)}
+          >
+            逐字
+          </GlassButton>
+        </GlassTooltip>
+        <AnimatePresence>
+          {copyMode && (
+            <motion.span
+              key="np-select-all"
+              initial={{ opacity: 0, scale: 0.55 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.55 }}
+              transition={{ type: "tween", duration: 0.26, ease: "easeOut" }}
+              style={{ display: "inline-flex" }}
+            >
+              <GlassTooltip text={T("全选", "Select all")} placement="left">
+                <GlassButton
+                  variant="ghost"
+                  size="sm"
+                  noAnimation
+                  className="np-lyrics-switch-btn np-select-all-btn"
+                  aria-label={T("全选", "Select all")}
+                  onClick={selectAllLyrics}
+                  style={switchBtnStyle(false)}
+                >
+                  全选
+                </GlassButton>
+              </GlassTooltip>
+            </motion.span>
+          )}
+        </AnimatePresence>
+        <GlassTooltip text={T("复制歌词", "Copy lyrics")} placement="left">
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            noAnimation
+            className="np-lyrics-switch-btn"
+            aria-label={T("复制", "Copy")}
+            aria-pressed={copyMode}
+            disabled={!lyricData?.lines?.length}
+            onClick={toggleCopyMode}
+            style={switchBtnStyle(copyMode, !lyricData?.lines?.length)}
+          >
+            <Copy size={14} />
+          </GlassButton>
+        </GlassTooltip>
       </div>
       {/* 设置面板 */}
       <NowPlayingSettingsWindow
@@ -716,6 +795,16 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
         playingFile={safeFile}
         onPlay={playFile}
       />
+
+      {/* 复制成功底部提示（复制模式内 Ctrl+C 后弹出，自动消失） */}
+      <BottomNotice
+        show={copyNotice}
+        tone="success"
+        duration={2000}
+        onDone={() => setCopyNotice(false)}
+      >
+        {T("已复制歌词", "Lyrics copied")}
+      </BottomNotice>
         </motion.div>
       )}
     </AnimatePresence>,

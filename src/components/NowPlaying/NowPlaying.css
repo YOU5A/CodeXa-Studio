@@ -163,18 +163,67 @@
 
 /* ── 右下角歌词快捷按钮（译/音/逐字/复制） ── */
 .np-lyrics-switch {
-  transition: opacity 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform-origin: bottom right;
+  transition:
+    opacity 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .np-idle .np-lyrics-switch {
   opacity: 0;
+  transform: scale(0.55);
   pointer-events: none;
 }
-.np-lyrics-switch-btn:hover {
-  color: var(--text-primary);
+
+/* 全选按钮点击反馈：按下轻微缩小（GlassButton 内联 transition 提供平滑过渡） */
+.np-lyrics-switch-btn.np-select-all-btn:active {
+  transform: scale(0.85);
 }
-.np-lyrics-switch-btn.active {
-  color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.16);
+
+/* ── 复制模式歌词平铺列表（可选中文本，滚动浏览） ── */
+.np-copy-lyrics {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+  -webkit-user-select: text;
+  line-height: 1.4;
+  padding: 24px 6px 24px 0;
+  box-sizing: border-box;
+}
+.np-copy-lyrics::-webkit-scrollbar {
+  width: 8px;
+}
+.np-copy-lyrics::-webkit-scrollbar-track {
+  background: transparent;
+}
+.np-copy-lyrics::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 100px;
+}
+.np-overlay.np-bg-light .np-copy-lyrics::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+}
+.np-copy-lyrics::selection {
+  background: rgba(var(--accent-rgb), 0.28);
+}
+.np-copy-lyrics-line {
+  margin-bottom: 14px;
+}
+.np-copy-lyrics-line.interlude {
+  margin: 0 0 30px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.2em;
+}
+.np-copy-lyrics-original {
+  font-weight: 700;
+}
+.np-copy-lyrics-romaji {
+  font-size: 0.6em;
+  opacity: 0.8;
+}
+.np-copy-lyrics-translation {
+  font-size: 0.5em;
+  opacity: 0.75;
 }
 
 /* ── 进度条悬停歌词预览 ── */
@@ -280,4 +329,14 @@
 @keyframes np-karaoke-wipe {
   from { -webkit-mask-position-x: 100%; }
   to { -webkit-mask-position-x: 0%; }
+}
+
+/* 逐字/普通文本模式切换：原文内容平滑淡入（由 LyricBlock 的模式 key 触发重建） */
+.np-overlay .lyric-original-switch {
+  display: inline-block;
+  animation: np-lyric-mode-enter 0.28s ease;
+}
+@keyframes np-lyric-mode-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }

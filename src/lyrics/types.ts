@@ -112,7 +112,7 @@ export const DEFAULT_LYRICS_SETTINGS: LyricsSettingsValues = {
   fontBold: true,
   fontSize: 20,
   romajiFontSize: 0.6,
-  translationFontSize: 0.5,
+  translationFontSize: 0.65,
   alignmentPercentage: 50,
   animationTiming: "smooth",
   lyricSource: "auto",

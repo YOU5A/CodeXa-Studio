@@ -1,7 +1,7 @@
 const { BrowserWindow } = require("electron");
 const path = require("path");
 
-function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, mainWindowRef }) {
+function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, mainWindowRef, fullscreenStateRef }) {
   const isDev = !require("electron").app.isPackaged;
   const bounds = electronSettings.windowBounds;
   const windowOptions = {
@@ -54,7 +54,7 @@ function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, m
   }
   let saveBoundsTimeout = null;
   const saveBounds = () => {
-    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isMinimized() || mainWindow.isFullScreen()) return;
+    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isMinimized() || mainWindow.isFullScreen() || fullscreenStateRef.current || fullscreenStateRef.animating) return;
     const b = electronSettings.windowBounds || {};
     if (electronSettings.rememberPosition) {
       const [x, y] = mainWindow.getPosition();
@@ -76,7 +76,7 @@ function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, m
       mainWindow.hide();
       return;
     }
-    if (!mainWindow.isMaximized() && !mainWindow.isMinimized() && !mainWindow.isFullScreen()) {
+    if (!mainWindow.isMaximized() && !mainWindow.isMinimized() && !mainWindow.isFullScreen() && !fullscreenStateRef.current && !fullscreenStateRef.animating) {
       const [x, y] = mainWindow.getPosition();
       const [w, h] = mainWindow.getSize();
       electronSettings.windowBounds = { x, y, width: w, height: h };

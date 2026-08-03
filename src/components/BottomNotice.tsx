@@ -5,7 +5,7 @@
  * 样式基于 GlassTooltip 模板，圆角匹配 radii.lg。
  */
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 
@@ -22,11 +22,10 @@ interface BottomNoticeProps {
   onDone?: () => void;
 }
 
-const springTransition = {
-  type: "spring" as const,
-  stiffness: 400,
-  damping: 30,
-  mass: 0.8,
+const noticeTransition = {
+  type: "tween" as const,
+  duration: 0.26,
+  ease: "easeOut",
 };
 
 const toneStyles: Record<NonNullable<BottomNoticeProps["tone"]>, { background: string; border: string }> = {
@@ -36,28 +35,30 @@ const toneStyles: Record<NonNullable<BottomNoticeProps["tone"]>, { background: s
 };
 
 export function BottomNotice({ show, children, duration = 2000, tone = "default", onDone }: BottomNoticeProps) {
+  // 保存最新回调：父组件重渲染会生成新的 onDone 引用，若直接作为依赖，定时器会被反复重置、提示永不消失
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   // Auto-dismiss after duration
   useEffect(() => {
     if (!show) return;
     const timer = setTimeout(() => {
-      onDone?.();
+      onDoneRef.current?.();
     }, duration);
     return () => clearTimeout(timer);
-  }, [show, duration, onDone]);
+  }, [show, duration]);
 
   return createPortal(
     <AnimatePresence onExitComplete={onDone}>
       {show && (
         <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 6, scale: 0.97 }}
-          transition={springTransition}
+          initial={{ opacity: 0, y: 12, scale: 0.9, x: "-50%" }}
+          animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+          exit={{ opacity: 0, y: 6, scale: 0.95, x: "-50%" }}
+          transition={noticeTransition}
           style={{
             position: "fixed",
             bottom: 24,
             left: "50%",
-            transform: "translateX(-50%)",
             zIndex: 99999,
             pointerEvents: "none",
             backdropFilter: "blur(32px) saturate(2.2)",

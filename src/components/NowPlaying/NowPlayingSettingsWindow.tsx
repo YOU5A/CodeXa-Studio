@@ -12,12 +12,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { GlassButton, GlassPillButton, GlassToggle, GlassSlider, GlassScrollArea } from "@/design-system";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { DEFAULT_LYRICS_SETTINGS, LyricsSettingsContent } from "@/lyrics";
+import { LyricsSettingsContent } from "@/lyrics";
 import type { LyricsSettingsValues } from "@/lyrics";
 import { DEFAULT_FLUID_SETTINGS, FluidSettingsContent, loadFluidSettings, saveFluidSettings, type FluidSettingsValues } from "@/components/FluidSettingsPanel";
 import { APP_VERSION } from "@/version";
-import { DEFAULT_NOW_PLAYING_SETTINGS } from "./NowPlayingSettings";
-import { NOW_PLAYING_FULLSCREEN_FONT_SIZE } from "./NowPlayingSettings";
+import { DEFAULT_NOW_PLAYING_SETTINGS, mergeLyricsSettings, splitLyricsChange } from "./NowPlayingSettings";
 import type { NowPlayingSettingsValues } from "./NowPlayingSettings";
 
 type SettingsTab = "appearance" | "cover" | "lyrics" | "background" | "about";
@@ -29,7 +28,7 @@ interface NowPlayingSettingsWindowProps {
   onChange: (values: NowPlayingSettingsValues) => void;
   lyricsSettings: LyricsSettingsValues;
   onLyricsSettingsChange: (values: LyricsSettingsValues) => void;
-  /** 全屏状态下禁用字号/当前歌词位置设置 */
+  /** 全屏状态下禁用当前歌词位置设置 */
   fullscreen?: boolean;
 }
 
@@ -249,6 +248,16 @@ export default function NowPlayingSettingsWindow({
     });
   };
 
+  // NowPlaying 面板显示值：样式字段以专属设置为准，全局字段（偏移/词库源）保持共享
+  const panelLyricsValues = mergeLyricsSettings(lyricsSettings, settings);
+  const handleLyricsChange = (v: LyricsSettingsValues) => {
+    const { shared: nextShared, np: nextNp } = splitLyricsChange(lyricsSettings, settings, v);
+    onChange(nextNp);
+    if (nextShared.globalOffset !== lyricsSettings.globalOffset || nextShared.lyricSource !== lyricsSettings.lyricSource) {
+      onLyricsSettingsChange(nextShared);
+    }
+  };
+
   // 暗化滑块：与音乐页流体设置共享（fluidSettings），始终显示
   const renderDimSlider = (disabled: boolean) => (
     <div style={{ padding: "2px 0 6px" }}>
@@ -370,9 +379,9 @@ export default function NowPlayingSettingsWindow({
                         {ALIGNMENT_OPTIONS.map((o) => (
                           <GlassPillButton
                             key={o.v}
-                            active={lyricsSettings.alignmentPercentage === o.v}
+                            active={settings.lyricStyles.alignmentPercentage === o.v}
                             disabled={fullscreen}
-                            onClick={() => onLyricsSettingsChange({ ...lyricsSettings, alignmentPercentage: o.v })}
+                            onClick={() => onChange({ ...settings, lyricStyles: { ...settings.lyricStyles, alignmentPercentage: o.v } })}
                           >
                             {T(o.zh, o.en)}
                           </GlassPillButton>
@@ -469,16 +478,15 @@ export default function NowPlayingSettingsWindow({
                     </div>
 
                     <LyricsSettingsContent
-                      values={lyricsSettings}
-                      onChange={onLyricsSettingsChange}
+                      values={panelLyricsValues}
+                      onChange={handleLyricsChange}
                       embedded
                       roomy
                       resetPosition="bottom"
                       onReset={() => setConfirmReset(true)}
-                      fontSizeDisabled={fullscreen}
                       hideAlignment
                       fontSizeOverride={{
-                        value: fullscreen ? NOW_PLAYING_FULLSCREEN_FONT_SIZE : settings.lyricsFontSize,
+                        value: settings.lyricsFontSize,
                         defaultVal: DEFAULT_NOW_PLAYING_SETTINGS.lyricsFontSize,
                         onChange: (v) => onChange({ ...settings, lyricsFontSize: v }),
                       }}
@@ -565,7 +573,7 @@ export default function NowPlayingSettingsWindow({
                       {T("恢复默认歌词设置？", "Reset lyrics settings?")}
                     </div>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", lineHeight: 1.5 }}>
-                      {T("将恢复歌词显示设置与 NowPlaying 歌词字号为默认值", "Restore lyrics display settings and the NowPlaying font size to defaults")}
+                      {T("将 NowPlaying 歌词样式与字号恢复为默认值，不影响音乐页歌词窗", "Restore NowPlaying lyric styles and font size to defaults; the music page lyric window is unaffected")}
                     </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -576,8 +584,11 @@ export default function NowPlayingSettingsWindow({
                       variant="primary"
                       size="sm"
                       onClick={() => {
-                        onLyricsSettingsChange({ ...DEFAULT_LYRICS_SETTINGS });
-                        onChange({ ...settings, lyricsFontSize: DEFAULT_NOW_PLAYING_SETTINGS.lyricsFontSize });
+                        onChange({
+                          ...settings,
+                          lyricStyles: { ...DEFAULT_NOW_PLAYING_SETTINGS.lyricStyles },
+                          lyricsFontSize: DEFAULT_NOW_PLAYING_SETTINGS.lyricsFontSize,
+                        });
                         setConfirmReset(false);
                       }}
                     >

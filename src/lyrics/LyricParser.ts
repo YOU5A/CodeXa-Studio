@@ -63,28 +63,87 @@ function replaceChineseSymbolsToEnglish(str: string): string {
 }
 
 // 歌词行就近一对一挂载：yrc 与 lrc/tlyric 时间基准存在 ~0.3-0.4s 偏移，不能按相等时间匹配
-const ATTACH_MAX_DIFF = 1.0; // 秒
+// 偏移量因歌而异（实测 0.3~1.6s），2s 容差在保证就近正确的前提下覆盖实测最大偏移
+const ATTACH_MAX_DIFF = 2.0; // 秒
+// 归一化：仅保留字母/数字/假名/汉字，并去掉全部空白（yrc 逐字文本词间带空格，
+// lrc 日文原文没有空格，必须去空格后才能内容匹配）
+function normalizeLyricText(text: string): string {
+  return (text || "").toLowerCase().replace(/[^a-z0-9\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]+/g, "");
+}
+
+function findClosestLine(lines: LyricPureLine[], time: number, maxDiff: number): LyricPureLine | null {
+  let best: LyricPureLine | null = null;
+  let bestDiff = Infinity;
+  for (const l of lines) {
+    const diff = Math.abs(l.time - time);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = l;
+    }
+  }
+  return best && bestDiff <= maxDiff ? best : null;
+}
+
+// 翻译/音译挂载：优先按文本匹配（yrc 时间轴可能与 lrc 偏差数秒甚至十余秒，
+// 如 Nightcore 混音版），文本匹配失败再按时间就近兜底（2s 容差）
 function attachNearest(
   processed: LyricLine[],
+  originalLyrics: LyricPureLine[],
   lines: LyricPureLine[],
   field: "originalLyric" | "translatedLyric" | "romanLyric"
 ): void {
+  const textIndex = new Map<string, number[]>();
+  processed.forEach((p, i) => {
+    const key = normalizeLyricText(p.originalLyric || p.text || "");
+    if (!key) return;
+    if (!textIndex.has(key)) textIndex.set(key, []);
+    textIndex.get(key)!.push(i);
+  });
   const used = new Set<number>();
+
   for (const line of lines) {
     if (!line.lyric) continue;
-    let bestIdx = -1;
-    let bestDiff = Infinity;
-    for (let i = 0; i < processed.length; i++) {
-      if (used.has(i)) continue;
-      const diff = Math.abs(processed[i].time - line.time);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIdx = i;
+
+    // 1) tlyric/romalrc 与 lrc 时间戳同源，先定位 lrc 行，再按原文文本匹配 yrc 行
+    let targetIdx = -1;
+    const lrcLine = findClosestLine(originalLyrics, line.time, 0.1);
+    if (lrcLine) {
+      const key = normalizeLyricText(lrcLine.lyric);
+      const candidates = textIndex.get(key);
+      if (candidates) {
+        targetIdx = candidates.find((i) => !used.has(i)) ?? -1;
+      }
+      // 精确匹配失败时尝试包含匹配（yrc 文本可能被逐字拼接截断/略有差异）
+      if (targetIdx < 0 && key.length >= 4) {
+        for (const [k, idxs] of textIndex) {
+          const shorter = key.length <= k.length ? key : k;
+          const longer = key.length <= k.length ? k : key;
+          if (shorter.length >= 4 && longer.includes(shorter) && shorter.length / longer.length >= 0.7) {
+            targetIdx = idxs.find((i) => !used.has(i)) ?? -1;
+            if (targetIdx >= 0) break;
+          }
+        }
       }
     }
-    if (bestIdx >= 0 && bestDiff <= ATTACH_MAX_DIFF) {
-      used.add(bestIdx);
-      const target = processed[bestIdx];
+
+    // 2) 兜底：就近时间匹配
+    if (targetIdx < 0) {
+      let bestIdx = -1;
+      let bestDiff = Infinity;
+      for (let i = 0; i < processed.length; i++) {
+        if (used.has(i)) continue;
+        const diff = Math.abs(processed[i].time - line.time);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx >= 0 && bestDiff <= ATTACH_MAX_DIFF) targetIdx = bestIdx;
+    }
+
+    if (targetIdx >= 0) {
+      used.add(targetIdx);
+      const target = processed[targetIdx];
       if (field === "originalLyric") {
         target.originalLyric = line.lyric;
         target.text = line.lyric;
@@ -643,9 +702,10 @@ export function parseLyric(
   } else {
     // ── Has dynamic lyrics: use YRC as base, attach originals ──
     const processed = parsePureDynamicLyric(dynamic);
-    // yrc 与 lrc/tlyric 时间基准存在偏移，翻译/音译按就近一对一挂载（原文直接用 yrc 词句）
-    attachNearest(processed, parsePureLyric(translated), "translatedLyric");
-    attachNearest(processed, parsePureLyric(roman), "romanLyric");
+    const originalLyrics = parsePureLyric(original);
+    // 翻译/音译挂载：文本优先、时间兜底（原文直接用 yrc 词句）
+    attachNearest(processed, originalLyrics, parsePureLyric(translated), "translatedLyric");
+    attachNearest(processed, originalLyrics, parsePureLyric(roman), "romanLyric");
 
     const finalResult = processLyric(processed);
 

@@ -6,6 +6,8 @@ const { spawnSync, exec } = require("child_process");
 const mainWindow = { current: null };
 const dotnetBridge = { current: null };
 const quittingRef = { current: false };
+// NowPlaying 全屏状态（工作区补间全屏）：current = 是否全屏；animating = 过渡中
+const fullscreenStateRef = { current: false, animating: false };
 
 const isDev = !app.isPackaged;
 
@@ -111,14 +113,14 @@ const { createTray } = require("./tray");
 
 // ---- App lifecycle ----
 app.whenReady().then(() => {
-  setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, dotnetBridge });
+  setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSettings, dotnetBridge, fullscreenStateRef });
   setupBridge({ isDev, dotnetBridge, app });
-  mainWindow.current = createWindow({ electronSettings, saveElectronSettings, isQuittingRef: quittingRef, mainWindowRef: mainWindow });
+  mainWindow.current = createWindow({ electronSettings, saveElectronSettings, isQuittingRef: quittingRef, mainWindowRef: mainWindow, fullscreenStateRef });
   createTray({ isDev, mainWindowRef: mainWindow, quittingRef });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow.current = createWindow({ electronSettings, saveElectronSettings, isQuittingRef: quittingRef, mainWindowRef: mainWindow });
+      mainWindow.current = createWindow({ electronSettings, saveElectronSettings, isQuittingRef: quittingRef, mainWindowRef: mainWindow, fullscreenStateRef });
     } else if (mainWindow.current) {
       mainWindow.current.show();
       mainWindow.current.focus();
@@ -141,7 +143,7 @@ app.whenReady().then(() => {
     // Windows 无边框窗口 enter/leave-full-screen 事件可能不触发，
     // 用 resize 兜底同步真实全屏状态（重复发送同值无害）
     mainWindow.current.on("resize", () => {
-      mainWindow.current?.webContents.send("window:fullscreenChange", mainWindow.current?.isFullScreen() ?? false);
+      mainWindow.current?.webContents.send("window:fullscreenChange", fullscreenStateRef.current);
     });
   }
 });

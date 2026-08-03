@@ -8,8 +8,8 @@
  * @module lyrics/LyricDisplay
  */
 
-import { useRef, useMemo, useLayoutEffect, useState, useCallback, useEffect } from "react";
-import type { LyricData, LyricsSettingsValues } from "./types";
+import { memo, useRef, useMemo, useLayoutEffect, useState, useCallback, useEffect } from "react";
+import type { LyricData, LyricLine, LyricsSettingsValues } from "./types";
 import { DEFAULT_LYRICS_SETTINGS } from "./types";
 import LyricBlock, { scaleByOffset, blurByOffset, opacityByOffset } from "./LyricBlock";
 import Scrollbar from "./Scrollbar";
@@ -58,11 +58,125 @@ export interface LyricDisplayProps {
 
 // ── Component ──
 
-// 字号 JS 插值动画时长（与子层展开动画 300ms 区分）
-const FONT_ANIM_MS = 250;
-const SUB_ANIM_MS = 300;
+// 字号/子层过渡时长：与缩放效果同一套 0.5s + --lyric-timing-function（纯 CSS 过渡）
+const SUB_ANIM_MS = 500;
 
-export default function LyricDisplay({
+// 每次滚轮事件最大位移（行数倍率，保底 120px）：超快滚动也不会一次跨过多行
+const MAX_WHEEL_STEP_LINES = 1.5;
+const MAX_WHEEL_STEP_PX = 120;
+// 滚轮/惯性最大速度（px/ms）：限制甩动后的总滑行距离
+const MAX_WHEEL_VELOCITY = 2.0;
+
+// ── LyricRow：单行渲染（memo）──
+// 换行时只有视觉属性变化的行（当前行附近）重渲染，远处行跳过，
+// 避免快速连续换行时整棵歌词树重渲染导致主线程卡顿；
+// currentTime/offset 不参与比较：逐字/发光动画通过 getCurrentTime 实时读取，offset 仅调试属性
+interface LyricRowProps {
+  line: LyricLine;
+  index: number;
+  offset: number;
+  isCurrent: boolean;
+  scale: number;
+  blur: number;
+  opacity: number;
+  delay: number;
+  currentTime: number;
+  getCurrentTime?: () => number;
+  seekCounter: number;
+  playState: boolean;
+  pageOpen: boolean;
+  onClick?: (time: number) => void;
+  settings: LyricsSettingsValues;
+  useKaraokeLyrics?: boolean;
+  karaokeAnimation?: "float" | "slide";
+  lyricGlow?: boolean;
+  glassGlowColor: string;
+  glowBorderRadius: number | string;
+  textAlign: "left" | "center" | "right";
+  scrollbar: boolean;
+  isManual: boolean;
+}
+
+function LyricRow({
+  line, index, offset, isCurrent, scale, blur, opacity, delay,
+  currentTime, getCurrentTime, seekCounter, playState, pageOpen, onClick,
+  settings, useKaraokeLyrics, karaokeAnimation, lyricGlow,
+  glassGlowColor, glowBorderRadius, textAlign, scrollbar, isManual,
+}: LyricRowProps) {
+  const ds = delay ? ` ${delay}ms` : "";
+  const lineAnimDuration = isManual ? "0.12s" : "0.5s";
+  return (
+    <GlassGlow
+      glowColor={glassGlowColor}
+      glowRadius={350}
+      borderRadius={glowBorderRadius}
+      style={{
+        maxWidth: "calc(100% - 40px)",
+        padding: "6px 8px 5px 8px",
+        marginLeft: textAlign === "left" ? 8 : undefined,
+        marginRight: textAlign === "right" ? (scrollbar ? 28 : 8) : undefined,
+        transform: `scale(${scale})`,
+        filter: blur > 0.5 ? `blur(${blur}px)` : "none",
+        opacity,
+        transition: [
+          `transform ${lineAnimDuration} var(--lyric-timing-function, ease)${ds}`,
+          `opacity ${lineAnimDuration} var(--lyric-timing-function, ease)${ds}`,
+        ].join(", "),
+        willChange: Math.abs(offset) <= 3 ? "transform" : "auto",
+        transformOrigin: textAlign === "left" ? "left center" : textAlign === "right" ? "right center" : "center",
+      }}
+    >
+      <div data-lyric-index={index}>
+        <LyricBlock
+          line={line}
+          offset={offset}
+          isCurrent={isCurrent}
+          currentTime={currentTime}
+          id={index}
+          getCurrentTime={getCurrentTime}
+          seekCounter={seekCounter}
+          playState={playState}
+          pageOpen={pageOpen}
+          onClick={onClick}
+          settings={settings}
+          useKaraokeLyrics={useKaraokeLyrics}
+          karaokeAnimation={karaokeAnimation}
+          lyricGlow={lyricGlow}
+        />
+      </div>
+    </GlassGlow>
+  );
+}
+
+function lyricRowPropsEqual(prev: LyricRowProps, next: LyricRowProps): boolean {
+  return (
+    prev.line === next.line &&
+    prev.index === next.index &&
+    prev.isCurrent === next.isCurrent &&
+    prev.scale === next.scale &&
+    prev.blur === next.blur &&
+    prev.opacity === next.opacity &&
+    prev.delay === next.delay &&
+    prev.getCurrentTime === next.getCurrentTime &&
+    prev.seekCounter === next.seekCounter &&
+    prev.playState === next.playState &&
+    prev.pageOpen === next.pageOpen &&
+    prev.onClick === next.onClick &&
+    prev.settings === next.settings &&
+    prev.useKaraokeLyrics === next.useKaraokeLyrics &&
+    prev.karaokeAnimation === next.karaokeAnimation &&
+    prev.lyricGlow === next.lyricGlow &&
+    prev.glassGlowColor === next.glassGlowColor &&
+    prev.glowBorderRadius === next.glowBorderRadius &&
+    prev.textAlign === next.textAlign &&
+    prev.scrollbar === next.scrollbar &&
+    prev.isManual === next.isManual
+  );
+}
+
+const LyricRowMemo = memo(LyricRow, lyricRowPropsEqual);
+
+function LyricDisplay({
   lyricData, currentTime, currentLineIndex, getCurrentTime,
   seekCounter = 0, playState = true, pageOpen = true,
   loading, error, loadingText, noLyricsText, instrumentalText,
@@ -87,6 +201,8 @@ export default function LyricDisplay({
   // 让新位置在 paint 前一次性生效，避免“跳帧 + 错位”。
   const shouldTransit = useRef(false);
   const previousFocusedLineRef = useRef(0);
+  // 快速连续换行检测：记录播放换行时间与单次跳转行数
+  const focusJumpRef = useRef(0);
 
   // 流式栈位置：wrapper 的 translateY
   const [stackOffset, setStackOffset] = useState(0);
@@ -110,7 +226,7 @@ export default function LyricDisplay({
   }, [lyricData]);
 
   // 布局/设置变化键：任一影响行高、位置或对齐的设置变化都会触发重新定位
-  // 字号变化键：三个字号走 JS 驱动插值动画（LyricBlock 通过 CSS 变量引用）
+  // 字号变化键：三个字号直接到位（LyricBlock 通过 CSS 变量引用）
   const fontKey = [
     settings.fontSize, settings.romajiFontSize, settings.translationFontSize,
   ].join("|");
@@ -170,14 +286,10 @@ export default function LyricDisplay({
   const fontCurrentRef = useRef<[number, number, number]>([
     settings.fontSize, settings.romajiFontSize, settings.translationFontSize,
   ]);
-  const fontMountedRef = useRef(false);
-  const fontAnimRef = useRef<{
-    raf: number;
-    from: [number, number, number];
-    to: [number, number, number];
-    start: number;
-    activeLineAtStart: number;
-  } | null>(null);
+  // 字号/子层几何过渡窗口时间戳：期间 wrapper RO 直写居中，避免逐帧 React 渲染
+  const geometryChangedAtRef = useRef(0);
+  // 子层过渡结束后清除 CSS 变量的定时器
+  const subEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
   // ── Resize tracking ──
@@ -269,6 +381,10 @@ export default function LyricDisplay({
 
   const focusLine = scrollingMode ? scrollingFocusLine : currentLineIndex;
 
+  // 单次播放换行跳过的行数：>2 视为 seek/点击歌词/切歌（大跳时精确居中并退出手动模式）
+  const focusJump = Math.abs(focusLine - previousFocusedLineRef.current);
+  focusJumpRef.current = focusJump;
+
   // ── Effective glow RGB based on fluid color mode ──
   const effectiveGlowRgb = useMemo(() => {
     let cm = null;
@@ -314,7 +430,7 @@ export default function LyricDisplay({
   const alignmentPctRef = useRef(settings.alignmentPercentage);
   const manualLineRef = useRef(0); // manualLine 镜像，避免滚动中重复 setState
   const lineCentersRef = useRef<number[]>([]); // 各行中心缓存（不逐帧读 DOM 布局）
-  stackOffsetRef.current = stackOffset;
+  // stackOffsetRef 由栈 effect / wrapper RO / 手动滚动直写维护（渲染以 ref 为准，state 仅作渲染触发）
   allLinesRef.current = allLines;
   alignmentPctRef.current = settings.alignmentPercentage;
   manualLineRef.current = manualLine;
@@ -331,44 +447,84 @@ export default function LyricDisplay({
     lineCentersRef.current = centers;
   }, []);
 
+  // 平均行距（来自行中心缓存，避免逐帧读 DOM 布局；无缓存时回退 40px）
+  const getLinePitch = () => {
+    const centers = lineCentersRef.current;
+    if (centers.length > 1) {
+      return (centers[centers.length - 1] - centers[0]) / (centers.length - 1);
+    }
+    return 40;
+  };
+
   // 当前聚焦行（含手动滚动/外部滚动模式）
   const activeLine = scrollingMode ? scrollingFocusLine : (isManual ? manualLine : focusLine);
   const activeLineRef = useRef(activeLine);
   activeLineRef.current = activeLine;
 
-  // ── 子层展开/收起（翻译/音译开关，JS 驱动）──
-  // CSS 过渡的插值在帧管线中晚于 rAF/强制布局，无法被 wrapper 位移同帧跟随；
-  // 改为逐帧设置每行子层高度/透明度/边距 CSS 变量（--lyric-trans-h/o/m-{id} 等），
-  // 几何即时生效，再同帧读取并直写 transform，当前行保持严格居中。
+  // 统一栈定位目标：当前播放行精确居中（手动/滚动模式期间由滚轮接管）
+  const computeStackTarget = useCallback((): number | null => {
+    const container = containerRef.current;
+    const wrapper = wrapperRef.current;
+    if (!container || !wrapper || !allLines.length) return null;
+    const idx = Math.min(Math.max(activeLine, 0), allLines.length - 1);
+    // wrapper 的直接子元素即各行 GlassGlow（文档流顺序 = 行顺序）
+    const lineEl = wrapper.children[idx] as HTMLElement | undefined;
+    if (!lineEl) return null;
+    const h = containerHeightRef.current || container.clientHeight;
+    if (h <= 0) return null;
+    const alignmentY = h * (alignmentPctRef.current * 0.01);
+    const next = alignmentY - lineEl.offsetTop - lineEl.offsetHeight / 2;
+    // 当前播放行始终精确居中（手动/滚动模式期间由滚轮接管，不参与）
+    return next;
+  }, [allLines, activeLine]);
+
   const transShowRef = useRef(settings.showTranslation);
   transShowRef.current = settings.showTranslation;
   const romaShowRef = useRef(settings.showRomaji);
   romaShowRef.current = settings.showRomaji;
-  const subProgressRef = useRef({ trans: settings.showTranslation ? 1 : 0, roma: settings.showRomaji ? 1 : 0 });
-  const subLayoutMountedRef = useRef(false);
-  const subMountedRef = useRef(false);
-  const subAnimRef = useRef<{ raf: number; start: number; activeLineAtStart: number } | null>(null);
+
+  // ── 子层展开/收起（翻译/音译开关，CSS 过渡驱动）──
+  // 与缩放效果同一套动画：一次写入目标 CSS 变量（--lyric-trans-h/o/m-{id} 等），
+  // 高度/边距/透明度由子层 0.5s var(--lyric-timing-function) 过渡插值，
+  // 居中由 wrapper ResizeObserver 逐帧直写 transform 跟随，无需 JS 插值循环。
+
+
+  // 子层内容高度缓存：展开动画期间只写 CSS 变量、不逐帧读布局。
+  // 每次布局/歌词变化后测量一次（querySelector + scrollHeight），动画帧内直接复用。
+  const subMeasureRef = useRef<{ trans: number | null; roma: number | null }[]>([]);
+
+  const measureSubHeights = useCallback(() => {
+    const w = wrapperRef.current;
+    if (!w) return;
+    const arr: { trans: number | null; roma: number | null }[] = [];
+    for (let i = 0; i < w.children.length; i++) {
+      const row = w.children[i] as HTMLElement;
+      const trans = row.querySelector(".lyric-block-translated") as HTMLElement | null;
+      const roma = row.querySelector(".lyric-block-romaji") as HTMLElement | null;
+      arr.push({
+        trans: trans ? (trans.firstElementChild as HTMLElement).scrollHeight : null,
+        roma: roma ? (roma.firstElementChild as HTMLElement).scrollHeight : null,
+      });
+    }
+    subMeasureRef.current = arr;
+  }, []);
 
   const applySubHeights = (tp: number, rp: number) => {
     const w = wrapperRef.current;
     if (!w) return;
     const fs = fontCurrentRef.current[0];
-    for (let i = 0; i < w.children.length; i++) {
-      const row = w.children[i] as HTMLElement;
-      const trans = row.querySelector(".lyric-block-translated") as HTMLElement | null;
-      if (trans) {
-        const inner = trans.firstElementChild as HTMLElement;
-        const h = inner.scrollHeight;
-        w.style.setProperty(`--lyric-trans-h-${i}`, `${h * tp}px`);
+    const ms = subMeasureRef.current;
+    const count = Math.min(w.children.length, ms.length);
+    for (let i = 0; i < count; i++) {
+      const m = ms[i];
+      if (m?.trans != null) {
+        w.style.setProperty(`--lyric-trans-h-${i}`, `${m.trans * tp}px`);
         w.style.setProperty(`--lyric-trans-o-${i}`, String(tp));
         // 默认 margin 是相对子层字号的 0.3em（如 19px×0.3=5.7px），须用子层字号计算
         w.style.setProperty(`--lyric-trans-m-${i}`, `${fs * fontCurrentRef.current[2] * 0.3 * tp}px`);
       }
-      const roma = row.querySelector(".lyric-block-romaji") as HTMLElement | null;
-      if (roma) {
-        const inner = roma.firstElementChild as HTMLElement;
-        const h = inner.scrollHeight;
-        w.style.setProperty(`--lyric-roma-h-${i}`, `${h * rp}px`);
+      if (m?.roma != null) {
+        w.style.setProperty(`--lyric-roma-h-${i}`, `${m.roma * rp}px`);
         w.style.setProperty(`--lyric-roma-o-${i}`, String(rp));
         w.style.setProperty(`--lyric-roma-m-${i}`, `${fs * fontCurrentRef.current[1] * 0.4 * rp}px`);
       }
@@ -385,13 +541,30 @@ export default function LyricDisplay({
     }
   };
 
-  // 布局变化提交后、paint 前用当前进度覆盖 React 默认值，
-  // 保证 stack effect 读取到的几何与动画起点一致（无先跳变再动画）
   useLayoutEffect(() => {
-    if (!subLayoutMountedRef.current) { subLayoutMountedRef.current = true; return; }
-    const sp = subProgressRef.current;
-    applySubHeights(sp.trans, sp.roma);
-  }, [layoutKey]);
+    // 翻译/罗马音开关：测量并先钉住完整高度（auto→px 是离散跳变、视觉无差异），
+    // 下一帧（双重 rAF）写目标值，保证收起/展开过渡两端都是可插值的 px；
+    // 插值由子层 CSS 过渡（0.5s，与缩放效果同曲线）驱动，无需逐帧 JS
+    measureSubHeights();
+    applySubHeights(1, 1);
+    geometryChangedAtRef.current = Date.now();
+    refreshLineCenters();
+    if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        applySubHeights(transShowRef.current ? 1 : 0, romaShowRef.current ? 1 : 0);
+        refreshLineCenters();
+        geometryChangedAtRef.current = Date.now();
+      });
+    });
+    // 过渡结束后清除变量恢复 auto/0px：字号变化时子层高度自动跟随，无需逐事件重测
+    subEndTimerRef.current = setTimeout(() => {
+      clearSubVars();
+      refreshLineCenters();
+      geometryChangedAtRef.current = 0;
+      subEndTimerRef.current = null;
+    }, SUB_ANIM_MS + 150);
+  }, [layoutKey, allLines, containerWidth, measureSubHeights, refreshLineCenters]);
 
 
   // ── Per-line visuals (pure visual transform, no layout participation) ──
@@ -411,7 +584,9 @@ export default function LyricDisplay({
       return scaleByOffset(offset);
     };
     const bByOffset = (offset: number) => {
-      if (!settings.enableBlur || isManual || scrollingMode) return 0;
+      // |offset| >= 4 的行 opacity 已 = 0，完全不可见；不再参与模糊过渡（±3 行保留 3.5px 渐变），
+      // 显著降低切行时主线程 blur 重栅格化面积（翻译/罗马音开启时行高更大，收益最明显）
+      if (!settings.enableBlur || isManual || scrollingMode || Math.abs(offset) >= 4) return 0;
       return blurByOffset(offset);
     };
     const oByOffset = (offset: number) => {
@@ -441,26 +616,20 @@ export default function LyricDisplay({
   useLayoutEffect(() => {
     // 先消费并复位过渡抑制标记：即使下面提前返回，也不会把“无动画”状态遗留到下一次跳行
     // 布局变化信号用 ref 时间戳（并发渲染中断不会丢失），变化后 100ms 内抑制位移动画
-    const suppress = !shouldTransit.current || Date.now() - layoutChangedAtRef.current < 100;
+    // 字号变化起始帧同样抑制 transform 过渡（后续由 wrapper RO 直写居中）
+    const suppress = !shouldTransit.current || Date.now() - layoutChangedAtRef.current < 100 || Date.now() - fontChangedAtRef.current < 100;
     shouldTransit.current = true;
     // 手动自由滚动/惯性期间位置由滚轮直接控制，不参与自动居中
     if (isManualRef.current) return;
-    const container = containerRef.current;
-    const wrapper = wrapperRef.current;
-    if (!container || !wrapper || !allLines.length) return;
-    const idx = Math.min(Math.max(activeLine, 0), allLines.length - 1);
-    // wrapper 的直接子元素即各行 GlassGlow（文档流顺序 = 行顺序）
-    const lineEl = wrapper.children[idx] as HTMLElement | undefined;
-    if (!lineEl) return;
-    const h = containerHeightRef.current || container.clientHeight;
-    if (h <= 0) return;
-    const next = h * (settings.alignmentPercentage * 0.01) - lineEl.offsetTop - lineEl.offsetHeight / 2;
+    const next = computeStackTarget();
+    if (next === null) return;
+    stackOffsetRef.current = next;
     setStackOffset(next);
     setSuppressStackTransition(suppress);
     setIsVisible(true);
   }, [
     allLines, activeLine, containerHeight, containerWidth,
-    layoutKey, resizeTick, manualExitTick,
+    layoutKey, fontKey, resizeTick, manualExitTick, computeStackTarget,
   ]);
 
   // ── 对齐方式切换的水平滑入动画（FLIP）──
@@ -504,42 +673,30 @@ export default function LyricDisplay({
   // 用 wrapper 的 ResizeObserver 在每一帧高度变化时重新计算居中位置；
   // 字号过渡中即时跟随（无自身过渡），其余高度变化保持平滑滑动。
   const recenterRef = useRef<() => number | null>(() => null);
-  recenterRef.current = () => {
-    const container = containerRef.current;
-    const wrapper = wrapperRef.current;
-    if (!container || !wrapper || !allLines.length) return null;
-    const idx = Math.min(Math.max(activeLine, 0), allLines.length - 1);
-    const lineEl = wrapper.children[idx] as HTMLElement | undefined;
-    if (!lineEl) return null;
-    const h = containerHeightRef.current || container.clientHeight;
-    if (h <= 0) return null;
-    return h * (settings.alignmentPercentage * 0.01) - lineEl.offsetTop - lineEl.offsetHeight / 2;
-  };
+  recenterRef.current = () => computeStackTarget();
   useLayoutEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
     const ro = new ResizeObserver(() => {
-      refreshLineCenters(); // 字号过渡/换行期间同步刷新行中心缓存
-      if (isManualRef.current) return; // 手动滚动期间保持当前像素位置
-      // 字号/子层动画期间由各自的 rAF 循环独占定位，RO 的滞后值会覆盖同帧直写
-      if (fontAnimRef.current || subAnimRef.current) return;
+      if (isManualRef.current) return; // 手动滚动期间位置由滚轮接管
+      const w = wrapperRef.current;
       const next = recenterRef.current();
-      if (next !== null) {
-        const suppress =
-          Date.now() - layoutChangedAtRef.current < 400 ||
-          Date.now() - fontChangedAtRef.current < 400;
-        setStackOffset(next);
-        setSuppressStackTransition(suppress);
+      if (w && next !== null) {
+        // 高度过渡期间逐帧直写 transform（不触发 React 渲染）；
+        // 起始帧栈 effect 已置 suppress=true，transform 过渡为 0s，不会追赶
+        w.style.transform = `translateY(${next}px)`;
+        stackOffsetRef.current = next;
+        setSuppressStackTransition(true);
       }
+      // 非字号/子层过渡窗口内刷新行中心缓存（如窗口缩放导致换行）
+      if (Date.now() - geometryChangedAtRef.current > 600) refreshLineCenters();
     });
     ro.observe(wrapper);
     return () => ro.disconnect();
     // 歌词数据异步加载：首帧 wrapper 可能不存在，allLines 变化后重新挂载监听
   }, [allLines]);
 
-  // ── 字号 JS 插值动画（从当前行向上下缩放）──
-  // 三个字号通过 --lyric-font-size / --lyric-romaji-scale / --lyric-trans-scale 驱动，
-  // 每帧先写变量再强制读取几何并直接写 transform，保证 paint 前当前行严格居中。
+  // ── 字号：直接到位（保持发布行为），子层高度为 auto 自动跟随 ──
 
   const setFontVars = useCallback((font: number, roma: number, trans: number) => {
     const w = wrapperRef.current;
@@ -549,148 +706,24 @@ export default function LyricDisplay({
     w.style.setProperty("--lyric-trans-scale", String(trans));
   }, []);
 
-  // 字号目标变化：启动/重定向插值动画
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
+  // 字号目标变化：直接到位（与发布行为一致）；子层高度此时为 auto，自动跟随字号
+  useLayoutEffect(() => {
     const to: [number, number, number] = [settings.fontSize, settings.romajiFontSize, settings.translationFontSize];
-    // 首次挂载/无实际变化：直接写目标值
-    if (!fontMountedRef.current) {
-      setFontVars(to[0], to[1], to[2]);
-      fontCurrentRef.current = [...to];
-      return;
-    }
-    // 手动滚动/惯性期间：字号直接到位，transform 由手动路径接管
-    if (isManualRef.current) {
-      setFontVars(to[0], to[1], to[2]);
-      fontCurrentRef.current = [...to];
-      return;
-    }
-    const prev = fontAnimRef.current;
-    const from: [number, number, number] = prev ? [...fontCurrentRef.current] : [...fontCurrentRef.current];
-    if (prev) cancelAnimationFrame(prev.raf);
-    const anim = { raf: 0, from, to, start: performance.now(), activeLineAtStart: activeLine };
-    fontAnimRef.current = anim;
-    const tick = (now: number) => {
-      if (fontAnimRef.current !== anim) return;
-      // 手动接管或播放切行：立即收敛字号，交还正常定位流程
-      // 手动接管时立即收敛；播放切行不打断动画（recenter 基于最新 activeLine 自动跟随）
-      if (isManualRef.current) {
-        setFontVars(anim.to[0], anim.to[1], anim.to[2]);
-        fontCurrentRef.current = [...anim.to];
-        if (fontAnimRef.current === anim) fontAnimRef.current = null;
-        return;
-      }
-      // rAF 时间戳是帧开始时间，可能早于 effect 内的 performance.now()，需夹取非负
-      const p = Math.min(1, Math.max(0, now - anim.start) / FONT_ANIM_MS);
-      const e = 1 - Math.pow(1 - p, 3);
-      const v0 = anim.from[0] + (anim.to[0] - anim.from[0]) * e;
-      const v1 = anim.from[1] + (anim.to[1] - anim.from[1]) * e;
-      const v2 = anim.from[2] + (anim.to[2] - anim.from[2]) * e;
-      fontCurrentRef.current = [v0, v1, v2];
-      const w = wrapperRef.current;
-      if (w) {
-        w.style.setProperty("--lyric-font-size", v0 + "px");
-        w.style.setProperty("--lyric-romaji-scale", String(v1));
-        w.style.setProperty("--lyric-trans-scale", String(v2));
-        // 强制布局（offsetTop 读取）后同帧居中：几何与位移在 paint 前一致
-        recenterRef.current(); // 首次读取强制布局（变量刚写入）
-        const next = recenterRef.current(); // 二次读取拿到稳定几何
-        if (next !== null) {
-          w.style.transform = `translateY(${next}px)`;
-          stackOffsetRef.current = next;
-          setStackOffset(next);
-          setSuppressStackTransition(true);
-        }
-      }
-      if (p >= 1) {
-        if (fontAnimRef.current === anim) fontAnimRef.current = null;
-        return;
-      }
-      anim.raf = requestAnimationFrame(tick);
-    };
-    anim.raf = requestAnimationFrame(tick);
-    return () => {
-      if (fontAnimRef.current === anim) {
-        cancelAnimationFrame(anim.raf);
-        fontAnimRef.current = null;
-      }
-    };
-    // fontChanged 仅用于区分“首次/无变化”与“真实变化”，不参与依赖
+    setFontVars(to[0], to[1], to[2]);
+    fontCurrentRef.current = [...to];
+    geometryChangedAtRef.current = Date.now();
+    // fontChanged 已在上方渲染期写入 fontChangedAtRef（栈抑制用）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fontKey]);
 
-  // 切歌：字号动画立即收敛到目标，避免在旧歌词几何下继续插值
-  useEffect(() => {
-    const anim = fontAnimRef.current;
-    if (anim) {
-      cancelAnimationFrame(anim.raf);
-      fontAnimRef.current = null;
-    }
+  // 切歌：字号直接到位，避免旧歌词几何下残留过渡
+  useLayoutEffect(() => {
     setFontVars(settings.fontSize, settings.romajiFontSize, settings.translationFontSize);
     fontCurrentRef.current = [settings.fontSize, settings.romajiFontSize, settings.translationFontSize];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lyricData]);
 
 
-  // ── 子层展开/收起动画循环（翻译/音译开关）──
-  // 逐帧插值子层高度/透明度/边距（applySubHeights）并同帧重定位，
-  // 当前行保持居中；连续切换开关时从当前进度重定向。
-  useEffect(() => {
-    // 首次挂载/非开关类布局变化时不启动动画
-    if (!subMountedRef.current) { subMountedRef.current = true; return; }
-    const prev = subAnimRef.current;
-    if (prev) cancelAnimationFrame(prev.raf);
-    const anim = { raf: 0, start: performance.now(), activeLineAtStart: activeLine };
-    subAnimRef.current = anim;
-    const tick = (now: number) => {
-      if (subAnimRef.current !== anim) return;
-      // 手动接管时直接收敛；播放切行不打断动画（recenter 基于最新 activeLine 自动跟随）
-      if (isManualRef.current) {
-        const tT = transShowRef.current ? 1 : 0;
-        const rT = romaShowRef.current ? 1 : 0;
-        subProgressRef.current = { trans: tT, roma: rT };
-        clearSubVars();
-        if (subAnimRef.current === anim) subAnimRef.current = null;
-        return;
-      }
-      const p = Math.min(1, Math.max(0, now - anim.start) / SUB_ANIM_MS);
-      const e = 1 - Math.pow(1 - p, 3);
-      const sp = subProgressRef.current;
-      const tTarget = transShowRef.current ? 1 : 0;
-      const rTarget = romaShowRef.current ? 1 : 0;
-      const tp = sp.trans + (tTarget - sp.trans) * e;
-      const rp = sp.roma + (rTarget - sp.roma) * e;
-      subProgressRef.current = { trans: tp, roma: rp };
-      applySubHeights(tp, rp);
-      const w = wrapperRef.current;
-      recenterRef.current(); // 首次读取强制布局（变量刚写入）
-      const next = recenterRef.current(); // 二次读取拿到稳定几何
-      if (w && next !== null) {
-        w.style.transform = `translateY(${next}px)`;
-        stackOffsetRef.current = next;
-        setStackOffset(next);
-        setSuppressStackTransition(true);
-      }
-      const done = Math.abs(tp - tTarget) < 0.001 && Math.abs(rp - rTarget) < 0.001;
-      if (done || p >= 1) {
-        clearSubVars();
-        subProgressRef.current = { trans: tTarget, roma: rTarget };
-        if (subAnimRef.current === anim) subAnimRef.current = null;
-        return;
-      }
-      anim.raf = requestAnimationFrame(tick);
-    };
-    anim.raf = requestAnimationFrame(tick);
-    return () => {
-      if (subAnimRef.current === anim) {
-        cancelAnimationFrame(anim.raf);
-        subAnimRef.current = null;
-      }
-    };
-    // layoutChanged 仅用于区分首次挂载与真实变化，不参与依赖
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutKey]);
 
 
 
@@ -849,9 +882,7 @@ export default function LyricDisplay({
       }
       const dt = now - lastWheelTimeRef.current;
       const centers = lineCentersRef.current;
-      const linePitch = centers.length > 1
-        ? (centers[centers.length - 1] - centers[0]) / (centers.length - 1)
-        : 40;
+      const linePitch = getLinePitch();
       // 用滚动方向相邻行的实际中心间距作为“一行”的步长，避免行高不均时跨不过去
       const dir = e.deltaY > 0 ? 1 : -1;
       const nearestNow = nearestManualLine(manualOffsetRef.current);
@@ -868,11 +899,16 @@ export default function LyricDisplay({
       if (dt > 20 && Math.abs(raw) < localPitch * 0.7) {
         raw = dir * localPitch;
       }
+      // 限速：单次事件最大位移（1.5 行，保底 120px），避免超快滚动直接闪到底部
+      const maxStep = Math.max(localPitch * MAX_WHEEL_STEP_LINES, MAX_WHEEL_STEP_PX);
+      raw = Math.max(-maxStep, Math.min(maxStep, raw));
       if (dt > 0 && dt < 120) {
         wheelVelRef.current = wheelVelRef.current * 0.7 + (raw / dt) * 0.3;
       } else {
         wheelVelRef.current = raw / Math.max(dt, 16);
       }
+      // 速度上限：限制惯性甩动的总滑行距离
+      wheelVelRef.current = Math.max(-MAX_WHEEL_VELOCITY, Math.min(MAX_WHEEL_VELOCITY, wheelVelRef.current));
       lastWheelTimeRef.current = now;
       const next = clampManualOffset(manualOffsetRef.current - raw);
       // B 方案：慢速离散档位（间隔 >150ms）带 0.35s 平滑过渡；快速连续滚动直接跟手
@@ -896,10 +932,11 @@ export default function LyricDisplay({
     return () => el.removeEventListener("wheel", hw);
   }, [exitManual, startCoast]);
 
-  // 自动跳行（播放推进/seek）时立即退出手动模式，恢复模糊/缩放
+  // 播放行大跳（seek/点击歌词/切歌/全局偏移）时退出手动模式；
+  // 播放自然换行（单行推进）不打断手动浏览位置
   useEffect(() => {
-    if (isManualRef.current) exitManual();
-  }, [currentLineIndex, exitManual]);
+    if (isManualRef.current && focusJumpRef.current > 2) exitManual();
+  }, [focusLine, exitManual]);
 
   // 容器尺寸变化（全屏切换/窗口缩放）时退出手动模式：
   // 旧的手动像素偏移在新尺寸下会错位，退回自动居中并强制重新定位
@@ -918,6 +955,7 @@ export default function LyricDisplay({
       if (coastTimerRef.current) clearTimeout(coastTimerRef.current);
       if (coastRafRef.current) cancelAnimationFrame(coastRafRef.current);
       if (switchResetTimerRef.current) clearTimeout(switchResetTimerRef.current);
+      if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
     };
   }, []);
 
@@ -1048,10 +1086,16 @@ export default function LyricDisplay({
             ["--lyric-line-spacing" as string]: String(lineSpacing),
             // 预留概览/滚动条区域：保留区在 wrapper 内，行居中/对齐不受其影响
             paddingRight: overview ? 200 : scrollbar ? 20 : 0,
+            // 字号 CSS 变量（渲染即写目标值；字号变化直接到位）
+            ["--lyric-font-size" as string]: fontCurrentRef.current[0] + "px",
+            ["--lyric-romaji-scale" as string]: String(fontCurrentRef.current[1]),
+            ["--lyric-trans-scale" as string]: String(fontCurrentRef.current[2]),
             // 手动滚动期间 transform 由滚轮/惯性直接写 DOM（manualOffsetRef 为同步镜像），
             // React 重渲染时写入当前值，避免覆盖滚动中的实时位置
             // 用 ref 镜像渲染：动画循环直写 transform 后，即使 React state 尚未刷新，渲染也不会回写旧值
             transform: isManual ? `translateY(${manualOffsetRef.current}px)` : `translateY(${stackOffsetRef.current}px)`,
+            // 子层展开/收起的几何过渡由 wrapper RO 逐帧直写居中（见 wrapper RO），
+            // 这里 transform 仅在线性切换/手动滚动时保留 CSS 过渡
             transition: suppressStackTransition
               ? "none"
               : `transform ${isManual ? "0.35s cubic-bezier(0.22, 0.61, 0.36, 1)" : "0.5s var(--lyric-timing-function, ease)"}`,
@@ -1062,52 +1106,33 @@ export default function LyricDisplay({
             const v = lineVisuals[i];
             if (!v) return null;
 
-            const isCurrent = i === activeLine;
-            const ds = v.delay ? ` ${v.delay}ms` : "";
-
             return (
-              <GlassGlow
+              <LyricRowMemo
                 key={i}
-                glowColor={glassGlowColor}
-                glowRadius={350}
-                borderRadius={glowBorderRadius}
-                style={{
-                  maxWidth: "calc(100% - 40px)",
-                  // 悬停光晕上下放大（左右保持 8px 不变）
-                  padding: "6px 8px 5px 8px",
-                  marginLeft: textAlign === "left" ? 8 : undefined,
-                  marginRight: textAlign === "right" ? (scrollbar ? 28 : 8) : undefined,
-                  transform: `scale(${v.scale})`,
-                  filter: v.blur > 0.5 ? `blur(${v.blur}px)` : "none",
-                  opacity: v.opacity,
-                  transition: [
-                    `transform ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
-                    `filter ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
-                    `opacity ${isManual ? "0.12s" : "0.5s"} var(--lyric-timing-function, ease)${ds}`,
-                  ].join(", "),
-                  willChange: Math.abs(i - activeLine) <= 3 ? "transform" : "auto",
-                  transformOrigin: textAlign === "left" ? "left center" : textAlign === "right" ? "right center" : "center",
-                }}
-              >
-                <div data-lyric-index={i}>
-                  <LyricBlock
-                    line={line}
-                    offset={i - activeLine}
-                    isCurrent={isCurrent}
-                    currentTime={currentTime}
-                    id={i}
-                    getCurrentTime={getCurrentTime}
-                    seekCounter={seekCounter}
-                    playState={playState}
-                    pageOpen={pageOpen}
-                    onClick={onLineClick}
-                    settings={settings}
-                    useKaraokeLyrics={useKaraokeLyrics}
-                    karaokeAnimation={karaokeAnimation}
-                    lyricGlow={lyricGlow}
-                  />
-                </div>
-              </GlassGlow>
+                line={line}
+                index={i}
+                offset={i - activeLine}
+                isCurrent={i === activeLine}
+                scale={v.scale}
+                blur={v.blur}
+                opacity={v.opacity}
+                delay={v.delay}
+                currentTime={currentTime}
+                getCurrentTime={getCurrentTime}
+                seekCounter={seekCounter}
+                playState={playState}
+                pageOpen={pageOpen}
+                onClick={onLineClick}
+                settings={settings}
+                useKaraokeLyrics={useKaraokeLyrics}
+                karaokeAnimation={karaokeAnimation}
+                lyricGlow={lyricGlow}
+                glassGlowColor={glassGlowColor}
+                glowBorderRadius={glowBorderRadius}
+                textAlign={textAlign}
+                scrollbar={scrollbar}
+                isManual={isManual}
+              />
             );
           })}
         </div>
@@ -1135,3 +1160,7 @@ export default function LyricDisplay({
     </>
   );
 }
+
+// memo：播放中 audioState.pos 高频更新会让外层整树重渲染，歌词子树的 props 基本稳定，
+// 包一层 memo 避免每次位置刷新都重渲染全部歌词行（翻译/罗马音开启时行数多、代价大）
+export default memo(LyricDisplay);
