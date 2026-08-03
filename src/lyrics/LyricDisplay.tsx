@@ -210,6 +210,11 @@ function LyricDisplay({
   // 容器尺寸变化计数：即使尺寸数值未变（如 DevTools 停靠切换），也强制重渲染一次，
   // 让栈定位 effect 及时消费并复位 shouldTransit，避免抑制标记卡住导致下一次跳行无动画
   const [resizeTick, setResizeTick] = useState(0);
+  // 子层收起/展开动画结束后强制一次栈重定位：
+  // switchReset 抑制过渡时 wrapper 净高度变化可能为零，ResizeObserver 不会触发
+  const [subSettleTick, setSubSettleTick] = useState(0);
+  // 上次生效的子层显隐标志：仅“开关真正变化”时走先钉满再收起的动画路径
+  const prevSubFlagsRef = useRef<[boolean, boolean]>([settings.showTranslation, settings.showRomaji]);
   // 切换抑制窗口：容器尺寸变化（全屏/窗口缩放）时短暂禁用字号/边距过渡，
   // 让歌词一步到位，避免字号过渡 + 逐帧居中叠加造成“上下乱弹”
   const [switchReset, setSwitchReset] = useState(false);
@@ -542,6 +547,23 @@ function LyricDisplay({
   };
 
   useLayoutEffect(() => {
+    const transShow = transShowRef.current;
+    const romaShow = romaShowRef.current;
+    // 仅“开关真正变化”时走先钉满再收起的动画路径；
+    // 首次挂载/切歌/容器尺寸变化时 CSS 兜底（auto/0px）已是目标状态，
+    // 若仍先钉满再收起，同帧净高度变化为零会让 wrapper ResizeObserver 不触发，
+    // 栈定位停留在全展开几何上导致错位（重开 NowPlaying 后歌词不居中）
+    const flagsChanged = transShow !== prevSubFlagsRef.current[0] || romaShow !== prevSubFlagsRef.current[1];
+    prevSubFlagsRef.current = [transShow, romaShow];
+
+    if (!flagsChanged) {
+      clearSubVars();
+      refreshLineCenters();
+      geometryChangedAtRef.current = Date.now();
+      if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
+      subEndTimerRef.current = null;
+      return;
+    }
     // 翻译/罗马音开关：测量并先钉住完整高度（auto→px 是离散跳变、视觉无差异），
     // 下一帧（双重 rAF）写目标值，保证收起/展开过渡两端都是可插值的 px；
     // 插值由子层 CSS 过渡（0.5s，与缩放效果同曲线）驱动，无需逐帧 JS
@@ -552,7 +574,10 @@ function LyricDisplay({
     if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        applySubHeights(transShowRef.current ? 1 : 0, romaShowRef.current ? 1 : 0);
+        applySubHeights(transShow ? 1 : 0, romaShow ? 1 : 0);
+        // 动画结束后强制一次栈重定位：switchReset 抑制窗口内收起瞬间到位、
+        // 净高度变化为零，wrapper RO 可能不触发，必须显式重算居中位置
+        setSubSettleTick((t) => t + 1);
         refreshLineCenters();
         geometryChangedAtRef.current = Date.now();
       });
@@ -629,7 +654,7 @@ function LyricDisplay({
     setIsVisible(true);
   }, [
     allLines, activeLine, containerHeight, containerWidth,
-    layoutKey, fontKey, resizeTick, manualExitTick, computeStackTarget,
+    layoutKey, fontKey, resizeTick, manualExitTick, subSettleTick, computeStackTarget,
   ]);
 
   // ── 对齐方式切换的水平滑入动画（FLIP）──
