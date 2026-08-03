@@ -147,6 +147,7 @@ export default function NowPlayingSettingsWindow({
   const backgroundRef = useRef<HTMLDivElement | null>(null);
   const aboutRef = useRef<HTMLDivElement | null>(null);
   const scrollPosRef = useRef(0);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
 
   // 流体设置与音乐页共享：外部修改实时同步，本面板修改即保存并广播
   useEffect(() => {
@@ -207,6 +208,16 @@ export default function NowPlayingSettingsWindow({
     el.scrollTop = scrollPosRef.current;
     syncTabFromScroll();
     return () => el.removeEventListener("scroll", onScroll);
+  }, [open]);
+
+  // 焦点还原：面板关闭后恢复焦点到打开前的元素（设置齿轮等）
+  useEffect(() => {
+    if (open) {
+      prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (prevFocusRef.current) {
+      prevFocusRef.current.focus?.();
+      prevFocusRef.current = null;
+    }
   }, [open]);
 
   // 恢复默认弹窗打开时，ESC 只关闭弹窗（capture 阶段优先于覆盖层的 ESC 监听）
@@ -283,6 +294,9 @@ export default function NowPlayingSettingsWindow({
           key="np-settings-window"
           ref={panelRef}
           className="np-settings-window"
+          role="dialog"
+          aria-modal="true"
+          aria-label={T("NowPlaying 设置", "NowPlaying Settings")}
           initial={{ scale: 0.55, opacity: 0, y: -16 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.55, opacity: 0, y: -16 }}
@@ -298,7 +312,7 @@ export default function NowPlayingSettingsWindow({
               variant="ghost"
               size="sm"
               noAnimation
-              aria-label="关闭设置"
+              aria-label={T("关闭设置", "Close settings")}
               onClick={onClose}
               style={{
                 width: 28,
@@ -570,10 +584,10 @@ export default function NowPlayingSettingsWindow({
                 >
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.92)", marginBottom: 4 }}>
-                      {T("恢复默认歌词设置？", "Reset lyrics settings?")}
+                      {T("恢复 NowPlaying 默认设置？", "Reset NowPlaying defaults?")}
                     </div>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", lineHeight: 1.5 }}>
-                      {T("将 NowPlaying 歌词样式与字号恢复为默认值，不影响音乐页歌词窗", "Restore NowPlaying lyric styles and font size to defaults; the music page lyric window is unaffected")}
+                      {T("将外观、封面、背景与歌词样式全部恢复为默认值；音乐页歌词的偏移与词库源不受影响", "Restore appearance, cover, background and lyric styles to defaults; music page lyric offset and source are unaffected")}
                     </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -584,11 +598,13 @@ export default function NowPlayingSettingsWindow({
                       variant="primary"
                       size="sm"
                       onClick={() => {
+                        // 恢复 NowPlaying 全部专属默认（外观/封面/歌词样式/字号）
                         onChange({
-                          ...settings,
+                          ...DEFAULT_NOW_PLAYING_SETTINGS,
                           lyricStyles: { ...DEFAULT_NOW_PLAYING_SETTINGS.lyricStyles },
-                          lyricsFontSize: DEFAULT_NOW_PLAYING_SETTINGS.lyricsFontSize,
                         });
+                        // 背景/流体设置与音乐页共享，一并恢复默认并广播同步
+                        handleFluidChange({ ...DEFAULT_FLUID_SETTINGS });
                         setConfirmReset(false);
                       }}
                     >

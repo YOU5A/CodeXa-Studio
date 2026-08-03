@@ -53,13 +53,13 @@ const FULLSCREEN_FONT_BOOST = 20;
 export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayProps) {
   const {
     audioState, playingFile, volume, playMode, playlist,
-    toggle, stop, seekTo, seek, setVolume, setPlayMode, playNext, playPrev, fmtTime,
+    toggle, seekTo, seek, setVolume, setPlayMode, playNext, playPrev, fmtTime,
     playFile,
   } = useMusicPlayer();
   const { lang } = useLanguage();
   const T = (zh: string, en: string) => (lang === "zh" ? zh : en);
   // 覆盖层内部独立实例；模块级 lyricCache 与 MusicManager 共享，不产生重复网络请求
-  const { lyricData, loading: lyricsLoading, error: lyricsError, currentLineIndex, currentTime, getCurrentTime, seekCounter } = useLyricManager();
+  const { lyricData, loading: lyricsLoading, error: lyricsError, currentLineIndex, currentTime, getCurrentTime, seekCounter } = useLyricManager(open);
   const [trackMeta, setTrackMeta] = useState<TrackMeta | null>(null);
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
   const [lyricsSettings, setLyricsSettings] = useState<LyricsSettingsValues>(() => loadLyricsSettings());
@@ -92,8 +92,11 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     // 仅亮色主题启用亮度自适应；暗色主题始终使用白色系文本
     if (resolvedTheme !== "light") return false;
     const source = coverColor ?? fluidColor;
-    return source ? isLightColor(source) : true;
-  }, [coverColor, fluidColor, resolvedTheme]);
+    // 有封面色/流体色时按实际颜色判断；无数据时仅 fluid 类型视为可能亮底，
+    // blur/solid/gradient 无封面一律是深色底，保持白字
+    if (source) return isLightColor(source);
+    return fluidSettings.backgroundType === "fluid";
+  }, [coverColor, fluidColor, resolvedTheme, fluidSettings.backgroundType]);
 
   const closePlaylist = useCallback(() => setPlaylistOpen(false), []);
   const handleTogglePlaylist = useCallback(() => {
@@ -200,6 +203,17 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     }
   }, [open]);
 
+  // 焦点还原：打开时记录来源元素，关闭后恢复焦点，避免焦点遗留在卸载的覆盖层内
+  const prevFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (open) {
+      prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (prevFocusRef.current) {
+      prevFocusRef.current.focus?.();
+      prevFocusRef.current = null;
+    }
+  }, [open]);
+
   // 复制模式：关闭覆盖层时退出平铺模式并清空提示
   useEffect(() => {
     if (!open) {
@@ -208,34 +222,48 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     }
   }, [open]);
 
-  // 元数据 + 封面取色：playingFile 变化时刷新（含自动下一首）
+  // 元数据 + 封面取色：仅在覆盖层打开且 playingFile 变化时刷新（含自动下一首）；
+  // 关闭时不请求，避免常驻挂载重复调用桥
   useEffect(() => {
     let cancelled = false;
-    if (!playingFile) {
+    if (!open || !playingFile) {
       setTrackMeta(null);
       setCoverColor(null);
       return;
     }
     const load = async () => {
-      const m = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: playingFile });
-      if (cancelled) return;
-      const cover = m?.cover ?? null;
-      setTrackMeta({
-        title: m?.title ?? "",
-        artist: m?.artist ?? "",
-        album: m?.album ?? "",
-        cover,
-      });
-      if (cover) {
-        const color = await extractDominantColorAsync(`data:image/jpeg;base64,${cover}`);
-        if (!cancelled) setCoverColor(color);
-      } else {
+      try {
+        const m = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: playingFile });
+        if (cancelled) return;
+        if (!m || typeof m !== "object") {
+          // 桥返回异常数据：按文件名回退，不留旧曲目信息
+          setTrackMeta({ title: "", artist: "", album: "", cover: null });
+          setCoverColor(null);
+          return;
+        }
+        const cover = m?.cover ?? null;
+        setTrackMeta({
+          title: m?.title ?? "",
+          artist: m?.artist ?? "",
+          album: m?.album ?? "",
+          cover,
+        });
+        if (cover) {
+          const color = await extractDominantColorAsync(`data:image/jpeg;base64,${cover}`);
+          if (!cancelled) setCoverColor(color);
+        } else {
+          setCoverColor(null);
+        }
+      } catch {
+        // 桥调用失败（文件被删/桥重启等）：回退文件名显示，避免旧元数据错配
+        if (cancelled) return;
+        setTrackMeta({ title: "", artist: "", album: "", cover: null });
         setCoverColor(null);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [playingFile]);
+  }, [open, playingFile]);
 
   // 跟随歌词设置变化（来源/字号/翻译等）
   useEffect(() => {
@@ -244,10 +272,16 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     return () => window.removeEventListener("lyricsSettingsChanged", handler);
   }, []);
 
-  // 复制模式：用户实际触发复制（选中文本后 Ctrl+C）时弹底部成功提示
+  // 复制模式：仅当复制内容来自歌词平铺列表时弹底部成功提示，
+  // 避免复制设置等其他文本时误报
   useEffect(() => {
     if (!open || !copyMode) return;
-    const handler = () => setCopyNotice(true);
+    const handler = () => {
+      const container = copyListRef.current;
+      const sel = window.getSelection();
+      if (!container || !sel || sel.rangeCount === 0) return;
+      if (container.contains(sel.getRangeAt(0).commonAncestorContainer)) setCopyNotice(true);
+    };
     document.addEventListener("copy", handler);
     return () => document.removeEventListener("copy", handler);
   }, [open, copyMode]);
@@ -295,7 +329,8 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
       clearTimeout(idleTimerRef.current);
       idleTimerRef.current = null;
     }
-    if (!open || !npSettings.idleHide || settingsOpen) {
+    // 播放列表面板打开时同样暂停闲置隐藏，避免控制条淡出后面板无参照
+    if (!open || !npSettings.idleHide || settingsOpen || playlistOpen) {
       setIdle(false);
       return;
     }
@@ -305,7 +340,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
       idleTimerRef.current = null;
       setIdle(false);
     };
-  }, [open, npSettings.idleHide, settingsOpen, resetIdleTimer]);
+  }, [open, npSettings.idleHide, settingsOpen, playlistOpen, resetIdleTimer]);
 
   // 覆盖层根节点声明 no-drag：避免标题栏 -webkit-app-region: drag 截获覆盖层内点击
   // borderRadius 对齐 #root 的窗口圆角（var(--radius)），避免四角露出黑色直角
@@ -341,6 +376,9 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
       {open && (
         <motion.div
           className={`np-overlay${idle ? " np-idle" : ""}${bgLight ? " np-bg-light" : ""}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label={T("正在播放", "Now Playing")}
           onMouseMove={npSettings.idleHide ? resetIdleTimer : undefined}
           // 打开/关闭：纯位移从底部向上展开/向下收起（无透明度/缩放渐变）
           initial={{ y: "100%" }}
@@ -356,7 +394,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ type: "tween", duration: 0.45, ease: "easeOut" }}
-        style={{ position: "absolute", inset: 0, zIndex: 0, background: "#12161f" }}
+        style={{ position: "absolute", inset: 0, zIndex: 0, background: bgLight ? "#ececf0" : "#12161f" }}
       >
         <NowPlayingBackground
           coverColor={coverColor}
@@ -365,6 +403,8 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
           dim={fluidSettings.backgroundDim}
           type={fluidSettings.backgroundType}
           dynamicFluid={fluidSettings.dynamicFluid}
+          blurAmount={fluidSettings.blurAmount}
+          targetFps={fluidSettings.fps}
         />
       </motion.div>
 
@@ -429,7 +469,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
           noAnimation
           className="np-settings-btn"
           data-np-settings-toggle
-          aria-label="设置"
+          aria-label={T("设置", "Settings")}
           onClick={() => { setPlaylistOpen(false); setSettingsOpen(v => !v); }}
           style={{
             position: "absolute",
@@ -472,7 +512,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
             size="sm"
             noAnimation
             className="np-close"
-            aria-label="关闭"
+            aria-label={T("关闭", "Close")}
             onClick={onClose}
             style={{
               width: 36,
@@ -495,7 +535,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
             noAnimation
             className="np-fullscreen-btn"
             ref={fullscreenBtnRef}
-            aria-label={fullscreen ? "退出全屏" : "全屏"}
+            aria-label={fullscreen ? T("退出全屏", "Exit fullscreen") : T("全屏", "Fullscreen")}
             onClick={async () => {
               if (fsBusy) return;
               setFsBusy(true);
@@ -535,7 +575,6 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
           position: "relative",
           zIndex: 1,
           height: "100%",
-          display: "grid",
           display: "flex",
           justifyContent: "center",
           gap: displayMode === "all" ? "clamp(24px, 3vw, 48px)" : 0,

@@ -48,17 +48,18 @@ export default function NowPlayingDisc({ coverB64, coverColor, playing, rectangl
       }}
     >
       {/* 封面彩色阴影：同一封面图模糊放大（常驻渲染，开关用透明度过渡） */}
+      {/* 用 CSS background 而非第二个 <img>，与主体 img 共享同一 data URL 位图缓存 */}
       {coverUrl ? (
-        <img
-          src={coverUrl}
-          alt=""
+        <div
           aria-hidden
           style={{
             position: "absolute",
             inset: rectangle ? "-12%" : "-8%",
             width: rectangle ? "124%" : "116%",
             height: rectangle ? "124%" : "116%",
-            objectFit: "cover",
+            backgroundImage: `url(${coverUrl})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
             borderRadius: shadowRadius,
             filter: "blur(25px) saturate(1.3) brightness(1.2)",
             opacity: blurShadow ? 0.75 : 0,

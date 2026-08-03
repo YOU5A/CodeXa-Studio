@@ -18,8 +18,8 @@ export interface SvgFluidRendererProps {
   speedMultiplier?: number;
   /** 是否暂停动画 */
   paused?: boolean;
-  /** 目标帧率 (30/60/0)，0=不限帧率；通过 CSS steps() 限制旋转动画 */
-  targetFps?: number;
+  /** 目标帧率 (30/60)；通过 CSS steps() 限制旋转动画 */
+  targetFps?: 30 | 60;
   /** 模糊程度 0-1（作用于流体上的 backdrop blur，最大 64px） */
   blurAmount?: number;
   /** 额外 CSS 类名 */
@@ -126,8 +126,8 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
           style={{
             animationDuration: `${150 / speedMultiplier}s`,
             // 原项目帧率限制：150s 旋转 → fps*150 步；60s 块旋转 → fps*60 步
-            ["--svg-fluid-steps-rect" as string]: targetFps > 0 ? `steps(${Math.round(targetFps * 150)})` : undefined,
-            ["--svg-fluid-steps-block" as string]: targetFps > 0 ? `steps(${Math.round(targetFps * 60)})` : undefined,
+            ["--svg-fluid-steps-rect" as string]: `steps(${Math.round(targetFps * 150)})`,
+            ["--svg-fluid-steps-block" as string]: `steps(${Math.round(targetFps * 60)})`,
           }}
         >
           <canvas ref={canvas1Ref} className="svg-fluid-canvas" width={CANVAS_SIZE} height={CANVAS_SIZE} />

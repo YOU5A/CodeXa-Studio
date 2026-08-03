@@ -50,6 +50,7 @@ export default function NowPlayingPlaylist({ open, onClose, playlist, playingFil
   const currentRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
 
   // 点击面板外空白处关闭（事件透传，不拦截背后控件；列表按钮除外，避免关后立刻重开）
   useEffect(() => {
@@ -80,12 +81,25 @@ export default function NowPlayingPlaylist({ open, onClose, playlist, playingFil
     }
   }, [open, playingFile, playlist.length]);
 
+  // 焦点还原：面板关闭后恢复焦点到打开前的元素
+  useEffect(() => {
+    if (open) {
+      prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (prevFocusRef.current) {
+      prevFocusRef.current.focus?.();
+      prevFocusRef.current = null;
+    }
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           key="np-playlist"
           ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={zh ? "播放列表" : "Playlist"}
           initial={{ x: "100%" }}
           animate={{ x: 0 }}
           exit={{ x: "100%" }}
@@ -103,7 +117,7 @@ export default function NowPlayingPlaylist({ open, onClose, playlist, playingFil
               variant="ghost"
               size="sm"
               noAnimation
-              aria-label="关闭播放列表"
+              aria-label={zh ? "关闭播放列表" : "Close playlist"}
               onClick={onClose}
               style={{
                 width: 28,

@@ -18,7 +18,7 @@ export interface FluidBackgroundProps {
   /** 模糊程度 0-1, 默认 0 */
   blurAmount?: number;
   /** 目标帧率 (30/60), 默认 60 */
-  targetFps?: number;
+  targetFps?: 30 | 60;
   /** 播放状态, 用于暂停同步 */
   playing?: boolean;
   /** 静态流体：暂停动画、渲染单帧（NowPlaying 背景类型“静态流体”使用） */

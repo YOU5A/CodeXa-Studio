@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, StopCircle, Volume1, Volume2, ListMusic } from "lucide-react";
 import { GlassSeekBar, GlassGlow } from "@/design-system/components";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { PlayMode } from "@/contexts/MusicPlayerContext";
 import NowPlayingProgressPreview from "./NowPlayingProgressPreview";
 import type { LyricData } from "@/lyrics";
@@ -41,6 +42,8 @@ export default function NowPlayingControls({
   onTogglePlaylist,
   lyricData, previewEnabled,
 }: NowPlayingControlsProps) {
+  const { lang } = useLanguage();
+  const T = (zh: string, en: string) => (lang === "zh" ? zh : en);
   const progressRef = useRef<HTMLDivElement | null>(null);
   const volumeRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -144,10 +147,10 @@ export default function NowPlayingControls({
 
       {/* 传输按钮行 */}
       <div className="np-ctrl-row" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
-        <button className="ctrl-btn np-ctrl-fade np-ctrl-cover" style={btnBase} onClick={cycleMode} aria-label="播放模式">
+        <button className="ctrl-btn np-ctrl-fade np-ctrl-cover" style={btnBase} onClick={cycleMode} aria-label={T("播放模式", "Playback mode")}>
           {modeIcon}
         </button>
-        <button className="ctrl-btn np-ctrl-dim np-ctrl-cover" style={btnBase} onClick={playPrev} aria-label="上一首">
+        <button className="ctrl-btn np-ctrl-dim np-ctrl-cover" style={btnBase} onClick={playPrev} aria-label={T("上一首", "Previous")}>
           <SkipBack size={18} fill="currentColor" />
         </button>
         <GlassGlow
@@ -159,7 +162,7 @@ export default function NowPlayingControls({
           <button
             className="ctrl-btn np-ctrl-dim np-play-core np-ctrl-cover"
             onClick={() => toggle()}
-            aria-label={playing ? "暂停" : "播放"}
+            aria-label={playing ? T("暂停", "Pause") : T("播放", "Play")}
             style={{
               ...btnBase,
               width: 54,
@@ -174,18 +177,18 @@ export default function NowPlayingControls({
             )}
           </button>
         </GlassGlow>
-        <button className="ctrl-btn np-ctrl-dim np-ctrl-cover" style={btnBase} onClick={playNext} aria-label="下一首">
+        <button className="ctrl-btn np-ctrl-dim np-ctrl-cover" style={btnBase} onClick={playNext} aria-label={T("下一首", "Next")}>
           <SkipForward size={18} fill="currentColor" />
         </button>
-        <button className="ctrl-btn np-ctrl-fade np-ctrl-cover" style={btnBase} data-np-playlist-toggle onClick={onTogglePlaylist} aria-label="播放列表">
+        <button className="ctrl-btn np-ctrl-fade np-ctrl-cover" style={btnBase} data-np-playlist-toggle onClick={onTogglePlaylist} aria-label={T("播放列表", "Playlist")}>
           <ListMusic size={18} />
         </button>
       </div>
 
-      {/* 音量行：整体比进度条略短（水平收窄），高度不变（滑块 md） */}
+      {/* 音量行：整体比进度条略短（水平收窄），高度与进度条一致（滑块 lg） */}
       <div className="np-ctrl-row" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, width: "96%", alignSelf: "center" }}>
         <Volume1 size={15} style={{ color: "var(--text-secondary)", flexShrink: 0 }} />
-        <GlassSeekBar ref={volumeRef} value={volume} size="md" onMouseDown={handleVolumeMouseDown} style={{ flex: 1 }} fillColor="rgb(var(--np-glow-rgb))" thumbColor="rgb(var(--np-glow-rgb))" />
+        <GlassSeekBar ref={volumeRef} value={volume} size="lg" onMouseDown={handleVolumeMouseDown} style={{ flex: 1 }} fillColor="rgb(var(--np-glow-rgb))" thumbColor="rgb(var(--np-glow-rgb))" />
         <Volume2 size={15} style={{ color: "var(--text-secondary)", flexShrink: 0 }} />
       </div>
     </div>

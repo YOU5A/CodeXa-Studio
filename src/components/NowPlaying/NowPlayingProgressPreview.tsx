@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { loadLyricsSettings } from "@/lyrics";
 import type { LyricData } from "@/lyrics";
 
 interface NowPlayingProgressPreviewProps {
@@ -34,7 +35,7 @@ function formatTime(time: number) {
 export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyricData, duration }: NowPlayingProgressPreviewProps) {
   const [visible, setVisible] = useState(false);
   const [lineIndex, setLineIndex] = useState(0);
-  const [nonInterludeIndex, setNonInterludeIndex] = useState(1);
+  const [nonInterludeIndex, setNonInterludeIndex] = useState(0);
   const [hoveredTime, setHoveredTime] = useState(0);
   const [subProgress, setSubProgress] = useState(0);
 
@@ -42,8 +43,20 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
   const xRef = useRef(0);
   const lyricDataRef = useRef(lyricData);
   const durationRef = useRef(duration);
+  // 歌词全局偏移（与 LyricManager 同源，事件同步）：预览与播放行保持一致
+  const globalOffsetRef = useRef(0);
+  // 进度条拖拽中：指针移出进度条时预览保持跟随，松手后再按指针位置显隐
+  const draggingRef = useRef(false);
   lyricDataRef.current = lyricData;
   durationRef.current = duration;
+
+  // 歌词全局偏移变化同步（避免 pointermove 高频读 localStorage）
+  useEffect(() => {
+    const handler = () => { globalOffsetRef.current = loadLyricsSettings().globalOffset; };
+    handler();
+    window.addEventListener("lyricsSettingsChanged", handler);
+    return () => window.removeEventListener("lyricsSettingsChanged", handler);
+  }, []);
 
   const updateHover = useCallback((clientX: number) => {
     const bar = progressBarRef.current;
@@ -52,7 +65,8 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     if (!rect.width) return;
     const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const totalLength = Math.max(0, durationRef.current || 0);
-    const hovered = totalLength * percent;
+    // 与播放同步应用全局偏移（秒），保证悬停行与当前行一致
+    const hovered = totalLength * percent + globalOffsetRef.current / 1000;
     setHoveredTime(hovered);
 
     const lines = lyricDataRef.current?.lines ?? [];
@@ -73,7 +87,7 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
       idx = lines.length;
     }
     setLineIndex(idx);
-    setNonInterludeIndex(Math.max(currentNonInterlude, 1));
+    setNonInterludeIndex(currentNonInterlude);
 
     const line = lines[idx];
     if (!line) {
@@ -101,7 +115,7 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     container.style.top = `${rect.top - height - 6}px`;
   }, [visible, lineIndex, hoveredTime, nonInterludeIndex, subProgress, progressBarRef]);
 
-  // 进度条事件挂接
+  // 进度条事件挂接：拖拽 seek 期间（mousedown → mouseup）预览跟随 window 级鼠标移动
   useEffect(() => {
     const bar = progressBarRef.current;
     if (!bar || !enabled) return;
@@ -112,16 +126,43 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     };
     const onMove = (e: PointerEvent) => {
       xRef.current = e.clientX;
+      // 非拖拽时直接更新；拖拽中由 window mousemove 统一驱动
+      if (!draggingRef.current) updateHover(e.clientX);
+    };
+    const onLeave = () => {
+      // 拖拽 seek 期间保持预览跟随，松手后再按指针位置决定显隐
+      if (!draggingRef.current) setVisible(false);
+    };
+    const onDown = () => { draggingRef.current = true; };
+    const onWindowMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      xRef.current = e.clientX;
       updateHover(e.clientX);
     };
-    const onLeave = () => setVisible(false);
+    const onUp = (e: MouseEvent) => {
+      draggingRef.current = false;
+      const el = progressBarRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+        setVisible(false);
+      } else {
+        updateHover(e.clientX);
+      }
+    };
     bar.addEventListener("pointerenter", onEnter);
     bar.addEventListener("pointermove", onMove);
     bar.addEventListener("pointerleave", onLeave);
+    bar.addEventListener("mousedown", onDown);
+    window.addEventListener("mousemove", onWindowMove);
+    window.addEventListener("mouseup", onUp);
     return () => {
       bar.removeEventListener("pointerenter", onEnter);
       bar.removeEventListener("pointermove", onMove);
       bar.removeEventListener("pointerleave", onLeave);
+      bar.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mousemove", onWindowMove);
+      window.removeEventListener("mouseup", onUp);
     };
   }, [progressBarRef, enabled, updateHover]);
 
@@ -141,7 +182,7 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
       className={`np-progressbar-preview${show ? "" : " invisible"}`}
       style={{ position: "fixed", zIndex: 1000, pointerEvents: "none" }}
     >
-      {line && (line.originalLyric || line.text) ? (
+      {line && (line.originalLyric || line.text) && nonInterludeIndex > 0 ? (
         <div className="np-progressbar-preview-number">{nonInterludeIndex} / {nonInterludeCount}</div>
       ) : null}
       {line?.dynamicLyric?.length ? (

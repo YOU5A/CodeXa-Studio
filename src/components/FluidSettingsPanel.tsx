@@ -14,8 +14,8 @@ import type { Language } from "@/types";
 // ── 类型 ──
 
 export interface FluidSettingsValues {
-  /** 帧率：30 / 60 / 0 = 无限 */
-  fps: 30 | 60 | 0;
+  /** 帧率：30 / 60 */
+  fps: 30 | 60;
   /** 模糊程度 0.6-1.0（最小锁死 60%） */
   blurAmount: number;
   /** 背景类型（复制自 NowPlaying 背景设置）：流体 / 模糊 / 渐变 / 纯色 */
@@ -50,7 +50,8 @@ export function loadFluidSettings(): FluidSettingsValues {
         return { ...DEFAULT_FLUID_SETTINGS };
       }
       return {
-        fps: parsed.fps ?? DEFAULT_FLUID_SETTINGS.fps,
+        // 旧版 0（无限帧率）已移除：仅接受 30/60，其余回退默认
+        fps: parsed.fps === 30 || parsed.fps === 60 ? parsed.fps : DEFAULT_FLUID_SETTINGS.fps,
         // 越界值（如旧版写入的 0）视为脏数据，回退默认 0.8
         blurAmount: parsed.blurAmount != null && parsed.blurAmount >= BLUR_MIN && parsed.blurAmount <= 1
           ? parsed.blurAmount
@@ -91,7 +92,6 @@ interface FluidSettingsPanelProps {
 const FPS_OPTIONS: { v: FluidSettingsValues["fps"]; label: { zh: string; en: string } }[] = [
   { v: 30, label: { zh: "30 FPS", en: "30 FPS" } },
   { v: 60, label: { zh: "60 FPS", en: "60 FPS" } },
-  { v: 0, label: { zh: "无限", en: "Unlimited" } },
 ];
 
 // ── 样式常量 ──

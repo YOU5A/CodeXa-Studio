@@ -9,10 +9,10 @@
  * 流体参数来自共享 fluidSettings（与音乐页同步）；暗化遮罩由设置面板滑块控制。
  */
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import FluidBackground from "@/components/FluidBackground";
-import { loadFluidSettings, type FluidSettingsValues } from "@/components/FluidSettingsPanel";
+import type { FluidSettingsValues } from "@/components/FluidSettingsPanel";
 import type { RGB } from "@/utils/colorExtractor";
 
 interface NowPlayingBackgroundProps {
@@ -25,21 +25,17 @@ interface NowPlayingBackgroundProps {
   type: FluidSettingsValues["backgroundType"];
   /** 动态流体：流体类型时是否启用动画（关 = 静态单帧） */
   dynamicFluid: boolean;
+  /** 流体模糊强度（来自外层 fluidSettings，与音乐页共享同一状态源） */
+  blurAmount: number;
+  /** 流体目标帧率 */
+  targetFps: FluidSettingsValues["fps"];
 }
 
 /** RGB → css 颜色，可选亮度系数（渐变用） */
 const rgbCss = (c: RGB, factor = 1) =>
   `rgb(${Math.min(255, Math.round(c[0] * factor))},${Math.min(255, Math.round(c[1] * factor))},${Math.min(255, Math.round(c[2] * factor))})`;
 
-function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, type, dynamicFluid }: NowPlayingBackgroundProps) {
-  const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
-
-  // 与音乐页共享同一份流体设置：外部修改实时同步
-  useEffect(() => {
-    const handler = () => setFluidSettings(loadFluidSettings());
-    window.addEventListener("fluidSettingsChanged", handler);
-    return () => window.removeEventListener("fluidSettingsChanged", handler);
-  }, []);
+function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, type, dynamicFluid, blurAmount, targetFps }: NowPlayingBackgroundProps) {
 
   const dimOpacity = Math.max(0, Math.min(100, dim)) / 100;
 
@@ -86,8 +82,8 @@ function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, type, d
     // fluid（动态由 dynamicFluid 控制）
     content = (
       <FluidBackground
-        blurAmount={fluidSettings.blurAmount}
-        targetFps={fluidSettings.fps}
+        blurAmount={blurAmount}
+        targetFps={targetFps}
         staticFluid={!dynamicFluid}
         coverImageUrl={coverImageUrl}
         playing={playing}

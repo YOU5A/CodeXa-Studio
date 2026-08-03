@@ -31,8 +31,8 @@ const MARQUEE_FADE_IN_MS = 600;
  * 仅当文本宽度严格超过容器宽度（scrollWidth > clientWidth）时触发。
  *
  * 测量 span 常驻 DOM（滚动时隐藏，仅作测量），配合 useLayoutEffect +
- * ResizeObserver + 500ms 定时复查 + resize 监听，覆盖异步元数据、字体加载、
- * 布局动画等一切时序；flex 子项默认 min-width:auto 会按内容撑开，
+ * ResizeObserver + FontFaceSet loadingdone + resize 监听，覆盖异步元数据、
+ * 字体加载、布局动画等一切时序；flex 子项默认 min-width:auto 会按内容撑开，
  * 因此显式 minWidth:0 / maxWidth:100% 保证 clientWidth 是真实容器宽度。
  */
 interface MarqueeTextProps {
@@ -64,11 +64,13 @@ function MarqueeText({ text, style, clipPaddingY = 0 }: MarqueeTextProps) {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     window.addEventListener("resize", update);
-    const timer = window.setInterval(update, 500);
+    // 字体加载完成会改变文本实际宽度（scrollWidth 变化不触发 RO），
+    // 监听 FontFaceSet loadingdone 替代原 500ms 常驻轮询
+    document.fonts?.addEventListener("loadingdone", update);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", update);
-      window.clearInterval(timer);
+      document.fonts?.removeEventListener("loadingdone", update);
     };
   }, [text]);
 

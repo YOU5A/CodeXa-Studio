@@ -203,6 +203,8 @@ function AppContent() {
           dim={fluidSettings.backgroundDim}
           type={fluidSettings.backgroundType}
           dynamicFluid={fluidSettings.dynamicFluid}
+          blurAmount={fluidSettings.blurAmount}
+          targetFps={fluidSettings.fps}
         />
       )}
       {/* Title Bar — sits above the body grid */}

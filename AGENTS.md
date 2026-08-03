@@ -1,41 +1,6 @@
-# 通用设置
-
-- 对话语言默认为中文。
-- GitHub 仓库: https://github.com/YOU5A/CodeXa-Studio
-- 可自行调用 Codex 插件和 Skill。
-- 未经明确指令，不得执行任何 git 操作。
-
-# 编码规范
-
-- 所有文本文件使用 UTF-8 without BOM。
-- 写入文件时禁止用 `Out-File -Encoding UTF8`（会加 BOM），改用 `[System.IO.File]::WriteAllText` + `UTF8Encoding($false)`。
-- Python 读文件统一用 `encoding='utf-8-sig'`。
-
-# PowerShell 限制
-
-- 仅用于文件浏览和简单单文件操作。
-- 禁止在 PowerShell 中编写/拼接包含中文的代码，改用 Python。
-- 写入 UTF-8 文件参照上方编码规范。
-
-# 文件删除安全规则
-
-- 禁止: `del /s`、`rd /s`、`rmdir /s`、`Remove-Item -Recurse`、`rm -rf`。
-- 只能逐个删除明确路径的文件。需批量删除时停止操作，交用户处理。
-
-# 编码准则
-
-1. **先思考再编码** — 明确假设，有疑问先问。
-2. **简洁优先** — 只写解决问题所需的最少代码，不过度抽象。
-3. **精准修改** — 只改需要改的，不顺手优化无关代码，匹配现有代码风格。
-4. **目标驱动** — 以可验证的成功标准定义任务，循环直到验证通过。
-
----
-
---- project-doc ---
-
 <!--
   AGENTS.md — CodeXa Studio
-  重构于 2026-08-02
+  重构于 2026-08-03
 -->
 
 # AGENTS.md — CodeXa Studio
@@ -44,8 +9,43 @@
 **作者:** YOU5A / Y0USA
 **技术栈:** TypeScript 6 · React 19 · Tailwind CSS 4 · Framer Motion 12 · Electron 42 · .NET 10
 **仓库:** https://github.com/YOU5A/CodeXa-Studio
-**版本:** 2.2.0
+**版本:** 2.5.0
 **许可证:** AGPL-3.0
+
+---
+
+## 〇、通用约定（保护规则）
+
+### 通用设置
+
+- 对话语言默认为中文。
+- GitHub 仓库: https://github.com/YOU5A/CodeXa-Studio
+- 可自行调用 Codex 插件和 Skill。
+- 未经明确指令，不得执行任何 git 操作。
+
+### 编码规范
+
+- 所有文本文件使用 UTF-8 without BOM。
+- 写入文件时禁止用 `Out-File -Encoding UTF8`（会加 BOM），改用 `[System.IO.File]::WriteAllText` + `UTF8Encoding($false)`。
+- Python 读文件统一用 `encoding='utf-8-sig'`。
+
+### PowerShell 限制
+
+- 仅用于文件浏览和简单单文件操作。
+- 禁止在 PowerShell 中编写/拼接包含中文的代码，改用 Python。
+- 写入 UTF-8 文件参照上方编码规范。
+
+### 文件删除安全规则
+
+- 禁止: `del /s`、`rd /s`、`rmdir /s`、`Remove-Item -Recurse`、`rm -rf`。
+- 只能逐个删除明确路径的文件。需批量删除时停止操作，交用户处理。
+
+### 编码准则
+
+1. **先思考再编码** — 明确假设，有疑问先问。
+2. **简洁优先** — 只写解决问题所需的最少代码，不过度抽象。
+3. **精准修改** — 只改需要改的，不顺手优化无关代码，匹配现有代码风格。
+4. **目标驱动** — 以可验证的成功标准定义任务，循环直到验证通过。
 
 ---
 
@@ -71,9 +71,11 @@ CodeXa-Studio/
 │   ├── bridge-manager.js                # .NET 主桥启动（开发 publish / 打包 resources）
 │   ├── rpc-bridge.js                    # JSON-RPC 子进程管理器（stdin/stdout）
 │   ├── ipc-setup.js                     # IPC 处理器 + 在线歌词/封面搜索
+│   ├── netease-eapi.js                  # 网易云 EAPI 加密请求（cloudsearch / lyric）
+│   ├── romaji.js                        # 日文歌词本地罗马音生成（kuroshiro + kuromoji）
 │   ├── window.js                        # 无边框透明窗口创建与持久化
 │   ├── tray.js                          # 系统托盘（显示/退出）
-│   └── rpc/                             # JS 兜底路由分发层（9 模块）
+│   └── rpc/                             # JS 兜底路由分发层（9 文件）
 │       ├── index.js                     # callMethod() 34 方法分发
 │       ├── system.js                    # system.info
 │       ├── registry.js                  # registry.* (3)
@@ -107,7 +109,7 @@ CodeXa-Studio/
 │
 ├── demos/                               # 演示页面（demo.html）
 ├── data/                                # 运行时数据（AppCpuPriority_export.json · config.json · test_cover.txt）
-├── docs/                                # 本地分析文档（gitignore 排除，含 legacy-py 旧 Python 工具）
+├── docs/                                # 本地分析文档（gitignore 排除）
 ├── public/
 │   ├── icon.png
 │   └── themes/                          # 5 套特殊主题 CSS（graphite / midnight / ocean / emerald / crimson）
@@ -115,7 +117,7 @@ CodeXa-Studio/
 └── src/                                 # React 19 前端
     ├── main.tsx                         # ReactDOM 入口
     ├── App.tsx                          # 根组件：路由、布局、Provider 嵌套、NowPlaying 覆盖层
-    ├── version.ts                       # 统一版本号 (2.2.0)
+    ├── version.ts                       # 统一版本号（2.5.0 · 唯一版本来源）
     ├── vite-env.d.ts
     ├── types/index.ts                   # SystemInfo · RpcMethod(34) · ElectronAPI · Theme(8) · Page(7)
     ├── constants/                       # storage-keys · default-settings
@@ -134,19 +136,13 @@ CodeXa-Studio/
     │   ├── BottomNotice.tsx / Toast.tsx / ConfirmDialog.tsx / ErrorBoundary.tsx
     │   ├── CoverSearchPanel.tsx / CoverPreviewWindow.tsx
     │   ├── DevLogPanel.tsx / FluidSettingsPanel.tsx
-    │   ├── FluidBackground/             # Canvas 2D + SVG 流体背景（9 预设）
-    │   │   ├── config.ts / presets.ts / renderer.ts
-    │   │   └── SvgFluidRenderer.tsx / SvgFluidRenderer.css / index.tsx
-    │   └── NowPlaying/                  # 全窗口播放覆盖层（10 文件）
-    │       ├── NowPlayingOverlay.tsx / NowPlayingBackground.tsx / NowPlayingDisc.tsx
-    │       ├── NowPlayingControls.tsx / NowPlayingInfo.tsx / NowPlayingLyrics.tsx
-    │       ├── NowPlayingPlaylist.tsx / NowPlayingSettings.ts / NowPlayingSettingsWindow.tsx
-    │       └── NowPlaying.css
+    │   ├── FluidBackground/             # SVG 封面流体背景（3 文件）
+    │   └── NowPlaying/                  # 全窗口播放覆盖层（12 文件，见 2.4）
     │
     ├── contexts/                        # 4 个 Context（见 2.1）
     ├── hooks/                           # 4 个 Hook（见 2.2）
     │
-    ├── pages/                           # 7 页面 (React.lazy)
+    ├── pages/                           # 7 页面（React.lazy）
     │   ├── Dashboard.tsx / Win32Priority.tsx / AppCpuPriority.tsx
     │   ├── MusicManager.tsx / NcmStudio.tsx / BackupCenter.tsx / Settings.tsx
     │   ├── music/                       # CoverManager · FileList · PlayerBar · RenamePanel · TagEditor · types
@@ -155,10 +151,6 @@ CodeXa-Studio/
     │
     ├── developer-unlock/                # 开发者解锁系统（7 文件）
     └── lyrics/                          # LRC 歌词子系统（12 文件）
-        ├── LyricParser.ts / LyricManager.tsx / LyricDisplay.tsx / LyricBlock.tsx
-        ├── LyricWindow.tsx / LyricOverview.tsx / InterludeDots.tsx
-        ├── LyricsSettingsPanel.tsx / LyricsSettingsContent.tsx / Scrollbar.tsx
-        └── types.ts / index.ts
 ```
 
 ### 1.2 桥接架构（.NET 主桥 + JS 兜底）
@@ -181,7 +173,7 @@ React 19 ←contextBridge→ Electron 42 ←JSON-RPC→ .NET 10 (主) / JS 路�
 - **兜底:** electron/rpc/ JS 路由，.NET 桥不可用时直接由 Node 实现同 34 个方法。
 - **路由层:** electron/rpc/ 9 个 JS 模块，统一分发 34 个 RPC 方法；rpc-bridge.js 负责子进程生命周期、请求 ID 与缓冲解析。
 - **IPC 通道:** preload.js → contextBridge.exposeInMainWorld → `window.electronAPI`，分组为 window / settings / bridge / dialog / shell / music / app。
-- **在线搜索:** 歌词与网易云封面走 `NeteaseCloudMusicApi`（cloudsearch + lyric）；QQ 封面（musicu.fcg）、iTunes 封面与图片下载走原生 HTTPS（支持 gzip 解压）。
+- **在线搜索:** 网易云歌词与封面走 `netease-eapi.js`（EAPI 加密请求：cloudsearch + lyric，仅 Node 内置 https/crypto）；日文歌词缺 romalrc 时由 `romaji.js` 用 kuroshiro + kuromoji 本地生成罗马音；QQ 封面（musicu.fcg）、iTunes 封面与图片下载走原生 HTTPS（支持 gzip 解压）。
 
 ### 1.3 RPC 方法表（34 个）
 
@@ -236,12 +228,10 @@ React 19 ←contextBridge→ Electron 42 ←JSON-RPC→ .NET 10 (主) / JS 路�
 
 #### 流体背景系统
 
-`src/components/FluidBackground/` — Canvas 2D + SVG 双渲染器：
-- 9 套预设: aurora（极光）/ ocean（深海）/ ember（余烬）/ nebula（星云）/ plasma（等离子）/ forest（森林）/ cover（封面颜色）/ fluid（流体）/ custom（自定义）
-- 支持 auto（主题自适应）与 cover（专辑封面取色）颜色模式
-- 速度/强度/模糊/质量 (fps) 可调
-- 配置持久化到 localStorage key `fluid-background-config`
-- 通过 CustomEvent `fluidSettingsChanged` / `fluidDynamicColorChanged` 跨组件同步
+`src/components/FluidBackground/` — SVG 封面流体（3 文件：index.tsx · SvgFluidRenderer.tsx · SvgFluidRenderer.css）：
+- 封面图片四分块 + feTurbulence/feDisplacementMap 扭曲，不依赖 Context 或全局状态
+- 参数通过 props 传入：封面 URL、总开关、速度倍率、模糊程度、目标帧率（30/60）、播放状态、静态单帧（暂停动画）
+- 设置面板 `FluidSettingsPanel.tsx`（GlassModal 承载）：fps / blurAmount / backgroundType（fluid · blur · gradient · solid）/ dynamicFluid / backgroundDim，控件体与 NowPlaying 背景设置共用
 
 #### 歌词子系统
 
@@ -260,14 +250,16 @@ React 19 ←contextBridge→ Electron 42 ←JSON-RPC→ .NET 10 (主) / JS 路�
 
 #### NowPlaying 全窗口播放覆盖层
 
-`src/components/NowPlaying/` — Apple Music 风格全窗口播放界面（10 个文件）：
+`src/components/NowPlaying/` — Apple Music 风格全窗口播放界面（12 个文件）：
 - NowPlayingOverlay — 覆盖层容器与开关
-- NowPlayingBackground — 动态背景
+- NowPlayingBackground — 动态背景（流体/模糊/渐变/纯色）
 - NowPlayingDisc — 旋转唱片
 - NowPlayingControls — 播放控制
 - NowPlayingInfo — 歌曲信息展示
 - NowPlayingLyrics — 覆盖层专属歌词（独立字号/行距/对齐，复用 LyricDisplay）
+- NowPlayingLyricsCopyMode — 复制模式歌词平铺列表（user-select: text，不拦截点击/拖选）
 - NowPlayingPlaylist — 播放列表面板（右侧滑入）
+- NowPlayingProgressPreview — 进度条悬停歌词预览（portal 渲染，指针穿透）
 - NowPlayingSettings / NowPlayingSettingsWindow — 覆盖层专属设置（localStorage 持久化）
 - NowPlaying.css — 样式
 

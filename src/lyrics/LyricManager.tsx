@@ -160,7 +160,13 @@ async function requestLyricData(filePath: string): Promise<LyricResult> {
   return promise;
 }
 
-export function useLyricManager() {
+/**
+ * 歌词状态 Hook。
+ *
+ * @param active 是否激活：false 时暂停 rAF 定位循环（数据获取仍走共享缓存去重）。
+ *               MusicManager 始终启用；NowPlaying 覆盖层仅在打开时启用，避免常驻空转。
+ */
+export function useLyricManager(active = true) {
   const { audioState, playingFile } = useMusicPlayer();
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -172,6 +178,8 @@ export function useLyricManager() {
 
   const lastFileRef = useRef<string>("");
   const prevSourceRef = useRef<LyricSourceOption>(getLyricSource());
+  // 歌词请求序号：切歌/换源后旧请求即使后返回也直接丢弃，防止覆盖当前曲目数据
+  const fetchSeqRef = useRef(0);
 
   const computeLineIndex = useCallback(
     (time: number, lines: LyricLine[]): number => {
@@ -187,6 +195,7 @@ export function useLyricManager() {
 
   const fetchLyrics = useCallback(async (filePath: string) => {
     if (!filePath) return;
+    const seq = ++fetchSeqRef.current;
 
     // 已完成缓存：同步命中，直接使用
     if (lyricCache.has(filePath)) {
@@ -207,6 +216,9 @@ export function useLyricManager() {
 
     // 共享请求链路：在途去重由 requestLyricData 内部处理
     const { data, error: fetchError } = await requestLyricData(filePath);
+
+    // 过期请求（期间切歌/换源）直接丢弃，避免旧结果覆盖当前曲目
+    if (seq !== fetchSeqRef.current) return;
 
     if (data) {
       setLyricData(data);
@@ -275,6 +287,8 @@ export function useLyricManager() {
   globalOffsetRef.current = globalOffset;
 
   useEffect(() => {
+    // 未激活（如 NowPlaying 覆盖层关闭）时不跑 rAF，避免常驻空转
+    if (!active) return;
     const tick = () => {
       const rawTime = audioState.pos ?? 0;
       const t = rawTime + globalOffsetRef.current / 1000;
@@ -292,7 +306,7 @@ export function useLyricManager() {
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [audioState.pos, computeLineIndex]);
+  }, [audioState.pos, computeLineIndex, active]);
 
   const getLiveCurrentTime = useCallback(() => currentTimeRef.current, []);
   const clearCache = useCallback(() => {
