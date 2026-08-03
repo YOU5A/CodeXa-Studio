@@ -52,7 +52,7 @@ export const DEFAULT_NOW_PLAYING_SETTINGS: NowPlayingSettingsValues = {
   coverBlurryShadow: true,
   useKaraokeLyrics: true,
   karaokeAnimation: "float",
-  lyricGlow: false,
+  lyricGlow: true,
   lyricsAlign: "center",
   lyricStyles: {
     showTranslation: true,

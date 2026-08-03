@@ -229,17 +229,21 @@
 /* ── 进度条悬停歌词预览 ── */
 .np-progressbar-preview {
   font-size: 14px;
-  background: rgba(0, 0, 0, 0.44);
-  backdrop-filter: saturate(130%) blur(10px);
-  -webkit-backdrop-filter: saturate(130%) blur(10px);
   color: rgba(255, 255, 255, 0.95);
   padding: 10px 15px;
-  border-radius: 10px;
-  border: 0.5px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  /* 视觉样式直接复用播放列表面板（NowPlayingPlaylist panelS） */
+  border-radius: 18px;
+  border: 0.5px solid var(--border-strong);
+  background: linear-gradient(160deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.45);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  isolation: isolate;
+  will-change: transform, opacity;
   transition: opacity 0.15s ease;
 }
 .np-progressbar-preview.invisible {

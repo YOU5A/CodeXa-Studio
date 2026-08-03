@@ -3,7 +3,7 @@
  *
  * 建立「所有行 ↔ 非间奏行」映射（参照 RNP preProcessMapping），
  * 缩略块高度 max(containerHeight / 总步数, 30)，拖动回调 onFocusLine(行索引)。
- * 轨道空白处点击不跳转；拖拽（超过 4px 位移）或滚轮滚动才跳转。
+ * 仅滑块可拖拽：轨道空白处点击/拖拽不响应，避免误操作当前歌词位置。
  *
  * @module lyrics/Scrollbar
  */
@@ -23,6 +23,7 @@ const DRAG_THRESHOLD = 4;
 
 export default function Scrollbar({ lines, currentLineIndex, containerHeight, onFocusLine }: ScrollbarProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
   const dragStartYRef = useRef(0);
   const dragMovedRef = useRef(false);
@@ -77,30 +78,13 @@ export default function Scrollbar({ lines, currentLineIndex, containerHeight, on
         width: 14,
         display: "flex",
         justifyContent: "center",
-        cursor: dragging ? "grabbing" : "grab",
-        touchAction: dragging ? "none" : "auto",
         zIndex: 2,
       }}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        draggingRef.current = true;
-        dragStartYRef.current = e.clientY;
-        dragMovedRef.current = false;
-        setDragging(true);
-        trackRef.current?.setPointerCapture(e.pointerId);
-      }}
-      onPointerMove={(e) => {
-        if (!draggingRef.current) return;
-        if (!dragMovedRef.current && Math.abs(e.clientY - dragStartYRef.current) < DRAG_THRESHOLD) return;
-        dragMovedRef.current = true;
-        apply(e.clientY);
-      }}
-      onPointerUp={() => { draggingRef.current = false; setDragging(false); }}
-      onPointerCancel={() => { draggingRef.current = false; setDragging(false); }}
     >
       <div
+        ref={thumbRef}
         style={{
           position: "absolute",
           top: 0,
@@ -122,8 +106,27 @@ export default function Scrollbar({ lines, currentLineIndex, containerHeight, on
             ? "transform 0.08s linear, width 0.2s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.25s ease, box-shadow 0.25s ease"
             : "transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), width 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 0.61, 0.36, 1)",
           willChange: "transform",
-          pointerEvents: "none",
+          pointerEvents: "auto",
+          cursor: dragging ? "grabbing" : "grab",
+          touchAction: "none",
         }}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          draggingRef.current = true;
+          dragStartYRef.current = e.clientY;
+          dragMovedRef.current = false;
+          setDragging(true);
+          thumbRef.current?.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          if (!draggingRef.current) return;
+          if (!dragMovedRef.current && Math.abs(e.clientY - dragStartYRef.current) < DRAG_THRESHOLD) return;
+          dragMovedRef.current = true;
+          apply(e.clientY);
+        }}
+        onPointerUp={() => { draggingRef.current = false; setDragging(false); }}
+        onPointerCancel={() => { draggingRef.current = false; setDragging(false); }}
       />
     </div>
   );

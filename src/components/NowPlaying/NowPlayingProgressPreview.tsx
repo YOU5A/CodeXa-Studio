@@ -3,13 +3,13 @@
  *
  * 鼠标悬停在进度条上时，按悬停位置换算时间并定位对应歌词行，
  * 在进度条上方显示：行号、逐词词遮罩、原文、翻译、行内子进度条、起止时间。
- * 通过 portal 渲染到 document.body，pointer-events: none，不影响拖动 seek。
+ * 渲染在 NowPlaying overlay 内部（absolute 定位，与设置面板同一层叠上下文），
+ * 保证 backdrop-filter 能采样 overlay 背景；pointer-events: none，不影响拖动 seek。
  *
  * 时间单位：本项目歌词行时间为秒，逐词时间为毫秒。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { loadLyricsSettings } from "@/lyrics";
 import type { LyricData } from "@/lyrics";
 
@@ -109,10 +109,16 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     const width = container.clientWidth;
     const height = container.clientHeight;
     const rect = bar.getBoundingClientRect();
-    let left = xRef.current - width / 2;
-    left = Math.max(0, Math.min(left, window.innerWidth - width));
+    // overlay 内部定位：以最近 positioned 祖先（overlay 根）为坐标系，
+    // 水平 clamp 在 overlay 内，垂直固定在进度条上方 6px
+    const parentRect = container.offsetParent ? container.offsetParent.getBoundingClientRect() : null;
+    const originLeft = parentRect?.left ?? 0;
+    const originTop = parentRect?.top ?? 0;
+    const clampWidth = parentRect?.width ?? window.innerWidth;
+    let left = xRef.current - originLeft - width / 2;
+    left = Math.max(0, Math.min(left, clampWidth - width));
     container.style.left = `${left}px`;
-    container.style.top = `${rect.top - height - 6}px`;
+    container.style.top = `${rect.top - originTop - height - 6}px`;
   }, [visible, lineIndex, hoveredTime, nonInterludeIndex, subProgress, progressBarRef]);
 
   // 进度条事件挂接：拖拽 seek 期间（mousedown → mouseup）预览跟随 window 级鼠标移动
@@ -176,11 +182,11 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
   );
   const show = enabled && visible && !isPureMusic && lines.length > 0 && lineIndex < lines.length;
 
-  return createPortal(
+  return (
     <div
       ref={containerRef}
       className={`np-progressbar-preview${show ? "" : " invisible"}`}
-      style={{ position: "fixed", zIndex: 1000, pointerEvents: "none" }}
+      style={{ position: "absolute", zIndex: 8, pointerEvents: "none" }}
     >
       {line && (line.originalLyric || line.text) && nonInterludeIndex > 0 ? (
         <div className="np-progressbar-preview-number">{nonInterludeIndex} / {nonInterludeCount}</div>
@@ -223,7 +229,6 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
           </div>
         </>
       ) : null}
-    </div>,
-    document.body
+    </div>
   );
 }

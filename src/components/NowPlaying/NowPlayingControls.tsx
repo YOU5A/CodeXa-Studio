@@ -133,7 +133,12 @@ export default function NowPlayingControls({
       <GlassSeekBar ref={progressRef} value={pct} size="lg" onMouseDown={handleProgressMouseDown} fillColor="rgb(var(--np-glow-rgb))" thumbColor="rgb(var(--np-glow-rgb))" />
 
       {/* 进度条悬停歌词预览 */}
-      <NowPlayingProgressPreview enabled={!!previewEnabled} progressBarRef={progressRef} lyricData={lyricData ?? null} duration={duration} />
+      <NowPlayingProgressPreview
+        enabled={!!previewEnabled}
+        progressBarRef={progressRef}
+        lyricData={lyricData ?? null}
+        duration={duration}
+      />
 
       {/* 时间行：当前 / 剩余 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: -6 }}>

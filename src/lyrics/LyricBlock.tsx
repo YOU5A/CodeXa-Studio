@@ -147,13 +147,13 @@ const LyricBlock = memo(function LyricBlock({
     const createGlow = (el: HTMLElement, word: DynamicLyricWord) => {
       const fadeIn = Math.max(word.duration * 0.6, 1);
       const keep = Math.max(word.duration * 0.4, 1);
-      const fadeAway = 500;
+      const fadeAway = 800;
       const duration = fadeIn + keep + fadeAway;
       const anim = el.animate(
         [
-          { filter: `drop-shadow(0 0 0px rgba(${glowRgb}, 0)) drop-shadow(0 0 0px rgba(${glowRgb}, 0))` },
-          { filter: `drop-shadow(0 0 15px rgba(${glowRgb}, 1)) drop-shadow(0 0 10px rgba(${glowRgb}, 0.5))`, offset: fadeIn / duration },
-          { filter: `drop-shadow(0 0 15px rgba(${glowRgb}, 1)) drop-shadow(0 0 10px rgba(${glowRgb}, 0.5))`, offset: (fadeIn + keep) / duration },
+          { filter: `drop-shadow(0 0 0px rgba(${glowRgb}, 0)) drop-shadow(0 0 0px rgba(${glowRgb}, 0))`, easing: "ease-out" },
+          { filter: `drop-shadow(0 0 12px rgba(${glowRgb}, 0.85)) drop-shadow(0 0 8px rgba(${glowRgb}, 0.4))`, offset: fadeIn / duration },
+          { filter: `drop-shadow(0 0 12px rgba(${glowRgb}, 0.85)) drop-shadow(0 0 8px rgba(${glowRgb}, 0.4))`, offset: (fadeIn + keep) / duration, easing: "ease-in" },
           { filter: `drop-shadow(0 0 0px rgba(${glowRgb}, 0)) drop-shadow(0 0 0px rgba(${glowRgb}, 0))`, offset: 1 },
         ],
         { duration, fill: "forwards", easing: "linear" }

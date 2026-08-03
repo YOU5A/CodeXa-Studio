@@ -838,7 +838,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
       {/* 复制成功底部提示（复制模式内 Ctrl+C 后弹出，自动消失） */}
       <BottomNotice
         show={copyNotice}
-        tone="success"
+        tone="default"
         duration={2000}
         onDone={() => setCopyNotice(false)}
       >

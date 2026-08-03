@@ -58,14 +58,20 @@ export interface LyricDisplayProps {
 
 // ── Component ──
 
-// 字号/子层过渡时长：与缩放效果同一套 0.5s + --lyric-timing-function（纯 CSS 过渡）
-const SUB_ANIM_MS = 500;
 
 // 每次滚轮事件最大位移（行数倍率，保底 120px）：超快滚动也不会一次跨过多行
 const MAX_WHEEL_STEP_LINES = 1.5;
 const MAX_WHEEL_STEP_PX = 120;
 // 滚轮/惯性最大速度（px/ms）：限制甩动后的总滑行距离
 const MAX_WHEEL_VELOCITY = 2.0;
+
+// 动画曲线映射（与设置面板 animationTiming 对应）
+const TIMING_MAP: Record<string, string> = {
+  smooth: "ease",
+  sharp: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+  easeout: "cubic-bezier(0, 0, 0.58, 1)",
+  lazy: "cubic-bezier(0.45, 0, 0.75, 0.35)",
+};
 
 // ── LyricRow：单行渲染（memo）──
 // 换行时只有视觉属性变化的行（当前行附近）重渲染，远处行跳过，
@@ -215,6 +221,8 @@ function LyricDisplay({
   const [subSettleTick, setSubSettleTick] = useState(0);
   // 上次生效的子层显隐标志：仅“开关真正变化”时走先钉满再收起的动画路径
   const prevSubFlagsRef = useRef<[boolean, boolean]>([settings.showTranslation, settings.showRomaji]);
+  // 子层动画序列号：快速连续开关时作废旧的双重 rAF 回调，防止旧目标覆盖新状态
+  const subAnimSeqRef = useRef(0);
   // 切换抑制窗口：容器尺寸变化（全屏/窗口缩放）时短暂禁用字号/边距过渡，
   // 让歌词一步到位，避免字号过渡 + 逐帧居中叠加造成“上下乱弹”
   const [switchReset, setSwitchReset] = useState(false);
@@ -237,11 +245,17 @@ function LyricDisplay({
   ].join("|");
 
   // 布局/设置变化键：任一影响行高、位置或对齐的非字号设置变化都会触发重新定位
-  const layoutKey = [
+  // 几何布局变化键：影响行高/行几何的非字号设置变化
+  // （alignmentPercentage 只改变对齐位置、不影响行几何，单独保留在 layoutKey 中触发栈定位，
+  //  但不再进入过渡抑制源，居上/居中切换可平滑滑动）
+  const geometryLayoutKey = [
     settings.showTranslation, settings.showRomaji, settings.fontBold,
-    settings.alignmentPercentage, lineSpacing, lineGapPx, textAlign, scrollbar, overview,
+    lineSpacing, lineGapPx, textAlign, scrollbar, overview,
     useKaraokeLyrics, karaokeAnimation,
   ].join("|");
+
+  // 布局/设置变化键：含 alignmentPercentage，用于触发栈重新定位
+  const layoutKey = [geometryLayoutKey, settings.alignmentPercentage].join("|");
 
   // 仅切歌时抑制一次过渡：新歌词直接到位；其余设置/布局变化一律走平滑位移动画
   const prevLyricDataRef = useRef<LyricData | null>(null);
@@ -254,12 +268,13 @@ function LyricDisplay({
     fontChangedAtRef.current = Date.now();
   }
 
-  // 布局/设置变化跟踪：开关/对齐等变化期间栈即时跟随（无 0.5s 过渡追赶）
-  const prevLayoutKeyRef = useRef(layoutKey);
+  // 布局/设置变化跟踪：几何类变化期间栈即时跟随（无 0.5s 过渡追赶）；
+  // alignmentPercentage 变化不进入抑制窗口，居上/居中切换走平滑滑动
+  const prevLayoutKeyRef = useRef(geometryLayoutKey);
   const layoutChangedAtRef = useRef(0);
-  const layoutChanged = prevLayoutKeyRef.current !== layoutKey;
+  const layoutChanged = prevLayoutKeyRef.current !== geometryLayoutKey;
   if (layoutChanged) {
-    prevLayoutKeyRef.current = layoutKey;
+    prevLayoutKeyRef.current = geometryLayoutKey;
     layoutChangedAtRef.current = Date.now();
   }
   if (prevLyricDataRef.current !== lyricData) {
@@ -293,8 +308,6 @@ function LyricDisplay({
   ]);
   // 字号/子层几何过渡窗口时间戳：期间 wrapper RO 直写居中，避免逐帧 React 渲染
   const geometryChangedAtRef = useRef(0);
-  // 子层过渡结束后清除 CSS 变量的定时器
-  const subEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
   // ── Resize tracking ──
@@ -536,44 +549,40 @@ function LyricDisplay({
     }
   };
 
-  const clearSubVars = () => {
-    const w = wrapperRef.current;
-    if (!w) return;
-    for (let i = 0; i < w.children.length; i++) {
-      for (const n of ["trans-h", "trans-o", "trans-m", "roma-h", "roma-o", "roma-m"]) {
-        w.style.removeProperty(`--lyric-${n}-${i}`);
-      }
-    }
-  };
 
   useLayoutEffect(() => {
     const transShow = transShowRef.current;
     const romaShow = romaShowRef.current;
     // 仅“开关真正变化”时走先钉满再收起的动画路径；
-    // 首次挂载/切歌/容器尺寸变化时 CSS 兜底（auto/0px）已是目标状态，
-    // 若仍先钉满再收起，同帧净高度变化为零会让 wrapper ResizeObserver 不触发，
-    // 栈定位停留在全展开几何上导致错位（重开 NowPlaying 后歌词不居中）
-    const flagsChanged = transShow !== prevSubFlagsRef.current[0] || romaShow !== prevSubFlagsRef.current[1];
+    // 挂载/切歌/容器尺寸变化时重新测量并按当前显隐标志写死目标值，
+    // 不再清除 CSS 变量：渲染回退值一旦先提交目标状态（0px/auto），
+    // “钉满”会从目标值反向启动过渡，双重 rAF 重定向后动画被瞬间取消（单次开关无动画）
+    const transChanged = transShow !== prevSubFlagsRef.current[0];
+    const romaChanged = romaShow !== prevSubFlagsRef.current[1];
+    const flagsChanged = transChanged || romaChanged;
     prevSubFlagsRef.current = [transShow, romaShow];
 
     if (!flagsChanged) {
-      clearSubVars();
+      measureSubHeights();
+      applySubHeights(transShow ? 1 : 0, romaShow ? 1 : 0);
       refreshLineCenters();
       geometryChangedAtRef.current = Date.now();
-      if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
-      subEndTimerRef.current = null;
       return;
     }
     // 翻译/罗马音开关：测量并先钉住完整高度（auto→px 是离散跳变、视觉无差异），
     // 下一帧（双重 rAF）写目标值，保证收起/展开过渡两端都是可插值的 px；
     // 插值由子层 CSS 过渡（0.5s，与缩放效果同曲线）驱动，无需逐帧 JS
     measureSubHeights();
-    applySubHeights(1, 1);
+    // 只钉住“本次开关会变化的层”，保持隐藏的层始终为 0：
+    // 避免关闭翻译后快速开关音译时，翻译层被展开又收起导致整个歌词高度乱跳
+    applySubHeights(transShow || transChanged ? 1 : 0, romaShow || romaChanged ? 1 : 0);
     geometryChangedAtRef.current = Date.now();
     refreshLineCenters();
-    if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
+    const seq = ++subAnimSeqRef.current;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        // 快速连续开关时旧动画回调作废，防止旧目标覆盖新状态
+        if (seq !== subAnimSeqRef.current) return;
         applySubHeights(transShow ? 1 : 0, romaShow ? 1 : 0);
         // 动画结束后强制一次栈重定位：switchReset 抑制窗口内收起瞬间到位、
         // 净高度变化为零，wrapper RO 可能不触发，必须显式重算居中位置
@@ -582,14 +591,7 @@ function LyricDisplay({
         geometryChangedAtRef.current = Date.now();
       });
     });
-    // 过渡结束后清除变量恢复 auto/0px：字号变化时子层高度自动跟随，无需逐事件重测
-    subEndTimerRef.current = setTimeout(() => {
-      clearSubVars();
-      refreshLineCenters();
-      geometryChangedAtRef.current = 0;
-      subEndTimerRef.current = null;
-    }, SUB_ANIM_MS + 150);
-  }, [layoutKey, allLines, containerWidth, measureSubHeights, refreshLineCenters]);
+  }, [geometryLayoutKey, allLines, containerWidth, measureSubHeights, refreshLineCenters]);
 
 
   // ── Per-line visuals (pure visual transform, no layout participation) ──
@@ -599,9 +601,12 @@ function LyricDisplay({
     const delayByOffset = (offset: number) => {
       if (scrollingMode) return 0;
       if (!settings.enableStagger) return 0;
-      // Only stagger on manual jumps (>1 line), not during normal auto-advance
-      if (!shouldTransit.current || jump <= 1) return 0;
-      return Math.min(Math.abs(offset) * 80, 400);
+      // 任意跳转（含播放自然切行）都产生方向性错开；切歌/首帧（shouldTransit=false）不动画
+      if (!shouldTransit.current || jump === 0) return 0;
+      // 参照 RNP：按跳转方向把 offset 映射到 0~8 档，每档 50ms，形成方向性波浪
+      const sign = focusLine - previousFocusedLineRef.current > 0 ? 1 : -1;
+      const clamped = Math.max(-4, Math.min(4, offset)) * sign + 4;
+      return clamped * 50;
     };
     const sByOffset = (offset: number) => {
       // 手动滚动/惯性阶段先禁用缩放，回归自动后按设置恢复
@@ -635,6 +640,39 @@ function LyricDisplay({
     settings.enableScale, settings.enableBlur, settings.enableStagger,
     scrollingMode, isManual,
   ]);
+
+  // ── 错开波浪：跳转时每行从方向性微位移归位（RNP 式流式近似）──
+  // 流式布局下 wrapper 整体移动，行级 translateY 仅作过渡期视觉补偿；
+  // 一次性 WAAPI：fill:backwards 让行在 delay 等待期间就停在偏移位置，
+  // delay 结束后连续归位（fill:none 会在 delay 结束瞬间跳变出偏移，显得一顿一顿）；
+  // 动画结束后自动释放回 CSS transform，无残留
+  const staggerPrevFocusRef = useRef(focusLine);
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    const prevFocus = staggerPrevFocusRef.current;
+    staggerPrevFocusRef.current = focusLine;
+    if (!wrapper || wrapper.children.length === 0) return;
+    if (!settings.enableStagger || scrollingMode || isManual) return;
+    if (prevFocus === focusLine || !shouldTransit.current) return;
+    const sign = focusLine - prevFocus > 0 ? 1 : -1;
+    const timing = TIMING_MAP[settings.animationTiming] || "ease";
+    for (let i = 0; i < wrapper.children.length; i++) {
+      const el = wrapper.children[i] as HTMLElement;
+      const offset = i - focusLine;
+      const clamped = Math.max(-4, Math.min(4, offset));
+      const delay = (clamped * sign + 4) * 50;
+      const dy = -sign * clamped * 8;
+      if (dy === 0) continue; // 当前行无微位移，仅参与缩放/透明度错开
+      const s = lineVisuals[i]?.scale ?? 1;
+      el.animate(
+        [
+          { transform: `translateY(${dy}px) scale(${s})` },
+          { transform: `translateY(0px) scale(${s})` },
+        ],
+        { duration: 500, delay, easing: timing, fill: "backwards" }
+      );
+    }
+  }, [focusLine, settings.enableStagger, settings.animationTiming, scrollingMode, isManual, lineVisuals]);
 
   // ── Stack positioning (flow-based) ──
 
@@ -737,6 +775,9 @@ function LyricDisplay({
     setFontVars(to[0], to[1], to[2]);
     fontCurrentRef.current = [...to];
     geometryChangedAtRef.current = Date.now();
+    // 子层高度为显式 px：字号变化后按当前显隐标志重新测量并写目标值
+    measureSubHeights();
+    applySubHeights(transShowRef.current ? 1 : 0, romaShowRef.current ? 1 : 0);
     // fontChanged 已在上方渲染期写入 fontChangedAtRef（栈抑制用）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fontKey]);
@@ -745,6 +786,9 @@ function LyricDisplay({
   useLayoutEffect(() => {
     setFontVars(settings.fontSize, settings.romajiFontSize, settings.translationFontSize);
     fontCurrentRef.current = [settings.fontSize, settings.romajiFontSize, settings.translationFontSize];
+    // 子层高度为显式 px：切歌后按当前显隐标志重新测量并写目标值
+    measureSubHeights();
+    applySubHeights(transShowRef.current ? 1 : 0, romaShowRef.current ? 1 : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lyricData]);
 
@@ -955,7 +999,9 @@ function LyricDisplay({
     };
     el.addEventListener("wheel", hw, { passive: false });
     return () => el.removeEventListener("wheel", hw);
-  }, [exitManual, startCoast]);
+    // 歌词异步加载：首帧可能处于 loading 状态（无容器），allLines 变化后重挂监听，
+    // 否则滚动条/滚轮在本次挂载内永远无法触发手动滚动
+  }, [exitManual, startCoast, allLines]);
 
   // 播放行大跳（seek/点击歌词/切歌/全局偏移）时退出手动模式；
   // 播放自然换行（单行推进）不打断手动浏览位置
@@ -972,7 +1018,7 @@ function LyricDisplay({
   // 歌词行几何变化（切歌/字号/翻译/换行等）时刷新行中心缓存
   useLayoutEffect(() => {
     refreshLineCenters();
-  }, [allLines, layoutKey, refreshLineCenters]);
+  }, [allLines, geometryLayoutKey, refreshLineCenters]);
 
   useLayoutEffect(() => {
     return () => {
@@ -980,17 +1026,8 @@ function LyricDisplay({
       if (coastTimerRef.current) clearTimeout(coastTimerRef.current);
       if (coastRafRef.current) cancelAnimationFrame(coastRafRef.current);
       if (switchResetTimerRef.current) clearTimeout(switchResetTimerRef.current);
-      if (subEndTimerRef.current) clearTimeout(subEndTimerRef.current);
     };
   }, []);
-
-  // Animation timing CSS variable
-  const timingMap: Record<string, string> = {
-    smooth: "ease",
-    sharp: "cubic-bezier(0.22, 0.61, 0.36, 1)",
-    easeout: "cubic-bezier(0, 0, 0.58, 1)",
-    lazy: "cubic-bezier(0.45, 0, 0.75, 0.35)",
-  };
 
   // Container class for centering/bold
   const containerClass =
@@ -1087,7 +1124,7 @@ function LyricDisplay({
           textAlign,
           overflow: "hidden",
           contain: "layout style",
-          ["--lyric-timing-function" as string]: timingMap[settings.animationTiming] || "ease",
+          ["--lyric-timing-function" as string]: TIMING_MAP[settings.animationTiming] || "ease",
           ["--lyric-glow" as string]: effectiveGlowColor || "var(--accent)",
           ["--lyric-glow-rgb" as string]: effectiveGlowRgb || "var(--accent-rgb)",
           ["--lyric-glow-rgb-2" as string]: effectiveGlowRgb2 || "var(--accent-rgb)",
