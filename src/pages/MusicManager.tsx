@@ -932,7 +932,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         display: "flex", alignItems: "center", gap: space[2],
         padding: "10px 0", flexShrink: 0,
       }}>
-        <h1 style={{ fontSize: fontSizes["2xl"], fontWeight: 600, color: "var(--text-primary)", margin: 0, marginRight: space[1] }}>
+        <h1 className="page-title" style={{ fontSize: fontSizes["2xl"], fontWeight: 600, color: "var(--text-primary)", margin: 0, marginRight: space[1] }}>
           {tx.title}
         </h1>
         <GlassButton variant="ghost" size="sm" onClick={browse}>

@@ -3,12 +3,13 @@
  *
  * 鼠标悬停在进度条上时，按悬停位置换算时间并定位对应歌词行，
  * 在进度条上方显示：行号、逐词词遮罩、原文、翻译、行内子进度条、起止时间。
- * 渲染在 NowPlaying overlay 内部（absolute 定位，与设置面板同一层叠上下文），
- * 保证 backdrop-filter 能采样 overlay 背景；pointer-events: none，不影响拖动 seek。
+ * 通过 portal 挂到 body（fixed 定位），让 backdrop-filter 直接采样 overlay 背景；
+ * pointer-events: none，不影响拖动 seek。
  *
  * 时间单位：本项目歌词行时间为秒，逐词时间为毫秒。
  */
 
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadLyricsSettings } from "@/lyrics";
 import type { LyricData } from "@/lyrics";
@@ -100,7 +101,8 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     setSubProgress(Math.max(0, Math.min(100, ((hovered - line.time) / lineDuration) * 100)));
   }, [progressBarRef]);
 
-  // 更新预览位置：固定显示在进度条上方 6px，水平方向 clamp 在窗口内
+  // 更新预览位置：使用 viewport 坐标，避免被 Controls 的 Framer Motion 变换层
+  // 限制 backdrop-filter 的采样范围；卡片通过 portal 直接挂到 body。
   useEffect(() => {
     if (!visible) return;
     const container = containerRef.current;
@@ -109,16 +111,12 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     const width = container.clientWidth;
     const height = container.clientHeight;
     const rect = bar.getBoundingClientRect();
-    // overlay 内部定位：以最近 positioned 祖先（overlay 根）为坐标系，
-    // 水平 clamp 在 overlay 内，垂直固定在进度条上方 6px
-    const parentRect = container.offsetParent ? container.offsetParent.getBoundingClientRect() : null;
-    const originLeft = parentRect?.left ?? 0;
-    const originTop = parentRect?.top ?? 0;
-    const clampWidth = parentRect?.width ?? window.innerWidth;
-    let left = xRef.current - originLeft - width / 2;
-    left = Math.max(0, Math.min(left, clampWidth - width));
+    // 卡片通过 portal 挂到 body，因此直接使用 viewport 坐标并在窗口边缘留出间距。
+    const margin = 8;
+    let left = xRef.current - width / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
     container.style.left = `${left}px`;
-    container.style.top = `${rect.top - originTop - height - 6}px`;
+    container.style.top = `${Math.max(margin, rect.top - height - 6)}px`;
   }, [visible, lineIndex, hoveredTime, nonInterludeIndex, subProgress, progressBarRef]);
 
   // 进度条事件挂接：拖拽 seek 期间（mousedown → mouseup）预览跟随 window 级鼠标移动
@@ -182,11 +180,11 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
   );
   const show = enabled && visible && !isPureMusic && lines.length > 0 && lineIndex < lines.length;
 
-  return (
+  const preview = (
     <div
       ref={containerRef}
       className={`np-progressbar-preview${show ? "" : " invisible"}`}
-      style={{ position: "absolute", zIndex: 8, pointerEvents: "none" }}
+      style={{ position: "fixed", zIndex: 208, pointerEvents: "none" }}
     >
       {line && (line.originalLyric || line.text) && nonInterludeIndex > 0 ? (
         <div className="np-progressbar-preview-number">{nonInterludeIndex} / {nonInterludeCount}</div>
@@ -231,4 +229,8 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
       ) : null}
     </div>
   );
+
+  // 预览卡片必须与 NowPlaying 背景处于同一顶层合成上下文，
+  // 否则生产构建后的 Chromium 可能只采样到透明 Controls 层，导致文字穿透卡片。
+  return createPortal(preview, document.body);
 }

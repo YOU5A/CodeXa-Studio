@@ -31,7 +31,7 @@ function createWindow({ electronSettings, saveElectronSettings, isQuittingRef, m
   const mainWindow = new BrowserWindow(windowOptions);
   mainWindow.once("ready-to-show", () => { mainWindow.show(); });
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL("http://127.0.0.1:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
     mainWindow.webContents.insertCSS("*:focus, *:focus-visible { outline: none !important; }");
   // Diagnostic: check if Windows sends WM_DROPFILES to the window

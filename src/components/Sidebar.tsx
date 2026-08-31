@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { springSnappy, GlassSurface, GlassButton, GlassTooltip } from "@/design-system";
 import {
-  LayoutDashboard, Cpu, Gauge, Music, Database, Settings, FileAudio,
+  LayoutDashboard, Cpu, Gauge, Music, MonitorCog, Settings, FileAudio,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -31,7 +31,7 @@ const navLabels: Record<Language, Record<Page, string>> = {
     win32priority: "Win32 优先级",
     appcpupriority: "应用 CPU 优先级",
     musicmanager: "音乐管理器",
-    backupcenter: "备份中心",
+    backupcenter: "显卡名称",
     ncmstudio: "NCM 解码",
     settings: "设置",
   },
@@ -40,7 +40,7 @@ const navLabels: Record<Language, Record<Page, string>> = {
     win32priority: "Win32 Priority",
     appcpupriority: "App CPU Priority",
     musicmanager: "Music Manager",
-    backupcenter: "Backup Center",
+    backupcenter: "GPU Name",
     ncmstudio: "NCM Studio",
     settings: "Settings",
   },
@@ -48,11 +48,11 @@ const navLabels: Record<Language, Record<Page, string>> = {
 
 const navItems: { id: Page; icon: React.ReactNode }[] = [
   { id: "dashboard", icon: <LayoutDashboard size={18} /> },
+  { id: "backupcenter", icon: <MonitorCog size={18} /> },
   { id: "win32priority", icon: <Cpu size={18} /> },
   { id: "appcpupriority", icon: <Gauge size={18} /> },
   { id: "musicmanager", icon: <Music size={18} /> },
   { id: "ncmstudio", icon: <FileAudio size={18} /> },
-  { id: "backupcenter", icon: <Database size={18} /> },
   { id: "settings", icon: <Settings size={18} /> },
 ];
 

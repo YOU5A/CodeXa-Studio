@@ -27,6 +27,7 @@ export default function PageLayout({ title, subtitle, actions, children }: PageL
 
   return (
     <motion.div
+      className="page-layout"
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={{ duration: animDuration, ease: EASE_OUT }}
@@ -45,13 +46,13 @@ export default function PageLayout({ title, subtitle, actions, children }: PageL
         flexShrink: 0,
       }}>
         <div>
-          <h2 style={{
+          <h2 className="page-title" style={{
             fontSize: fontSizes["2xl"], fontWeight: 600,
             color: "var(--text-primary)", margin: 0,
           }}>
             {title}
           </h2>
-          <p style={{
+          <p className="page-subtitle" style={{
             fontSize: fontSizes.sm, color: "var(--text-tertiary)",
             margin: `${space[1]}px 0 0`,
           }}>

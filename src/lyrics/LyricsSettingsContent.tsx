@@ -77,6 +77,8 @@ interface Props {
   onReset?: () => void;
   /** NowPlaying 专属字号：传此对象时字号滑块改控制它，不写入共享歌词设置；defaultVal 为滑块重置基准 */
   fontSizeOverride?: { value: number; defaultVal: number; onChange: (v: number) => void };
+  /** 覆盖翻译字号滑块的恢复基准（NowPlaying 默认值与共享歌词设置不同） */
+  translationFontSizeDefault?: number;
   /** 全屏时禁用字体大小滑块（置灰不可调） */
   fontSizeDisabled?: boolean;
   /** 全屏时禁用当前歌词位置（置灰不可调） */
@@ -85,7 +87,7 @@ interface Props {
   hideAlignment?: boolean;
 }
 
-const LyricsSettingsContent: FC<Props> = ({ values, onChange, embedded = false, footer, roomy = false, resetPosition = "top", onReset, fontSizeOverride, fontSizeDisabled = false, alignmentDisabled = false, hideAlignment = false }) => {
+const LyricsSettingsContent: FC<Props> = ({ values, onChange, embedded = false, footer, roomy = false, resetPosition = "top", onReset, fontSizeOverride, translationFontSizeDefault, fontSizeDisabled = false, alignmentDisabled = false, hideAlignment = false }) => {
   const { lang } = useLanguage();
   const tx = t[lang];
   const resetAtBottom = resetPosition === "bottom";
@@ -137,7 +139,7 @@ const LyricsSettingsContent: FC<Props> = ({ values, onChange, embedded = false, 
       <Sec title={tx.display} roomy={roomy}>
         <GlassSlider label={tx.fontSize} live defaultVal={fontSizeOverride ? fontSizeOverride.defaultVal : DEFAULT_LYRICS_SETTINGS.fontSize} display={`${shownFontSize}px`} value={shownFontSize} min={16} max={64} step={1} disabled={fontSizeDisabled} onChange={fontSizeOverride ? fontSizeOverride.onChange : (v) => set("fontSize", v)} />
         <GlassSlider label={tx.romajiFontSize} live defaultVal={DEFAULT_LYRICS_SETTINGS.romajiFontSize} display={`${values.romajiFontSize.toFixed(2)}em`} value={values.romajiFontSize} min={0.3} max={1.5} step={0.05} onChange={v => set("romajiFontSize", v)} />
-        <GlassSlider label={tx.translationFontSize} live defaultVal={DEFAULT_LYRICS_SETTINGS.translationFontSize} display={`${values.translationFontSize.toFixed(2)}em`} value={values.translationFontSize} min={0.3} max={1.5} step={0.05} onChange={v => set("translationFontSize", v)} />
+        <GlassSlider label={tx.translationFontSize} live defaultVal={translationFontSizeDefault ?? DEFAULT_LYRICS_SETTINGS.translationFontSize} display={`${values.translationFontSize.toFixed(2)}em`} value={values.translationFontSize} min={0.3} max={1.5} step={0.05} onChange={v => set("translationFontSize", v)} />
 
         {!hideAlignment && (
         <Row label={tx.alignmentPercentage} roomy={roomy} disabled={alignmentDisabled}>

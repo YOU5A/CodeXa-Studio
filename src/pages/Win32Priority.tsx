@@ -147,6 +147,7 @@ export default function Win32Priority(_props: Props) {
   const [presetTooltip, setPresetTooltip] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    const startedAt = Date.now();
     setLoading(true);
     const result = await window.electronAPI?.bridge.call("registry.read");
     if (result && !result.error) {
@@ -158,6 +159,8 @@ export default function Win32Priority(_props: Props) {
     }
     const bkResult = await window.electronAPI?.bridge.call("backup.list");
     if (bkResult?.backups) setBackups(bkResult.backups);
+    const remaining = 700 - (Date.now() - startedAt);
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
     setLoading(false);
   }, []);
 
@@ -266,7 +269,7 @@ export default function Win32Priority(_props: Props) {
             </div>
             <div style={{ display: "flex", gap: space[4], marginTop: space[2] }}>
               <GlassButton variant="secondary" size="sm" onClick={fetchData}>
-                <RefreshCw size={14} /> {tx.refresh}
+                <motion.span animate={{ rotate: loading ? 360 : 0 }} transition={{ repeat: loading ? Infinity : 0, duration: 0.7, ease: "linear" }} style={{ display: "flex" }}><RefreshCw size={14} /></motion.span> {tx.refresh}
               </GlassButton>
               <GlassButton variant="secondary" size="sm" onClick={createBackup}>
                 <Save size={14} /> {tx.createBackup}

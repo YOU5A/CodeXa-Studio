@@ -34,10 +34,6 @@ export default function AboutSection({ tx }: AboutSectionProps) {
           onClick={() => window.electronAPI?.shell.openExternal("https://space.bilibili.com/353017137")}>
           {tx.bilibili}
         </GlassButton>
-        <GlassButton variant="secondary" size="sm"
-          onClick={() => window.electronAPI?.shell.openExternal("https://you5a.github.io/UserTool")}>
-          {tx.usertool}
-        </GlassButton>
       </div>
     </>
   );

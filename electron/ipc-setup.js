@@ -405,6 +405,18 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
   }
 
   ipcMain.handle("bridge:call", async (_event, method, params) => {
+    // GPU name tools are also available in the JS router so they work while an older
+    // published .NET bridge is still present (for example during development).
+    if (["gpu.detect", "gpu.write_name", "gpu.backup.create", "gpu.backup.list", "gpu.backup.restore", "gpu.backup.delete", "gpu.backup.clear"].includes(method)) {
+      const gpuRegistry = require("./rpc/registry");
+      if (method === "gpu.detect") return gpuRegistry.detectGpuAsync();
+      if (method === "gpu.write_name") return gpuRegistry.writeGpuName(params || {});
+      if (method === "gpu.backup.create") return gpuRegistry.gpuBackupCreate();
+      if (method === "gpu.backup.list") return gpuRegistry.gpuBackupList();
+      if (method === "gpu.backup.delete") return gpuRegistry.gpuBackupDelete(params?.filename);
+      if (method === "gpu.backup.clear") return gpuRegistry.gpuBackupClear();
+      return gpuRegistry.gpuBackupRestore(params?.filepath);
+    }
     // NCM methods handled natively (no bridge needed)
     if (method === "ncm.list") {
       const { listNcm } = require("./rpc/ncm");

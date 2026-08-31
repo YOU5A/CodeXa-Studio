@@ -98,6 +98,9 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     return fluidSettings.backgroundType === "fluid";
   }, [coverColor, fluidColor, resolvedTheme, fluidSettings.backgroundType]);
 
+  // 亮色主题的流体背景需要更强暗化以维持歌词和控件对比度；设置值本身不变。
+  const fluidDimMultiplier = resolvedTheme === "light" && fluidSettings.backgroundType === "fluid" ? 2 : 1;
+
   const closePlaylist = useCallback(() => setPlaylistOpen(false), []);
   const handleTogglePlaylist = useCallback(() => {
     setSettingsOpen(false);
@@ -401,6 +404,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
           coverImageUrl={trackMeta?.cover ? `data:image/jpeg;base64,${trackMeta.cover}` : null}
           playing={audioState.playing}
           dim={fluidSettings.backgroundDim}
+          dimMultiplier={fluidDimMultiplier}
           type={fluidSettings.backgroundType}
           dynamicFluid={fluidSettings.dynamicFluid}
           blurAmount={fluidSettings.blurAmount}

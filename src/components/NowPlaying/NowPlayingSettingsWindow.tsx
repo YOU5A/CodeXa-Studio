@@ -504,6 +504,7 @@ export default function NowPlayingSettingsWindow({
                         defaultVal: DEFAULT_NOW_PLAYING_SETTINGS.lyricsFontSize,
                         onChange: (v) => onChange({ ...settings, lyricsFontSize: v }),
                       }}
+                      translationFontSizeDefault={DEFAULT_NOW_PLAYING_SETTINGS.lyricStyles.translationFontSize}
                     />
                   </div>
 

@@ -91,6 +91,8 @@ class Program
             "registry.read" => reg.Read(p),
             "registry.write" => reg.Write(p),
             "registry.backup" => reg.Backup(p, BackupDir),
+            "gpu.detect" => reg.DetectGpu(p),
+            "gpu.write_name" => reg.WriteGpuName(p),
 
             // Admin
             "admin.check" => adm.Check(p),

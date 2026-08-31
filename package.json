@@ -1,10 +1,10 @@
 {
   "name": "codexa-studio",
-  "version": "2.5.0",
+  "version": "2.5.5",
   "description": "CodeXa Studio - Windows 系统调优一体化工具箱",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on -i 50 http://localhost:5173 && C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd .\"",
+    "dev": "concurrently \"vite --host 127.0.0.1\" \"wait-on -i 50 http://127.0.0.1:5173 && C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd .\"",
     "build": "vite build && electron-builder",
     "vite:dev": "vite",
     "electron:dev": "C:\\Users\\Yousa\\AppData\\Roaming\\npm\\electron.cmd ."

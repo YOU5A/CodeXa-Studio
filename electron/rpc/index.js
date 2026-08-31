@@ -32,6 +32,10 @@ async function callMethod(method, params = {}) {
       }
       return registry.backupValue(current.value);
     }
+    case "gpu.detect":
+      return registry.detectGpu();
+    case "gpu.write_name":
+      return registry.writeGpuName(params);
 
     // ── Admin ──
     case "admin.check":

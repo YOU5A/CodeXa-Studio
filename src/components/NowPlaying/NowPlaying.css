@@ -234,7 +234,8 @@
   /* 视觉样式直接复用播放列表面板（NowPlayingPlaylist panelS） */
   border-radius: 18px;
   border: 0.5px solid var(--border-strong);
-  background: linear-gradient(160deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+  /* 保留透明度给 backdrop-filter，同时提供一层稳定底色，避免合成失败时文字穿透。 */
+  background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)), rgba(18,20,30,0.42);
   backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   box-shadow: 0 12px 48px rgba(0,0,0,0.45);
@@ -242,8 +243,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  isolation: isolate;
-  will-change: transform, opacity;
+  /* 预览卡片通过 portal 挂到 body，避免隔离层截断 backdrop-filter 的采样。 */
+  isolation: auto;
+  will-change: opacity;
   transition: opacity 0.15s ease;
 }
 .np-progressbar-preview.invisible {

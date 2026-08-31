@@ -60,7 +60,6 @@ const t: Record<Language, Record<string, string>> = {
     aboutTech: "Electron + React + .NET",
     github: "GitHub",
     bilibili: "B站",
-    usertool: "UserTool",
     language: "语言",
     aboutVersion: `版本 ${APP_VERSION}`,
   },
@@ -104,7 +103,6 @@ const t: Record<Language, Record<string, string>> = {
     aboutTech: "Electron + React + .NET",
     github: "GitHub",
     bilibili: "Bilibili",
-    usertool: "UserTool",
     language: "Language",
     aboutVersion: `Version ${APP_VERSION}`,
   },
@@ -199,7 +197,7 @@ export default function Settings() {
     >
       {/* Page Title */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 600, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.02em" }}>
+        <h1 className="page-title" style={{ fontSize: 24, fontWeight: 600, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.02em" }}>
           {tx.title}
         </h1>
         <GlassPillButton

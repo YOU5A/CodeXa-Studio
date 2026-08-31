@@ -18,7 +18,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import NowPlayingBackground from "./components/NowPlaying/NowPlayingBackground";
 import NowPlayingOverlay from "./components/NowPlaying/NowPlayingOverlay";
 import { loadFluidSettings, type FluidSettingsValues } from "./components/FluidSettingsPanel";
-import type { RGB } from "./utils/colorExtractor";
+import { isLightColor, type RGB } from "./utils/colorExtractor";
 
 // Lazy-loaded pages with hover preload support
 const pageLoaders: Record<Page, () => Promise<{ default: React.ComponentType<any> }>> = {
@@ -26,7 +26,7 @@ const pageLoaders: Record<Page, () => Promise<{ default: React.ComponentType<any
   win32priority: () => import("./pages/Win32Priority"),
   appcpupriority: () => import("./pages/AppCpuPriority"),
   musicmanager: () => import("./pages/MusicManager"),
-  backupcenter: () => import("./pages/BackupCenter"),
+  backupcenter: () => import("./pages/GpuName"),
   ncmstudio: () => import("./pages/NcmStudio"),
   settings: () => import("./pages/Settings"),
 };
@@ -35,7 +35,7 @@ const Dashboard = lazy(pageLoaders.dashboard);
 const Win32Priority = lazy(pageLoaders.win32priority);
 const AppCpuPriority = lazy(pageLoaders.appcpupriority);
 const MusicManager = lazy(pageLoaders.musicmanager);
-const BackupCenter = lazy(pageLoaders.backupcenter);
+const GpuName = lazy(pageLoaders.backupcenter);
 const NcmStudio = lazy(pageLoaders.ncmstudio);
 const Settings = lazy(pageLoaders.settings);
 
@@ -81,6 +81,15 @@ function AppContent() {
   const { lang } = useLanguage();
   const { isDeveloperMode, isGameOpen, openGame, closeGame, unlock } = useDevUnlock();
   const { showToast } = useToast();
+
+  // 亮色主题下，深色封面流体会让沿用主题黑色的页面标题失去对比度。
+  // 取色失败时仍保守地按深色处理（纯黑封面会被取色器过滤）。
+  const lightThemeDarkFluid = resolvedTheme === "light"
+    && fluidSettings.backgroundType === "fluid"
+    && !!coverImageUrl
+    && (!coverColor || !isLightColor(coverColor));
+  // 亮色主题的流体视觉更亮，暗化遮罩强度翻倍；滑块仍保持 0-100 且全程有效。
+  const fluidDimMultiplier = resolvedTheme === "light" && fluidSettings.backgroundType === "fluid" ? 2 : 1;
 
   useEffect(() => {
     window.electronAPI?.window.onMaximizeChange(setIsMaximized);
@@ -187,7 +196,7 @@ function AppContent() {
     win32priority: <Win32Priority />,
     appcpupriority: <AppCpuPriority />,
     musicmanager: <MusicManager onNavigate={handleNavigate} fluidSettings={fluidSettings} onFluidSettingsChange={setFluidSettings} onOpenNowPlaying={() => setNowPlayingOpen(true)} />,
-    backupcenter: <BackupCenter />,
+    backupcenter: <GpuName />,
     ncmstudio: <NcmStudio />,
     settings: <Settings />,
   };
@@ -201,6 +210,7 @@ function AppContent() {
           coverImageUrl={coverImageUrl}
           playing={audioState.playing}
           dim={fluidSettings.backgroundDim}
+          dimMultiplier={fluidDimMultiplier}
           type={fluidSettings.backgroundType}
           dynamicFluid={fluidSettings.dynamicFluid}
           blurAmount={fluidSettings.blurAmount}
@@ -217,7 +227,7 @@ function AppContent() {
 
       {/* Body: sidebar + main content */}
       <div
-        className="app-body"
+        className={`app-body${lightThemeDarkFluid ? " app-fluid-dark" : ""}`}
         style={{
           display: "flex",
           flex: 1,

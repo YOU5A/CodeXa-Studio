@@ -143,6 +143,9 @@ export type Page =
 export type RpcMethod =
   | "system.info"
   | "registry.read" | "registry.write" | "registry.backup"
+  | "gpu.detect" | "gpu.write_name"
+  | "gpu.backup.create" | "gpu.backup.list" | "gpu.backup.restore"
+  | "gpu.backup.delete" | "gpu.backup.clear"
   | "admin.check" | "admin.restart"
   | "priority.list" | "priority.add" | "priority.edit" | "priority.delete" | "priority.export" | "priority.import_config"
   | "music.scan" | "music.get_metadata" | "music.save_tags" | "music.extract_cover" | "music.apply_cover"

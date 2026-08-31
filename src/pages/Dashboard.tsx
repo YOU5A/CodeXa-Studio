@@ -84,7 +84,7 @@ const moduleLabels: Record<string, string> = {
   win32priority: "Win32 Priority",
   appcpupriority: "App CPU Priority",
   musicmanager: "Music Manager",
-  backupcenter: "Backup Center",
+  backupcenter: "GPU Name",
 };
 
 /* ─── Shared Stat Icon ─── */

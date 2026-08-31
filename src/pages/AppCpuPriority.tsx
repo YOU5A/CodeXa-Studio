@@ -127,12 +127,20 @@ export default function AppCpuPriority(_props: Props) {
   const [formIo, setFormIo] = useState("");
   const [enableIo, setEnableIo] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchRules = useCallback(async () => {
+    const startedAt = Date.now();
+    setRefreshing(true);
     try {
       const result = await window.electronAPI?.bridge.call("priority.list");
       if (result && !result.error) setRules(result.applications ?? []);
     } catch { /* bridge not ready, will retry */ }
+    finally {
+      const remaining = 700 - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+      setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => { fetchRules(); }, [fetchRules]);
@@ -248,7 +256,7 @@ export default function AppCpuPriority(_props: Props) {
           <Plus size={14} /> {tx.add}
         </GlassButton>
         <GlassButton variant="secondary" onClick={fetchRules} style={{ padding: `${space[2]}px ${space[3]}px`, fontSize: fontSizes.md }}>
-          <RefreshCw size={14} />
+          <motion.span animate={{ rotate: refreshing ? 360 : 0 }} transition={{ repeat: refreshing ? Infinity : 0, duration: 0.7, ease: "linear" }} style={{ display: "flex" }}><RefreshCw size={14} /></motion.span>
         </GlassButton>
         <GlassButton variant="secondary" onClick={exportConfig} style={{ padding: `${space[2]}px ${space[4]}px`, fontSize: fontSizes.md }}>
           <Download size={14} /> {tx.export}

@@ -187,6 +187,16 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15);background
   scrollbar-gutter: stable;
 }
 
+/* 亮色主题的深色流体背景：页面标题使用高对比文本，避免黑字融入封面。 */
+.app-fluid-dark .page-title {
+  color: rgba(255, 255, 255, 0.94) !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.42);
+}
+.app-fluid-dark .page-subtitle {
+  color: rgba(255, 255, 255, 0.72) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
+}
+
 .scroll-fade-edge {
   mask-image: linear-gradient(
     to bottom,
