@@ -5,6 +5,7 @@ export const STORAGE_LANG = 'codexa-studio-lang';
 export const STORAGE_PLAYMODE = 'music_playmode';
 export const STORAGE_VOLUME = 'music_volume';
 export const STORAGE_ACTIVITY = 'codexa-studio-activity';
+export const STORAGE_DASHBOARD_HARDWARE = 'codexa-studio-dashboard-hardware';
 export const STORAGE_NCM_OUTPUT_DIR = 'ncm-output-dir';
 
 export const STORAGE_DEVELOPER_MODE = 'codexa-studio-dev-mode';

@@ -192,7 +192,7 @@ function AppContent() {
   };
 
   const pages: Record<Page, React.ReactNode> = {
-    dashboard: <Dashboard onNavigate={handleNavigate} />,
+    dashboard: <Dashboard />,
     win32priority: <Win32Priority />,
     appcpupriority: <AppCpuPriority />,
     musicmanager: <MusicManager onNavigate={handleNavigate} fluidSettings={fluidSettings} onFluidSettingsChange={setFluidSettings} onOpenNowPlaying={() => setNowPlayingOpen(true)} />,
