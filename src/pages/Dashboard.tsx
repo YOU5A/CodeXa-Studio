@@ -15,6 +15,7 @@ import { GlassBadge, GlassProgressBar } from "@/design-system/components";
 import { space, radii, fontSizes } from "@/design-system/tokens";
 import { STORAGE_DASHBOARD_HARDWARE } from "@/constants/storage-keys";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTheme } from "@/hooks/useTheme";
 import type { SystemInfo } from "@/types";
 
 const t = {
@@ -413,13 +414,15 @@ function CurrentValuesPanel({ win32Value, gpuName, loading, tx }: {
 
 // Module-level cache to avoid reset on page re-entry
 let cachedSysInfo: SystemInfo | null = null;
+let cachedTrend: MetricPoint[] = [];
 
 export default function Dashboard() {
   const { lang } = useLanguage();
+  const { settings } = useTheme();
   const tx = t[lang];
   const [cachedHardware] = useState(readDashboardHardwareCache);
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(cachedSysInfo);
-  const [trend, setTrend] = useState<MetricPoint[]>([]);
+  const [trend, setTrend] = useState<MetricPoint[]>(cachedTrend);
   const [win32Value, setWin32Value] = useState<Win32ValueSnapshot | null>(cachedHardware.win32Value);
   const [gpuName, setGpuName] = useState<string | null>(cachedHardware.gpuName);
   const [hardwareLoading, setHardwareLoading] = useState(!cachedHardware.win32Value && !cachedHardware.gpuName);
@@ -440,14 +443,13 @@ export default function Dashboard() {
 
         cachedSysInfo = nextInfo;
         setSysInfo(nextInfo);
-        setTrend((previous) => [
-          ...previous.slice(-23),
-          {
-            cpu: nextInfo.cpu_percent,
-            memory: nextInfo.memory_percent,
-            disk: nextInfo.disk_percent,
-          },
-        ]);
+        const nextPoint = {
+          cpu: nextInfo.cpu_percent,
+          memory: nextInfo.memory_percent,
+          disk: nextInfo.disk_percent,
+        };
+        cachedTrend = [...cachedTrend.slice(-23), nextPoint];
+        setTrend(cachedTrend);
       } catch {
         // Keep the last known-good snapshot visible when a poll fails.
       }
@@ -515,7 +517,7 @@ export default function Dashboard() {
       animate={{ opacity: 1 }}
       style={{ display: "flex", flexDirection: "column", gap: space[6], height: "100%", minHeight: 0 }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gridAutoRows: "minmax(min-content, 1fr)", gap: space[4], alignItems: "stretch", alignContent: "stretch", flex: 1, height: "100%", minHeight: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: settings.fontScale < 120 ? "1fr" : "repeat(auto-fit, minmax(420px, 1fr))", gridAutoRows: "minmax(min-content, 1fr)", gap: space[4], alignItems: "stretch", alignContent: "stretch", flex: 1, height: "100%", minHeight: 0 }}>
         <SystemHealthPanel sysInfo={sysInfo} trend={trend} tx={tx} />
         <CurrentValuesPanel win32Value={win32Value} gpuName={gpuName} loading={hardwareLoading} tx={tx} />
       </div>
