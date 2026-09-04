@@ -44,20 +44,23 @@ interface LyricResult {
   error: string | null;
 }
 
-function extractTitleFromPath(filePath: string): string {
+function splitFilenameMetadata(filePath: string): { title: string; artist: string } {
   const name = filePath.replace(/\\/g, "/").split("/").pop() || "";
-  return name.replace(/\.[^.]+$/, "");
+  const stem = name.replace(/\.[^.]+$/, "");
+  const separator = stem.includes(" - ") ? " - " : stem.includes("-") ? "-" : null;
+  if (!separator) return { title: stem, artist: "" };
+  const index = stem.indexOf(separator);
+  const artist = stem.slice(0, index).trim();
+  const title = stem.slice(index + separator.length).trim();
+  return title ? { title, artist } : { title: stem, artist: "" };
+}
+
+function extractTitleFromPath(filePath: string): string {
+  return splitFilenameMetadata(filePath).title;
 }
 
 function extractArtistFromPath(filePath: string): string {
-  const parts = filePath.replace(/\\/g, "/").split("/");
-  const fileName = (parts.pop() || "").replace(/\.[^.]+$/, "");
-  const separator = fileName.includes(" - ") ? " - " : fileName.includes("-") ? "-" : null;
-  if (separator) {
-    const [artist] = fileName.split(separator);
-    if (artist.trim()) return artist.trim();
-  }
-  return "";
+  return splitFilenameMetadata(filePath).artist;
 }
 
 /**
@@ -87,6 +90,16 @@ async function requestLyricData(filePath: string): Promise<LyricResult> {
         if (metaResult?.album) album = metaResult.album;
       } catch {
         /* use filename fallback */
+      }
+      // 某些文件没有标准标签，标题会直接沿用“艺人 - 歌名”文件名。
+      // 这里在请求网易云前拆开，避免把艺人重复拼进标题关键词。
+      if (title.includes(" - ") || title.includes("-")) {
+        const parsed = splitFilenameMetadata(title);
+        const compact = (value: string) => value.replace(/\s+/g, "").toLowerCase();
+        if (parsed.title !== title && (!artist || compact(parsed.artist) === compact(artist))) {
+          title = parsed.title;
+          if (!artist) artist = parsed.artist;
+        }
       }
 
       // Helper: fetch from Netease online

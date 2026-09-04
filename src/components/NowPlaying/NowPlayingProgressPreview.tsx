@@ -3,8 +3,8 @@
  *
  * 鼠标悬停在进度条上时，按悬停位置换算时间并定位对应歌词行，
  * 在进度条上方显示：行号、逐词词遮罩、原文、翻译、行内子进度条、起止时间。
- * 通过 portal 挂到 body（fixed 定位），让 backdrop-filter 直接采样 overlay 背景；
- * pointer-events: none，不影响拖动 seek。
+ * 通过 portal 直接挂到播放覆盖层，避免生产版 Chromium 将歌词前景层排除在
+ * backdrop-filter 的采样之外；pointer-events: none，不影响拖动 seek。
  *
  * 时间单位：本项目歌词行时间为秒，逐词时间为毫秒。
  */
@@ -230,7 +230,8 @@ export default function NowPlayingProgressPreview({ enabled, progressBarRef, lyr
     </div>
   );
 
-  // 预览卡片必须与 NowPlaying 背景处于同一顶层合成上下文，
-  // 否则生产构建后的 Chromium 可能只采样到透明 Controls 层，导致文字穿透卡片。
-  return createPortal(preview, document.body);
+  // 直接作为 .np-overlay 的子层。不要再包中间容器：它会新建堆叠上下文，
+  // 使打包版 Chromium 丢失歌词/控件层的 backdrop 采样。
+  const portalContainer = document.querySelector<HTMLElement>(".np-overlay") ?? document.body;
+  return createPortal(preview, portalContainer);
 }

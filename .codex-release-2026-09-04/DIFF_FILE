@@ -1,0 +1,8 @@
+--- D:\Code\CodeXa-Studio\src\version.ts
++++ D:\Code\CodeXa-Studio\.codex-release-2026-09-04\MODIFIED_FILE
+@@ -2,3 +2,5 @@
+ // Centralized version number - single source of truth
+ 
+ export const APP_VERSION = "2.5.6";
++
++// Release verification copy: APP_VERSION branch/field.

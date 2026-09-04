@@ -1,0 +1,50 @@
+RELEASE VERIFICATION
+
+BRANCH: master
+CHANGED BRANCH/FIELD: src/version.ts APP_VERSION; package.json version; package-lock.json root version
+
+ARTIFACTS
+MODIFIED_FILE: D:\Code\CodeXa-Studio\.codex-release-2026-09-04\MODIFIED_FILE
+DIFF_FILE: D:\Code\CodeXa-Studio\.codex-release-2026-09-04\DIFF_FILE
+VERIFICATION.txt: D:\Code\CodeXa-Studio\.codex-release-2026-09-04\VERIFICATION.txt
+ROLLBACK.sh: D:\Code\CodeXa-Studio\.codex-release-2026-09-04\ROLLBACK.sh
+
+HASH PRESERVATION
+INPUT: D:\Code\CodeXa-Studio\src\version.ts
+ORIGINAL SHA256: 2f03d49e90f103e6070ce8d43ba208bd814176165270d464bc0c65f358163919
+MODIFIED COPY SHA256: 5a589b69d254344677717f603fae385bf2745131718c38ff2f56233021edccd4
+STATUS: original source preserved; modified copy remains changed.
+
+BASELINE
+COMMAND: git show HEAD:electron/ipc-setup.js | Set-Content -NoNewline -Encoding utf8 .tmp-baseline-ipc.js; node --check .tmp-baseline-ipc.js
+INPUT: HEAD:electron/ipc-setup.js materialized as .tmp-baseline-ipc.js
+LITERAL OUTPUT: BASELINE_EXIT_STATUS=0
+RESULT: syntax check passed
+EXIT STATUS: 0
+
+MODIFIED
+COMMAND: node --check electron/ipc-setup.js
+INPUT: D:\Code\CodeXa-Studio\electron\ipc-setup.js
+LITERAL OUTPUT: MODIFIED_EXIT_STATUS=0
+RESULT: syntax check passed
+EXIT STATUS: 0
+
+ROLLBACK
+COMMAND: bash .codex-release-2026-09-04/ROLLBACK.sh .codex-release-2026-09-04/rollback-test-copy
+INPUT: a separate copy of MODIFIED_FILE
+LITERAL OUTPUT: ROLLBACK_OK
+ROLLBACK_EXIT_STATUS=0
+RESULT: rollback script completed successfully
+EXIT STATUS: 0
+RESTORED BEHAVIOR/STATUS: TARGET_SHA256=5A589B69D254344677717F603FAE385BF2745131718C38FF2F56233021EDCCD4; BACKUP_SHA256=5A589B69D254344677717F603FAE385BF2745131718C38FF2F56233021EDCCD4; WORK_SHA256=5A589B69D254344677717F603FAE385BF2745131718C38FF2F56233021EDCCD4; RESTORED=True.
+
+BUILD
+COMMAND: npm run build
+INPUT: current working tree, package version 2.5.6
+LITERAL OUTPUT: > codexa-studio@2.5.6 build; > vite build && electron-builder; ✓ built in 332ms; • building target=portable file=dist-electron\CodeXa Studio 2.5.6.exe; • building target=nsis file=dist-electron\CodeXa Studio Setup 2.5.6.exe; • building block map blockMapFile=dist-electron\CodeXa Studio Setup 2.5.6.exe.blockmap
+RESULT: Vite production build and electron-builder completed
+EXIT STATUS: 0
+
+PACKAGE STATUS
+PORTABLE: dist-electron\CodeXa Studio 2.5.6.exe
+INSTALLER: dist-electron\CodeXa Studio Setup 2.5.6.exe

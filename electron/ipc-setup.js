@@ -78,6 +78,73 @@ function stripBrackets(s) {
     .trim();
 }
 
+// 将多艺术家字段拆成可比较的独立名称。网易云搜索会把逗号、斜杠、× 等
+// 当作关键词，拆分后才能正确识别“Daoko,米津玄師”这类协作艺人。
+function splitArtistTokens(value) {
+  const normalized = normalizeFullwidth(String(value || ""))
+    .replace(/[，、；;|/／&＆+＋×]/g, ",")
+    .replace(/\s+\b(?:feat\.?|ft\.?|with)\b\s+/gi, ",")
+    .replace(/\s+x\s+/gi, ",");
+  return normalized
+    .split(",")
+    .map((item) => stripBrackets(item).trim())
+    .filter(Boolean);
+}
+
+function normalizeMatchKey(value) {
+  return normalizeFullwidth(normalizeChinese(stripBrackets(value || "")))
+    .toLowerCase()
+    .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+/gi, "");
+}
+
+// 版本/翻唱标记不是目标曲目的歌词版本，匹配时降低其优先级，避免
+// “环境音/Remix”因同时包含多个艺人名而压过原曲。
+function candidateVersionPenalty(songName, songAlbum, queryTitle) {
+  const normalizeVersionKey = (value) => normalizeFullwidth(normalizeChinese(value || ""))
+    .toLowerCase()
+    .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+/gi, "");
+  const haystack = normalizeVersionKey(`${songName || ""} ${songAlbum || ""}`);
+  const query = normalizeVersionKey(queryTitle);
+  const markers = [
+    "cover", "翻唱", "翻自", "remix", "mix", "acoustic", "live", "piano",
+    "instrumental", "伴奏", "纯音乐", "环境音", "口琴", "吉他", "钢琴", "粤语", "中文版",
+  ];
+  let penalty = 0;
+  for (const marker of markers) {
+    const key = normalizeVersionKey(marker);
+    if (key && haystack.includes(key) && !query.includes(key)) {
+      penalty += marker === "remix" || marker === "mix" || marker === "环境音" ? 0.28 : 0.16;
+    }
+  }
+  return Math.min(penalty, 0.5);
+}
+
+function hasUsableLyrics(lrc) {
+  if (typeof lrc !== "string" || !lrc.trim()) return false;
+  const meaningful = [];
+  for (const rawLine of lrc.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    let text = line;
+    if (line.startsWith("{")) {
+      try {
+        const json = JSON.parse(line);
+        text = Array.isArray(json.c) ? json.c.map((part) => part?.tx || "").join("") : "";
+      } catch {
+        text = "";
+      }
+    } else {
+      text = text.replace(/^\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]\s*/, "");
+      text = text.replace(/^\[[^\]]+\]\s*/, "");
+    }
+    text = text.trim();
+    if (!text || /^(?:作词|作曲|编曲|作詞|編曲|制作人|制作|混音|录音|監修|原唱|演唱|OP|SP|出品)[:：]/i.test(text)) continue;
+    meaningful.push(text);
+  }
+  if (meaningful.length === 0) return false;
+  return meaningful.some((text) => !/^(?:纯音乐(?:，请欣赏)?|instrumental(?:\s+music)?|伴奏|inst\.?|音乐)$/i.test(text));
+}
+
 // ── Levenshtein distance ──
 function levenshteinDistance(a, b) {
   const m = a.length, n = b.length;
@@ -107,22 +174,16 @@ function chinese2gramOverlap(a, b) {
 }
 
 function scoreMatch(songName, songArtists, queryTitle, queryArtist, queryAlbum, songAlbum) {
-  const toLower = (s) => normalizeFullwidth((s || "").toLowerCase()).replace(/\s+/g, " ").trim();
-
-  // Normalize: strip brackets + normalize Chinese
+  const toLower = (value) => normalizeFullwidth((value || "").toLowerCase()).replace(/\s+/g, " ").trim();
   const snRaw = toLower(normalizeChinese(stripBrackets(songName || "")));
   const qtRaw = toLower(normalizeChinese(stripBrackets(queryTitle || "")));
   const sn = toLower(normalizeChinese(songName || ""));
   const qt = toLower(normalizeChinese(queryTitle || ""));
-  const qa = toLower(normalizeChinese(queryArtist || ""));
-
   let score = 0;
 
-  // Title exact match (raw or stripped)
+  // 标题优先：原曲通常是精确标题，翻唱/混音会在标题中附加版本标记。
   if (sn === qt || snRaw === qtRaw) score += 0.5;
-  // Title contains query or vice versa
   else if (sn.includes(qt) || qt.includes(sn) || snRaw.includes(qtRaw) || qtRaw.includes(snRaw)) score += 0.38;
-  // Levenshtein + Chinese 2-gram + word overlap
   else {
     const maxLen = Math.max(sn.length, qt.length);
     if (maxLen > 3) {
@@ -131,59 +192,55 @@ function scoreMatch(songName, songArtists, queryTitle, queryArtist, queryAlbum, 
       if (ratio > 0.8) score += 0.25;
       else if (ratio > 0.6) score += 0.12;
     }
-    // Chinese 2-gram overlap
     const c2g = chinese2gramOverlap(sn, qt);
     if (c2g > 0.4) score += 0.18 * c2g;
-    // Word overlap (Latin languages)
     const snWords = new Set(sn.split(" "));
     const qtWords = new Set(qt.split(" "));
     let overlap = 0;
-    for (const w of qtWords) { if (snWords.has(w)) overlap++; }
+    for (const word of qtWords) if (word && snWords.has(word)) overlap++;
     if (overlap > 0) score += 0.12 * (overlap / Math.max(qtWords.size, 1));
   }
 
-  // ★ Bonus for raw (unstripped) title match — helps distinguish song versions
-  // When stripBrackets removes version info, exact raw match breaks the tie
+  // 原始标题精确匹配奖励，用于区分同名的不同版本。
   if (sn !== snRaw && qt !== qtRaw) {
     if (sn === qt) score += 0.15;
     else if (sn.includes(qt) || qt.includes(sn)) score += 0.10;
-    // 2-gram overlap on raw strings for version-specific matching
     else {
       const raw2g = chinese2gramOverlap(sn, qt);
       if (raw2g > 0.5) score += 0.08 * raw2g;
     }
   }
 
-  // Artist matching (with Chinese normalization)
-  if (qa && songArtists && songArtists.length > 0) {
-    const artistNames = songArtists.map(a => toLower(normalizeChinese(typeof a === "string" ? a : a.name || "")));
-    for (const an of artistNames) {
-      if (an === qa) { score += 0.4; break; }
-      else if (an.includes(qa) || qa.includes(an)) { score += 0.28; break; }
+  // 多艺术家按 token 匹配，不再把“Daoko,米津玄師”当成一个整体字符串。
+  const queryArtists = splitArtistTokens(queryArtist).map(normalizeMatchKey).filter(Boolean);
+  const songArtistKeys = (songArtists || [])
+    .map((artist) => normalizeMatchKey(typeof artist === "string" ? artist : artist?.name || ""))
+    .filter(Boolean);
+  if (queryArtists.length && songArtistKeys.length) {
+    let matched = 0;
+    for (const queryArtistKey of queryArtists) {
+      if (songArtistKeys.some((songArtistKey) => songArtistKey === queryArtistKey || songArtistKey.includes(queryArtistKey) || queryArtistKey.includes(songArtistKey))) matched++;
     }
-  } else if (!qa) {
+    if (matched === queryArtists.length) score += 0.4;
+    else if (matched > 0) score += 0.28 * (matched / queryArtists.length);
+  } else if (!queryArtists.length) {
     score += 0.2;
   }
 
-  // Album matching — helps distinguish different versions of the same song
   if (queryAlbum && songAlbum) {
-    const qal = toLower(normalizeChinese(queryAlbum || ""));
-    const sal = toLower(normalizeChinese(songAlbum || ""));
+    const qal = toLower(normalizeChinese(queryAlbum));
+    const sal = toLower(normalizeChinese(songAlbum));
     if (qal && sal) {
       if (qal === sal) score += 0.3;
       else if (qal.includes(sal) || sal.includes(qal)) score += 0.18;
       else {
         const maxLen = Math.max(qal.length, sal.length);
-        if (maxLen > 3) {
-          const dist = levenshteinDistance(qal, sal);
-          const ratio = 1 - dist / maxLen;
-          if (ratio > 0.7) score += 0.10;
-        }
+        if (maxLen > 3 && 1 - levenshteinDistance(qal, sal) / maxLen > 0.7) score += 0.10;
       }
     }
   }
 
-  return score;
+  return Math.max(0, score - candidateVersionPenalty(songName, songAlbum, queryTitle));
 }
 
 // ── General HTTPS request helper (for non-QQ services) ──
@@ -232,31 +289,44 @@ function httpRequest(url, options = {}) {
 }
 // ── Multi-query lyrics search helper: try different query formulations ──
 async function searchLyricsMultiQuery(title, artist, album, searchFn) {
-  // Build query variants: stripped versions without brackets/feat
+  // 标题优先，再用拆分后的艺人名补充查询。把所有艺人拼成一个关键词会
+  // 把网易云结果推向“环境音/混音”等包含多个名字的错误版本。
   const strippedTitle = stripBrackets(title);
   const strippedArtist = artist ? stripBrackets(artist) : "";
-
-  const queries = [];
+  const artistTokens = splitArtistTokens(artist);
+  const queries = [{ title, artist: "" }];
+  for (const token of artistTokens) queries.push({ title, artist: token });
   if (artist) queries.push({ title, artist });
-  queries.push({ title, artist: "" });
-  if (strippedTitle !== title && artist) queries.push({ title: strippedTitle, artist: strippedArtist || artist });
-  if (strippedTitle !== title) queries.push({ title: strippedTitle, artist: "" });
+  if (strippedTitle !== title) {
+    queries.push({ title: strippedTitle, artist: "" });
+    for (const token of splitArtistTokens(strippedArtist || artist)) queries.push({ title: strippedTitle, artist: token });
+    if (artist) queries.push({ title: strippedTitle, artist: strippedArtist || artist });
+  }
 
-  // Deduplicate queries
   const seen = new Set();
   const unique = [];
   for (const q of queries) {
-    const key = q.title + "|" + (q.artist || "");
+    const key = `${q.title}|${q.artist || ""}`.toLowerCase();
     if (!seen.has(key)) { seen.add(key); unique.push(q); }
   }
-
+  let bestResult = null;
+  let bestScore = -Infinity;
   for (const q of unique) {
     try {
       const result = await searchFn(q.title, q.artist, album);
-      if (result) return result;
+      if (result) {
+        const score = Number.isFinite(result._score) ? result._score : 0;
+        if (!bestResult || score > bestScore) {
+          bestResult = result;
+          bestScore = score;
+        }
+        // 精确标题 + 艺人已得到高置信结果时无需继续请求剩余查询，
+        // 避免多艺术家文件产生过多网易云歌词请求。
+        if (bestScore >= 0.9) break;
+      }
     } catch {}
   }
-  return null;
+  return bestResult;
 }
 
 // ── Music: Online Lyrics Search (Netease) ──
@@ -480,55 +550,44 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
       const songs = searchRes?.result?.songs;
       if (!songs || songs.length === 0) return null;
 
-      let best = null;
-      let bestScore = -1;
-      let bestRawDist = Infinity;
-      for (const s of songs) {
-        const score = scoreMatch(s.name, s.ar, t, a, al, s.al?.name);
-        // Tie-breaking: when scores are very close, prefer the song whose
-        // raw (unstripped) title is closest to the query — this resolves
-        // version conflicts (e.g., "2017 Mix" vs "10 years after Ver.")
-        if (score > bestScore + 0.02) {
-          bestScore = score;
-          best = s;
-          bestRawDist = levenshteinDistance(
-            normalizeFullwidth(s.name.toLowerCase()),
-            normalizeFullwidth((t || "").toLowerCase())
-          );
-        } else if (Math.abs(score - bestScore) <= 0.02 && best) {
-          const rawDist = levenshteinDistance(
-            normalizeFullwidth(s.name.toLowerCase()),
-            normalizeFullwidth((t || "").toLowerCase())
-          );
-          if (rawDist < bestRawDist) {
-            best = s;
-            bestRawDist = rawDist;
-          }
-        }
-      }
+      const ranked = songs
+        .map((song) => ({ song, score: scoreMatch(song.name, song.ar, t, a, al, song.al?.name) }))
+        .sort((left, right) => {
+          if (Math.abs(right.score - left.score) > 0.02) return right.score - left.score;
+          const leftDist = levenshteinDistance(normalizeFullwidth((left.song.name || "").toLowerCase()), normalizeFullwidth((t || "").toLowerCase()));
+          const rightDist = levenshteinDistance(normalizeFullwidth((right.song.name || "").toLowerCase()), normalizeFullwidth((t || "").toLowerCase()));
+          return leftDist - rightDist;
+        });
 
-      if (!best || bestScore < 0.3) return null;
-
-      const body = await lyric({ id: best.id });
-      const lrc = body?.lrc?.lyric;
-      const tlyric = body?.tlyric?.lyric;
-      let romalrc = body?.romalrc?.lyric;
-      const yrc = body?.yrc?.lyric;
-      // 缺少 romalrc 时本地生成罗马音（仅日文歌词）
-      if (!romalrc && lrc) {
+      // 只检查排名靠前的少量候选；纯音乐/环境音没有可同步歌词时继续尝试，
+      // 防止它们因标题中包含艺人名而截断后续正确结果。
+      for (const { song: candidate, score } of ranked.slice(0, 8)) {
+        if (score < 0.2) continue;
+        let body;
         try {
-          const generated = await toRomajiLrc(lrc);
-          if (generated) {
-            romalrc = generated;
-            console.log(`[Lyrics:Netease] Generated romaji, id=${best.id}`);
-          }
-        } catch (e) {
-          console.warn("[Lyrics:Romaji]", e.message);
+          body = await lyric({ id: candidate.id });
+        } catch {
+          continue;
         }
-      }
-      if (lrc) {
-        console.log(`[Lyrics:Netease] Found, score=${bestScore.toFixed(2)}, id=${best.id}, album="${best.al?.name || ""}", hasTrans=${!!tlyric}, hasRoma=${!!romalrc}, hasDyn=${!!yrc}`);
-        return { text: lrc, translated_text: tlyric || "", roman_text: romalrc || "", dynamic_text: yrc || "", source: "netease" };
+        const lrc = body?.lrc?.lyric;
+        if (!hasUsableLyrics(lrc)) continue;
+        const tlyric = body?.tlyric?.lyric;
+        let romalrc = body?.romalrc?.lyric;
+        const yrc = body?.yrc?.lyric;
+        // 缺少 romalrc 时本地生成罗马音（仅日文歌词）
+        if (!romalrc && lrc) {
+          try {
+            const generated = await toRomajiLrc(lrc);
+            if (generated) {
+              romalrc = generated;
+              console.log(`[Lyrics:Netease] Generated romaji, id=${candidate.id}`);
+            }
+          } catch (e) {
+            console.warn("[Lyrics:Romaji]", e.message);
+          }
+        }
+        console.log(`[Lyrics:Netease] Found, score=${score.toFixed(2)}, id=${candidate.id}, album="${candidate.al?.name || ""}", hasTrans=${!!tlyric}, hasRoma=${!!romalrc}, hasDyn=${!!yrc}`);
+        return { text: lrc, translated_text: tlyric || "", roman_text: romalrc || "", dynamic_text: yrc || "", source: "netease", _score: score };
       }
       return null;
     } catch (e) {
@@ -760,4 +819,8 @@ ipcMain.handle("music:downloadCoverImage", async (_event, url) => {
 
 }
 
-module.exports = { setupIPC };
+module.exports = {
+  setupIPC,
+  // 保留纯函数导出供离线回归测试使用，不改变运行时 IPC API。
+  __test: { splitArtistTokens, normalizeMatchKey, candidateVersionPenalty, hasUsableLyrics, scoreMatch, searchLyricsMultiQuery },
+};

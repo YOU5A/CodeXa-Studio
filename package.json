@@ -1,6 +1,6 @@
 {
   "name": "codexa-studio",
-  "version": "2.5.5",
+  "version": "2.5.6",
   "description": "CodeXa Studio - Windows 系统调优一体化工具箱",
   "main": "electron/main.js",
   "scripts": {

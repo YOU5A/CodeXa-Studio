@@ -236,7 +236,6 @@
   border: 0.5px solid var(--border-strong);
   /* 保留透明度给 backdrop-filter，同时提供一层稳定底色，避免合成失败时文字穿透。 */
   background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)), rgba(18,20,30,0.42);
-  backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   box-shadow: 0 12px 48px rgba(0,0,0,0.45);
   overflow: hidden;
@@ -247,6 +246,13 @@
   isolation: auto;
   will-change: opacity;
   transition: opacity 0.15s ease;
+}
+/* Lightning CSS 在生产压缩时可能折叠标准属性，只保留 WebKit 前缀；
+   用特性查询单独声明，确保打包后的 Electron 仍启用真实背景采样。 */
+@supports (backdrop-filter: blur(0px)) {
+  .np-progressbar-preview {
+    backdrop-filter: blur(24px) saturate(1.5);
+  }
 }
 .np-progressbar-preview.invisible {
   opacity: 0;
