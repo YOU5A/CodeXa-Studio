@@ -149,18 +149,20 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
               inline={false}
               onClick={() => onNavigate(item.id)}
               onMouseEnter={() => onPreload?.(item.id)}
-              whileHover={isActive ? { background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)" } : undefined}
+              whileHover={isActive ? { background: "rgba(255, 255, 255, 0.18)", color: "var(--text-primary)" } : undefined}
               initial={isNewNcm ? { opacity: 0, y: -10 } : undefined}
               animate={isNewNcm ? { opacity: 1, y: 0 } : undefined}
               style={{
                 justifyContent: "flex-start",
-                color: isActive ? "var(--accent)" : "var(--text-secondary)",
-                fontWeight: isActive ? 500 : 400,
-                background: isActive ? "var(--accent-bg-fade)" : "transparent",
+                color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                fontWeight: isActive ? 600 : 400,
+                background: isActive ? "var(--glass-vision-active)" : "transparent",
+                boxShadow: isActive ? "var(--glass-vision-shadow)" : "none",
                 borderRadius: 10,
                 padding: settings.compactMode ? "8px 10px" : "10px 14px",
                 fontSize: settings.compactMode ? 12 : 13,
                 width: "100%",
+                transition: "background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
               }}
               {...{ "data-nav-id": item.id }}
             >

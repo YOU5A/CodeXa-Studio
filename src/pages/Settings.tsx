@@ -177,12 +177,35 @@ export default function Settings() {
     }).catch(() => {});
   }, []);
 
+  const handleAutoStartChange = async (val: boolean) => {
+    setElectronSettings(prev => ({ ...prev, autoStart: val }));
+    try {
+      await window.electronAPI?.settings.set("autoStart", val);
+    } catch (err) {
+      console.error("[Settings] Failed to set autoStart:", err);
+      setElectronSettings(prev => ({ ...prev, autoStart: !val }));
+    }
+  };
+
+  const handleCloseToTrayChange = async (val: boolean) => {
+    setElectronSettings(prev => ({ ...prev, closeToTray: val }));
+    try {
+      await window.electronAPI?.settings.set("closeToTray", val);
+    } catch (err) {
+      console.error("[Settings] Failed to set closeToTray:", err);
+      setElectronSettings(prev => ({ ...prev, closeToTray: !val }));
+    }
+  };
+
   const handleReset = async () => {
     const ok = await confirm({ title: tx.resetConfirm, danger: true });
     if (!ok) return;
     resetSettings();
     window.electronAPI?.settings.set("rememberSize", true);
     window.electronAPI?.settings.set("rememberPosition", true);
+    window.electronAPI?.settings.set("autoStart", false);
+    window.electronAPI?.settings.set("closeToTray", false);
+    setElectronSettings({ autoStart: false, closeToTray: false });
     window.electronAPI?.settings.resetBounds();
     showToast(tx.resetSuccess, "success");
   };
@@ -240,6 +263,8 @@ export default function Settings() {
           updateSettings={updateSettings}
           autoStart={electronSettings.autoStart}
           closeToTray={electronSettings.closeToTray}
+          onAutoStartChange={handleAutoStartChange}
+          onCloseToTrayChange={handleCloseToTrayChange}
         />
 
         <InterfaceSection

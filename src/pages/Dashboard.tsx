@@ -2,21 +2,30 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
+  ArrowUpRight,
+  CheckCircle2,
   CircleAlert,
   Cpu,
   HardDrive,
+  Laptop,
   MemoryStick,
+  Monitor,
   MonitorCog,
   ShieldAlert,
   ShieldCheck,
+  Sliders,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import { GlassBadge, GlassProgressBar } from "@/design-system/components";
 import { space, radii, fontSizes } from "@/design-system/tokens";
-import { STORAGE_DASHBOARD_HARDWARE } from "@/constants/storage-keys";
+import {
+  STORAGE_DASHBOARD_HARDWARE,
+  STORAGE_DASHBOARD_SYSINFO,
+  STORAGE_DASHBOARD_TREND,
+} from "@/constants/storage-keys";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
-import type { SystemInfo } from "@/types";
+import type { Page, SystemInfo } from "@/types";
 
 const t = {
   zh: {
@@ -43,12 +52,29 @@ const t = {
     cores: "核",
     threads: "线程",
     currentConfiguration: "当前配置",
-    win32Value: "当前 Win32 值",
-    gpuName: "显卡名称",
+    win32Value: "Win32 调度优先级",
+    gpuName: "显示适配器名称",
     decimal: "十进制",
     hex: "十六进制",
     loadingValue: "读取中...",
     valueUnavailable: "暂不可用",
+    configure: "前往管理",
+    ratio: "前后台比",
+    quantum: "时间片",
+    priorityMode: "调度模式",
+    quantumShort: "短间隔 (Short)",
+    quantumLong: "长间隔 (Long)",
+    priorityFixed: "固定 (Fixed)",
+    priorityVariable: "可变 (Variable)",
+    laptop: "笔记本电脑",
+    desktop: "台式电脑",
+    activeDevice: "当前生效设备",
+    gpuSafeNotice: "支持免驱动改名与安全备份恢复",
+    highestFps: "最高FPS / 游戏优化",
+    fastResponse: "快速响应 / 1:1分配",
+    programDefault: "程序默认 (Win10+)",
+    backgroundDefault: "后台服务默认",
+    smoothest: "最平滑 / 前台优先",
   },
   en: {
     title: "Dashboard",
@@ -74,12 +100,29 @@ const t = {
     cores: "C",
     threads: "T",
     currentConfiguration: "Current Configuration",
-    win32Value: "Current Win32 Value",
-    gpuName: "GPU Name",
+    win32Value: "Win32 Priority Separation",
+    gpuName: "Display Adapter Name",
     decimal: "Decimal",
     hex: "Hexadecimal",
     loadingValue: "Reading...",
     valueUnavailable: "Unavailable",
+    configure: "Configure",
+    ratio: "Ratio",
+    quantum: "Quantum",
+    priorityMode: "Mode",
+    quantumShort: "Short Quantum",
+    quantumLong: "Long Quantum",
+    priorityFixed: "Fixed",
+    priorityVariable: "Variable",
+    laptop: "Laptop",
+    desktop: "Desktop",
+    activeDevice: "Active Adapter",
+    gpuSafeNotice: "Supports safe rename & restore",
+    highestFps: "Best FPS / Gaming",
+    fastResponse: "Fast Response / 1:1",
+    programDefault: "Default (Win10+)",
+    backgroundDefault: "Background Services",
+    smoothest: "Smoothest / Foreground",
   },
 };
 
@@ -141,13 +184,17 @@ function Sparkline({ values, color, label, noDataLabel }: { values: number[]; co
   const width = 176;
   const height = 44;
   const latest = values.length > 0 ? values[values.length - 1] : null;
-  const points = values.length > 0
-    ? values.map((value, index) => {
-        const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+
+  // When only 1 point is available, span it across the full width [val, val] so a horizontal line is immediately visible
+  const effectiveValues = values.length === 1 ? [values[0], values[0]] : values;
+
+  const points = effectiveValues.length > 0
+    ? effectiveValues.map((value, index) => {
+        const x = (index / (effectiveValues.length - 1)) * width;
         const y = height - 4 - (Math.max(0, Math.min(100, value)) / 100) * (height - 8);
-        return `${x},${y}`;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
       }).join(" ")
-    : `${width / 2},${height / 2}`;
+    : null;
 
   return (
     <svg
@@ -158,7 +205,7 @@ function Sparkline({ values, color, label, noDataLabel }: { values: number[]; co
       style={{ width: "100%", height, display: "block", color }}
     >
       <line x1="0" y1="40" x2={width} y2="40" stroke="currentColor" strokeWidth="1" opacity="0.14" />
-      {values.length > 0 && (
+      {points && (
         <polyline fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" points={points} />
       )}
     </svg>
@@ -175,6 +222,8 @@ function MetricBlock({ icon, label, value, detail, values, color, noDataLabel }:
   noDataLabel: string;
 }) {
   const progressColor = value === null ? "accent" : getProgressColor(value);
+  // If values array is empty but we have a non-null current value, synthesize [value] so Sparkline immediately draws
+  const effectiveValues = values.length === 0 && value !== null ? [value] : values;
 
   return (
     <div style={{ minWidth: 0 }}>
@@ -187,7 +236,7 @@ function MetricBlock({ icon, label, value, detail, values, color, noDataLabel }:
       </div>
       <GlassProgressBar value={value ?? 0} color={progressColor} height={4} />
       <div style={{ marginTop: space[2], marginBottom: space[1], padding: "0 2px" }}>
-        <Sparkline values={values} color={color} label={label} noDataLabel={noDataLabel} />
+        <Sparkline values={effectiveValues} color={color} label={label} noDataLabel={noDataLabel} />
       </div>
       <div style={{ color: "var(--text-tertiary)", fontSize: fontSizes.xs, fontVariantNumeric: "tabular-nums", minHeight: 17 }}>
         {detail}
@@ -327,12 +376,64 @@ interface Win32ValueSnapshot {
 
 interface GpuDetectionSnapshot {
   adapters?: Array<{ name?: string }>;
+  formFactor?: "laptop" | "desktop";
+  isLaptop?: boolean;
   error?: string;
 }
 
 interface DashboardHardwareCache {
   win32Value: Win32ValueSnapshot | null;
   gpuName: string | null;
+  gpuFormFactor: "laptop" | "desktop" | null;
+}
+
+const win32Presets: Record<
+  number,
+  {
+    aa: "short" | "long";
+    bb: "fixed" | "variable";
+    cc: "3:1" | "2:1" | "1:1";
+    effect?: "highestFps" | "fastResponse" | "programDefault" | "backgroundDefault" | "smoothest";
+  }
+> = {
+  42: { aa: "short", bb: "fixed", cc: "3:1", effect: "highestFps" },
+  41: { aa: "short", bb: "fixed", cc: "2:1" },
+  40: { aa: "short", bb: "fixed", cc: "1:1", effect: "fastResponse" },
+  38: { aa: "short", bb: "variable", cc: "3:1", effect: "programDefault" },
+  37: { aa: "short", bb: "variable", cc: "2:1" },
+  36: { aa: "short", bb: "variable", cc: "1:1" },
+  26: { aa: "long", bb: "fixed", cc: "3:1" },
+  25: { aa: "long", bb: "fixed", cc: "2:1" },
+  24: { aa: "long", bb: "fixed", cc: "1:1", effect: "backgroundDefault" },
+  22: { aa: "long", bb: "variable", cc: "3:1", effect: "smoothest" },
+  21: { aa: "long", bb: "variable", cc: "2:1" },
+  20: { aa: "long", bb: "variable", cc: "1:1" },
+};
+
+function parseWin32Separation(value: number | null, tx: typeof t.zh) {
+  if (value === null || isNaN(value)) return null;
+  const preset = win32Presets[value];
+  if (preset) {
+    return {
+      ratio: preset.cc,
+      quantum: preset.aa === "short" ? tx.quantumShort : tx.quantumLong,
+      mode: preset.bb === "fixed" ? tx.priorityFixed : tx.priorityVariable,
+      effect: preset.effect ? tx[preset.effect] : null,
+    };
+  }
+  const aaBits = value & 3;
+  const isShort = aaBits === 2;
+  const bbBits = (value >> 2) & 3;
+  const isFixed = bbBits === 2;
+  const ccBits = (value >> 4) & 3;
+  const ratio = ccBits === 1 ? "3:1" : ccBits === 2 ? "2:1" : "1:1";
+
+  return {
+    ratio,
+    quantum: isShort ? tx.quantumShort : tx.quantumLong,
+    mode: isFixed ? tx.priorityFixed : tx.priorityVariable,
+    effect: null,
+  };
 }
 
 function readDashboardHardwareCache(): DashboardHardwareCache {
@@ -340,12 +441,14 @@ function readDashboardHardwareCache(): DashboardHardwareCache {
     const cached = JSON.parse(localStorage.getItem(STORAGE_DASHBOARD_HARDWARE) || "null") as Partial<DashboardHardwareCache> | null;
     const win32Value = cached?.win32Value;
     const gpuName = typeof cached?.gpuName === "string" && cached.gpuName.trim() ? cached.gpuName : null;
+    const gpuFormFactor = cached?.gpuFormFactor === "laptop" || cached?.gpuFormFactor === "desktop" ? cached.gpuFormFactor : null;
     return {
       win32Value: win32Value && typeof win32Value.value === "number" ? win32Value : null,
       gpuName,
+      gpuFormFactor,
     };
   } catch {
-    return { win32Value: null, gpuName: null };
+    return { win32Value: null, gpuName: null, gpuFormFactor: null };
   }
 }
 
@@ -360,71 +463,199 @@ function formatWin32Hex(value: number): string {
   return `0x${value.toString(16).toUpperCase().padStart(8, "0")}`;
 }
 
-function CurrentValuesPanel({ win32Value, gpuName, loading, tx }: {
+function CurrentValuesPanel({
+  win32Value,
+  gpuName,
+  gpuFormFactor,
+  loading,
+  tx,
+  onNavigate,
+}: {
   win32Value: Win32ValueSnapshot | null;
   gpuName: string | null;
+  gpuFormFactor: "laptop" | "desktop" | null;
   loading: boolean;
   tx: typeof t.zh;
+  onNavigate?: (page: Page) => void;
 }) {
   const numericValue = typeof win32Value?.decimal === "number"
     ? win32Value.decimal
     : typeof win32Value?.value === "number" ? win32Value.value : null;
   const hexValue = numericValue === null ? null : win32Value?.hex || formatWin32Hex(numericValue);
+  const parsedWin32 = parseWin32Separation(numericValue, tx);
 
   return (
-    <GlassCard noHover style={{ overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <PanelHeader icon={<MonitorCog size={18} />} title={tx.currentConfiguration} />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: space[4], alignItems: "stretch", height: "100%", minHeight: 0 }}>
+      {/* Win32 Card */}
+      <GlassCard
+        onClick={() => onNavigate?.("win32priority")}
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: `${space[5]}px ${space[6]}px`,
+          position: "relative",
+          outline: "none",
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[3] }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], color: "var(--text-secondary)", fontSize: fontSizes.sm, fontWeight: 500 }}>
+              <Sliders size={16} style={{ color: "var(--accent)" }} aria-hidden="true" />
+              <span>{tx.win32Value}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-tertiary)", fontSize: fontSizes.xs, transition: "color 0.2s" }}>
+              <span>{tx.configure}</span>
+              <ArrowUpRight size={13} />
+            </div>
+          </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: space[5], alignItems: "stretch", flex: 1, minHeight: 0 }}>
-        <section
-          aria-labelledby="dashboard-win32-value"
-          style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: `${space[5]}px ${space[6]}px`, borderRadius: radii.lg, background: "var(--bg-tertiary)" }}
-        >
-            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[4] }}>
-              <div id="dashboard-win32-value" style={{ display: "flex", alignItems: "center", gap: space[2], color: "var(--text-secondary)", fontSize: fontSizes.sm }}>
-                <Activity size={16} aria-hidden="true" />
-                {tx.win32Value}
-              </div>
-              <span style={{ color: "var(--text-tertiary)", fontSize: fontSizes.xs }}>· {tx.hex}</span>
+          <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: space[3], marginBottom: space[2] }}>
+            <div style={{ color: "var(--accent)", fontSize: fontSizes["3xl"], fontWeight: 600, letterSpacing: "-0.04em", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>
+              {loading ? tx.loadingValue : hexValue ?? tx.valueUnavailable}
+            </div>
+            <div style={{ color: "var(--text-tertiary)", fontSize: fontSizes.sm, fontVariantNumeric: "tabular-nums" }}>
+              {tx.decimal} <strong style={{ color: "var(--text-primary)", fontWeight: 600 }}>{loading ? "—" : numericValue ?? "—"}</strong>
+            </div>
           </div>
-          <div style={{ color: "var(--accent)", fontSize: fontSizes["3xl"], fontWeight: 600, letterSpacing: "-0.04em", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {loading ? tx.loadingValue : hexValue ?? tx.valueUnavailable}
-          </div>
-          <div style={{ marginTop: space[3], color: "var(--text-tertiary)", fontSize: fontSizes.sm, fontVariantNumeric: "tabular-nums" }}>
-            {tx.decimal} <strong style={{ color: "var(--text-primary)", fontWeight: 600 }}>{loading ? "—" : numericValue ?? "—"}</strong>
-          </div>
-        </section>
 
-        <section
-          aria-labelledby="dashboard-gpu-name"
-          style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: `${space[5]}px ${space[6]}px`, borderRadius: radii.lg, background: "var(--bg-tertiary)" }}
-        >
-          <div id="dashboard-gpu-name" style={{ display: "flex", alignItems: "center", gap: space[2], color: "var(--text-secondary)", fontSize: fontSizes.sm, marginBottom: space[3] }}>
-            <MonitorCog size={16} aria-hidden="true" />
-            {tx.gpuName}
+          {parsedWin32?.effect && (
+            <div style={{ marginBottom: space[2] }}>
+              <GlassBadge size="sm" variant="accent">{parsedWin32.effect}</GlassBadge>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: space[2], marginTop: space[4], paddingTop: space[3], borderTop: "1px solid var(--border-color)" }}>
+          <div style={{ padding: "6px 8px", borderRadius: radii.md, background: "color-mix(in srgb, var(--bg-tertiary) 60%, transparent)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+            <div style={{ color: "var(--text-tertiary)", fontSize: 11, marginBottom: 2 }}>{tx.ratio}</div>
+            <div style={{ color: "var(--text-primary)", fontSize: fontSizes.xs, fontWeight: 600 }}>{parsedWin32 ? parsedWin32.ratio : "—"}</div>
           </div>
-          <div style={{ color: "var(--text-primary)", fontSize: fontSizes["2xl"], fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={gpuName ?? undefined}>
+          <div style={{ padding: "6px 8px", borderRadius: radii.md, background: "color-mix(in srgb, var(--bg-tertiary) 60%, transparent)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+            <div style={{ color: "var(--text-tertiary)", fontSize: 11, marginBottom: 2 }}>{tx.quantum}</div>
+            <div style={{ color: "var(--text-primary)", fontSize: fontSizes.xs, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={parsedWin32?.quantum}>
+              {parsedWin32 ? parsedWin32.quantum.split(" ")[0] : "—"}
+            </div>
+          </div>
+          <div style={{ padding: "6px 8px", borderRadius: radii.md, background: "color-mix(in srgb, var(--bg-tertiary) 60%, transparent)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+            <div style={{ color: "var(--text-tertiary)", fontSize: 11, marginBottom: 2 }}>{tx.priorityMode}</div>
+            <div style={{ color: "var(--text-primary)", fontSize: fontSizes.xs, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={parsedWin32?.mode}>
+              {parsedWin32 ? parsedWin32.mode.split(" ")[0] : "—"}
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* GPU Card */}
+      <GlassCard
+        onClick={() => onNavigate?.("backupcenter")}
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: `${space[5]}px ${space[6]}px`,
+          position: "relative",
+          outline: "none",
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[3] }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], color: "var(--text-secondary)", fontSize: fontSizes.sm, fontWeight: 500 }}>
+              <MonitorCog size={16} style={{ color: "var(--accent)" }} aria-hidden="true" />
+              <span>{tx.gpuName}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-tertiary)", fontSize: fontSizes.xs, transition: "color 0.2s" }}>
+              <span>{tx.configure}</span>
+              <ArrowUpRight size={13} />
+            </div>
+          </div>
+
+          <div
+            style={{
+              color: "var(--text-primary)",
+              fontSize: fontSizes["2xl"],
+              fontWeight: 600,
+              lineHeight: 1.3,
+              overflowWrap: "anywhere",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              minHeight: 56,
+            }}
+            title={gpuName ?? undefined}
+          >
             {loading ? tx.loadingValue : gpuName ?? tx.valueUnavailable}
           </div>
-        </section>
-      </div>
-    </GlassCard>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], marginTop: space[2], marginBottom: space[2] }}>
+            {gpuFormFactor && (
+              <GlassBadge size="sm" variant="default">
+                {gpuFormFactor === "laptop" ? <Laptop size={12} /> : <Monitor size={12} />}
+                {gpuFormFactor === "laptop" ? tx.laptop : tx.desktop}
+              </GlassBadge>
+            )}
+            <GlassBadge size="sm" variant="success">
+              <CheckCircle2 size={12} />
+              {tx.activeDevice}
+            </GlassBadge>
+          </div>
+        </div>
+
+        <div style={{ marginTop: space[4], paddingTop: space[3], borderTop: "1px solid var(--border-color)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2], padding: "7px 10px", borderRadius: radii.md, background: "color-mix(in srgb, var(--bg-tertiary) 60%, transparent)", border: "1px solid var(--border-color)", color: "var(--text-tertiary)", fontSize: fontSizes.xs }}>
+            <ShieldCheck size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {tx.gpuSafeNotice}
+            </span>
+          </div>
+        </div>
+      </GlassCard>
+    </div>
   );
 }
 
-// Module-level cache to avoid reset on page re-entry
-let cachedSysInfo: SystemInfo | null = null;
-let cachedTrend: MetricPoint[] = [];
+interface DashboardSystemCache {
+  sysInfo: SystemInfo | null;
+  trend: MetricPoint[];
+}
 
-export default function Dashboard() {
+function readDashboardSystemCache(): DashboardSystemCache {
+  try {
+    const rawSys = localStorage.getItem(STORAGE_DASHBOARD_SYSINFO);
+    const rawTrend = localStorage.getItem(STORAGE_DASHBOARD_TREND);
+    const sysInfo = rawSys ? (JSON.parse(rawSys) as SystemInfo) : null;
+    const trend = rawTrend ? (JSON.parse(rawTrend) as MetricPoint[]) : [];
+    return {
+      sysInfo: sysInfo && typeof sysInfo.cpu_percent === "number" ? sysInfo : null,
+      trend: Array.isArray(trend) ? trend : [],
+    };
+  } catch {
+    return { sysInfo: null, trend: [] };
+  }
+}
+
+// Module-level cache to avoid reset on page re-entry, primed immediately from localStorage
+const initialSystemCache = readDashboardSystemCache();
+let cachedSysInfo: SystemInfo | null = initialSystemCache.sysInfo;
+let cachedTrend: MetricPoint[] = initialSystemCache.trend;
+
+export interface DashboardProps {
+  onNavigate?: (page: Page) => void;
+}
+
+export default function Dashboard({ onNavigate }: DashboardProps = {}) {
   const { lang } = useLanguage();
   const { settings } = useTheme();
   const tx = t[lang];
   const [cachedHardware] = useState(readDashboardHardwareCache);
-  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(cachedSysInfo);
-  const [trend, setTrend] = useState<MetricPoint[]>(cachedTrend);
+  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(() => cachedSysInfo ?? readDashboardSystemCache().sysInfo);
+  const [trend, setTrend] = useState<MetricPoint[]>(() => cachedTrend.length > 0 ? cachedTrend : readDashboardSystemCache().trend);
   const [win32Value, setWin32Value] = useState<Win32ValueSnapshot | null>(cachedHardware.win32Value);
   const [gpuName, setGpuName] = useState<string | null>(cachedHardware.gpuName);
+  const [gpuFormFactor, setGpuFormFactor] = useState<"laptop" | "desktop" | null>(cachedHardware.gpuFormFactor);
   const [hardwareLoading, setHardwareLoading] = useState(!cachedHardware.win32Value && !cachedHardware.gpuName);
   const lastGoodCpu = useRef(cachedSysInfo?.cpu_percent ?? 0);
 
@@ -450,6 +681,13 @@ export default function Dashboard() {
         };
         cachedTrend = [...cachedTrend.slice(-23), nextPoint];
         setTrend(cachedTrend);
+
+        try {
+          localStorage.setItem(STORAGE_DASHBOARD_SYSINFO, JSON.stringify(nextInfo));
+          localStorage.setItem(STORAGE_DASHBOARD_TREND, JSON.stringify(cachedTrend));
+        } catch {
+          // Cache is an enhancement; live RPC result remains authoritative.
+        }
       } catch {
         // Keep the last known-good snapshot visible when a poll fails.
       }
@@ -479,6 +717,7 @@ export default function Dashboard() {
 
       let nextWin32Value = cachedHardware.win32Value;
       let nextGpuName = cachedHardware.gpuName;
+      let nextGpuFormFactor = cachedHardware.gpuFormFactor;
 
       if (win32Result.status === "fulfilled") {
         const snapshot = unwrapBridgeResult<Win32ValueSnapshot>(win32Result.value);
@@ -492,12 +731,18 @@ export default function Dashboard() {
         const snapshot = unwrapBridgeResult<GpuDetectionSnapshot>(gpuResult.value);
         if (snapshot && !snapshot.error) {
           nextGpuName = snapshot.adapters?.map((adapter) => adapter.name?.trim()).filter(Boolean).join(" · ") || null;
+          nextGpuFormFactor = snapshot.formFactor || (snapshot.isLaptop ? "laptop" : "desktop") || null;
           setGpuName(nextGpuName);
+          setGpuFormFactor(nextGpuFormFactor);
         }
       }
 
       try {
-        localStorage.setItem(STORAGE_DASHBOARD_HARDWARE, JSON.stringify({ win32Value: nextWin32Value, gpuName: nextGpuName }));
+        localStorage.setItem(STORAGE_DASHBOARD_HARDWARE, JSON.stringify({
+          win32Value: nextWin32Value,
+          gpuName: nextGpuName,
+          gpuFormFactor: nextGpuFormFactor,
+        }));
       } catch {
         // Cache is an enhancement; the live RPC result remains authoritative.
       }
@@ -519,7 +764,14 @@ export default function Dashboard() {
     >
       <div style={{ display: "grid", gridTemplateColumns: settings.fontScale < 120 ? "1fr" : "repeat(auto-fit, minmax(420px, 1fr))", gridAutoRows: "minmax(min-content, 1fr)", gap: space[4], alignItems: "stretch", alignContent: "stretch", flex: 1, height: "100%", minHeight: 0 }}>
         <SystemHealthPanel sysInfo={sysInfo} trend={trend} tx={tx} />
-        <CurrentValuesPanel win32Value={win32Value} gpuName={gpuName} loading={hardwareLoading} tx={tx} />
+        <CurrentValuesPanel
+          win32Value={win32Value}
+          gpuName={gpuName}
+          gpuFormFactor={gpuFormFactor}
+          loading={hardwareLoading}
+          tx={tx}
+          onNavigate={onNavigate}
+        />
       </div>
     </motion.div>
   );

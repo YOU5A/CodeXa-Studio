@@ -8,10 +8,12 @@ interface BehaviorSectionProps {
   updateSettings: (partial: Partial<AppSettings>) => void;
   autoStart: boolean;
   closeToTray: boolean;
+  onAutoStartChange: (v: boolean) => void;
+  onCloseToTrayChange: (v: boolean) => void;
 }
 
 export default function BehaviorSection({
-  tx, settings, updateSettings, autoStart, closeToTray,
+  tx, settings, updateSettings, autoStart, closeToTray, onAutoStartChange, onCloseToTrayChange,
 }: BehaviorSectionProps) {
   return (
     <>
@@ -21,9 +23,7 @@ export default function BehaviorSection({
         <div style={labelStyle}>{tx.autoStart}</div>
         <GlassToggle
           active={autoStart}
-          onChange={(v) => {
-            window.electronAPI?.settings.set("autoStart", v);
-          }}
+          onChange={onAutoStartChange}
         />
       </div>
 
@@ -31,9 +31,7 @@ export default function BehaviorSection({
         <div style={labelStyle}>{tx.closeToTray}</div>
         <GlassToggle
           active={closeToTray}
-          onChange={(v) => {
-            window.electronAPI?.settings.set("closeToTray", v);
-          }}
+          onChange={onCloseToTrayChange}
         />
       </div>
 

@@ -1,4 +1,4 @@
-import { Music, Image } from "lucide-react";
+import { Music, Image, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GlassCard, GlassToggle } from "@/design-system/components";
 import { fontSizes } from "@/design-system/tokens";
@@ -15,118 +15,171 @@ export default function MetadataPanel({
   info, writeTags, onWriteTagsChange,
   metadataLabel, noMetadataText, titleLabel, artistLabel, albumLabel,
   formatLabel, durationLabel, writeTagsLabel,
+  selectedPath, loading,
 }: NcmMetadataPanelProps) {
   const coverBase64 = info?.coverBase64 as string | undefined;
+  const hasInfo = Boolean(info && !info.error);
+  const activeKey = selectedPath || (hasInfo ? `${info?.title}-${info?.artist}` : (info?.error ? "error" : (loading ? "loading" : "empty")));
 
   return (
-    <GlassCard style={{ padding: 0, alignSelf: "flex-start", maxWidth: "100%" }}>
-      {/* Header */}
+    <GlassCard style={{ padding: 0, alignSelf: "flex-start", maxWidth: "100%", width: "100%", overflow: "hidden" }}>
+      {/* Header - Always static */}
       <div style={{
         padding: "8px 12px", borderBottom: "1px solid var(--border-color)",
         fontSize: fontSizes.sm, fontWeight: 600, color: "var(--text-secondary)",
-        display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
       }}>
-        <Music size={14} />
-        <span>{metadataLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Music size={14} />
+          <span>{metadataLabel}</span>
+        </div>
+        {loading && (
+          <Loader2 size={13} className="animate-spin" style={{ color: "var(--accent)", opacity: 0.8 }} />
+        )}
       </div>
 
-      <AnimatePresence mode="wait">
-        {info && !info.error ? (
-        <motion.div
-          key="meta"
-          initial={{ opacity: 0, filter: "blur(6px)" }}
-          animate={{ opacity: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, filter: "blur(6px)" }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          style={{ padding: 12 }}
-        >
-          <div style={{ display: "flex", gap: 12 }}>
-            {/* Cover preview */}
-            {coverBase64 ? (
-              <img
-                src={"data:image/jpeg;base64," + coverBase64}
-                alt="Cover"
-                style={{
-                  width: 80, height: 80, borderRadius: 8,
-                  objectFit: "cover", flexShrink: 0,
-                  border: "1px solid var(--border-color)",
-                }}
-              />
-            ) : (
+      {/* Dynamic Content Area */}
+      <div style={{ position: "relative", minHeight: 104 }}>
+        <AnimatePresence mode="popLayout" initial={false}>
+          {hasInfo ? (
+            <motion.div
+              key={activeKey}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+              style={{ padding: 12 }}
+            >
+              <div style={{ display: "flex", gap: 12 }}>
+                {/* Cover preview */}
+                {coverBase64 ? (
+                  <img
+                    src={"data:image/jpeg;base64," + coverBase64}
+                    alt="Cover"
+                    decoding="async"
+                    loading="eager"
+                    style={{
+                      width: 80, height: 80, borderRadius: 8,
+                      objectFit: "cover", flexShrink: 0,
+                      border: "1px solid var(--border-color)",
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 80, height: 80, borderRadius: 8, flexShrink: 0,
+                    background: "var(--surface-bg)", border: "1px solid var(--border-color)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Image size={24} style={{ color: "var(--text-tertiary)" }} />
+                  </div>
+                )}
+
+                {/* Metadata grid */}
+                <div style={{
+                  display: "grid", gridTemplateColumns: "auto 1fr",
+                  gap: "6px 12px", fontSize: fontSizes.xs, flex: 1, minWidth: 0,
+                  alignItems: "start",
+                }}>
+                  <span style={{ color: "var(--text-tertiary)", lineHeight: 1.4 }}>{titleLabel}:</span>
+                  <span
+                    title={info?.title || ""}
+                    style={{ color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-word", lineHeight: 1.4 }}
+                  >
+                    {info?.title || "-"}
+                  </span>
+                  <span style={{ color: "var(--text-tertiary)", lineHeight: 1.4 }}>{artistLabel}:</span>
+                  <span
+                    title={info?.artist || ""}
+                    style={{ color: "var(--text-primary)", wordBreak: "break-word", lineHeight: 1.4 }}
+                  >
+                    {info?.artist || "-"}
+                  </span>
+                  <span style={{ color: "var(--text-tertiary)", lineHeight: 1.4 }}>{albumLabel}:</span>
+                  <span
+                    title={info?.album || ""}
+                    style={{ color: "var(--text-primary)", wordBreak: "break-word", lineHeight: 1.4 }}
+                  >
+                    {info?.album || "-"}
+                  </span>
+
+                  {info?.duration > 0 && (
+                    <>
+                      <span style={{ color: "var(--text-tertiary)", lineHeight: 1.4 }}>{durationLabel}:</span>
+                      <span style={{ color: "var(--text-primary)", lineHeight: 1.4 }}>
+                        {fmtDuration(info.duration)}
+                      </span>
+                    </>
+                  )}
+
+                  <span style={{ color: "var(--text-tertiary)", lineHeight: 1.4 }}>{formatLabel}:</span>
+                  <span style={{
+                    color: "var(--text-primary)", fontSize: fontSizes.xs,
+                    background: "var(--glass-vision-active)", padding: "1px 6px",
+                    borderRadius: 4, display: "inline-block", width: "fit-content",
+                    boxShadow: "0 0 0 1px var(--glass-vision-border)",
+                  }}>
+                    {info?.format || "?"}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          ) : selectedPath && loading ? (
+            <motion.div
+              key="loading-placeholder"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{
+                padding: 12, display: "flex", gap: 12, alignItems: "center",
+              }}
+            >
               <div style={{
                 width: 80, height: 80, borderRadius: 8, flexShrink: 0,
-                background: "var(--surface-bg)", border: "1px solid var(--border-color)",
+                background: "var(--surface-bg-hover)", border: "1px solid var(--border-color)",
                 display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: 0.5,
               }}>
-                <Image size={24} style={{ color: "var(--text-tertiary)" }} />
+                <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
               </div>
-            )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+                <div style={{ height: 14, width: "60%", background: "var(--surface-bg-hover)", borderRadius: 4, opacity: 0.6 }} />
+                <div style={{ height: 12, width: "40%", background: "var(--surface-bg-hover)", borderRadius: 4, opacity: 0.4 }} />
+                <div style={{ height: 12, width: "50%", background: "var(--surface-bg-hover)", borderRadius: 4, opacity: 0.4 }} />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key={info?.error ? "error" : "empty"}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+              style={{
+                padding: 24, textAlign: "center",
+                color: "var(--text-tertiary)", fontSize: fontSizes.sm,
+              }}
+            >
+              {info?.error ? info.error : noMetadataText}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-            {/* Metadata grid */}
-            <div style={{
-              display: "grid", gridTemplateColumns: "auto 1fr",
-              gap: "4px 12px", fontSize: fontSizes.xs, flex: 1,
-            }}>
-              <span style={{ color: "var(--text-tertiary)" }}>{titleLabel}:</span>
-              <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
-                {info?.title || "-"}
-              </span>
-              <span style={{ color: "var(--text-tertiary)" }}>{artistLabel}:</span>
-              <span style={{ color: "var(--text-primary)" }}>
-                {info?.artist || "-"}
-              </span>
-              <span style={{ color: "var(--text-tertiary)" }}>{albumLabel}:</span>
-              <span style={{ color: "var(--text-primary)" }}>
-                {info?.album || "-"}
-              </span>
-
-              {info?.duration > 0 && (
-                <>
-                  <span style={{ color: "var(--text-tertiary)" }}>{durationLabel}:</span>
-                  <span style={{ color: "var(--text-primary)" }}>
-                    {fmtDuration(info.duration)}
-                  </span>
-                </>
-              )}
-
-              <span style={{ color: "var(--text-tertiary)" }}>{formatLabel}:</span>
-              <span style={{
-                color: "var(--accent)", fontSize: fontSizes.xs,
-                background: "var(--accent-bg-fade)", padding: "1px 6px",
-                borderRadius: 4, display: "inline-block", width: "fit-content",
-              }}>
-                {info?.format || "?"}
-              </span>
-            </div>
-          </div>
-
-          {/* Write tags toggle */}
-          <div style={{
-            marginTop: 12, paddingTop: 10,
-            borderTop: "1px solid var(--border-color)",
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            <GlassToggle active={writeTags} onChange={onWriteTagsChange} size="sm" />
-            <span style={{ fontSize: fontSizes.xs, color: "var(--text-secondary)" }}>
-              {writeTagsLabel}
-            </span>
-          </div>
-        </motion.div>
-      ) : (
-        <motion.div
-          key="empty"
-          initial={{ opacity: 0, filter: "blur(6px)" }}
-          animate={{ opacity: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, filter: "blur(6px)" }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          style={{
-          padding: 24, textAlign: "center",
-          color: "var(--text-tertiary)", fontSize: fontSizes.sm,
+      {/* Write tags toggle - Static Footer */}
+      {(hasInfo || selectedPath) && (
+        <div style={{
+          padding: "10px 12px",
+          borderTop: "1px solid var(--border-color)",
+          display: "flex", alignItems: "center", gap: 8,
+          flexShrink: 0,
         }}>
-          {info?.error ? info.error : noMetadataText}
-        </motion.div>
+          <GlassToggle active={writeTags} onChange={onWriteTagsChange} size="sm" />
+          <span style={{ fontSize: fontSizes.xs, color: "var(--text-secondary)" }}>
+            {writeTagsLabel}
+          </span>
+        </div>
       )}
-      </AnimatePresence>
     </GlassCard>
   );
 }

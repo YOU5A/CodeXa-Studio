@@ -431,6 +431,14 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
   });
   // Electron settings (autoStart, minimizeToTray, closeToTray)
   ipcMain.handle("settings:get", (_e, key) => {
+    if (key === "autoStart" && process.platform === "win32") {
+      try {
+        const loginSettings = app.getLoginItemSettings({ path: process.execPath });
+        electronSettings.autoStart = loginSettings.openAtLogin;
+      } catch (e) {
+        console.warn("[Settings] getLoginItemSettings error:", e.message);
+      }
+    }
     return electronSettings[key];
   });
 
@@ -440,7 +448,11 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
 
     // Apply autoStart change immediately
     if (key === "autoStart") {
-      app.setLoginItemSettings({ openAtLogin: value, path: process.execPath });
+      try {
+        app.setLoginItemSettings({ openAtLogin: Boolean(value), path: process.execPath });
+      } catch (e) {
+        console.error("[Settings] setLoginItemSettings error:", e.message);
+      }
     }
 
     return true;
@@ -461,6 +473,14 @@ function setupIPC({ mainWindow, electronSettings, quittingRef, saveElectronSetti
   });
 
   ipcMain.handle("settings:getAll", () => {
+    if (process.platform === "win32") {
+      try {
+        const loginSettings = app.getLoginItemSettings({ path: process.execPath });
+        electronSettings.autoStart = loginSettings.openAtLogin;
+      } catch (e) {
+        console.warn("[Settings] getLoginItemSettings error:", e.message);
+      }
+    }
     return { ...electronSettings };
   });
 

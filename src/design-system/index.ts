@@ -82,6 +82,7 @@ export {
   GlassSlider,
   GlassScrollArea,
   GlassSVGFilter,
+  LiquidGlassLens,
 } from './components';
 export type {
   GlassSurfaceProps,
@@ -106,6 +107,7 @@ export type {
   GlassFloatProps,
   GlassSliderProps,
   GlassScrollAreaProps,
+  LiquidGlassLensProps,
 } from './components';
 
 /* ??? Layouts ??? */

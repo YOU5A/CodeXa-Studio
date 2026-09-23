@@ -97,13 +97,12 @@ export function GlassToggle({
           : "var(--bg-tertiary)",
         backdropFilter: active ? "blur(10px) saturate(1.6)" : "none",
         WebkitBackdropFilter: active ? "blur(10px) saturate(1.6)" : "none",
-        boxShadow: active ? "inset 0 1px 2px rgba(var(--glass-glow-rgb,255,255,255),0.1)" : "none",
         border: "1px solid",
         borderColor: active
           ? "rgba(var(--accent-rgb), 0.5)"
           : "var(--border-color)",
-        boxShadow: active && hovered
-          ? "0 0 16px rgba(var(--accent-rgb), 0.35)"
+        boxShadow: active
+          ? (hovered ? "inset 0 1px 2px rgba(var(--glass-glow-rgb,255,255,255),0.1), 0 0 16px rgba(var(--accent-rgb), 0.35)" : "inset 0 1px 2px rgba(var(--glass-glow-rgb,255,255,255),0.1)")
           : "none",
         transition: "background var(--transition-fast) ease, border-color var(--transition-fast) ease, box-shadow 0.25s ease",
         opacity: disabled ? 0.5 : 1,

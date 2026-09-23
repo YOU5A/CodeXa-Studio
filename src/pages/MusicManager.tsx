@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen, Search, Save, Image, X, Play, Pause, Settings,
   SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
-  Volume2, Trash2, Edit3, ChevronUp, Globe
+  Volume2, Trash2, Edit3, ChevronUp, Globe, Palette
 } from "lucide-react";
-import { GlassCard, GlassButton, GlassInput, GlassSurface, GlassBadge, GlassTooltip } from "@/design-system/components";
+import { GlassCard, GlassButton, GlassInput, GlassSurface, GlassBadge, GlassTooltip, GlassScrollArea } from "@/design-system/components";
 import { space, fontSizes, radii } from "@/design-system/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -62,6 +62,8 @@ const t = {
     coverRemoved: "封面已删除",
     renameSuccess: "重命名成功",
     settings: "设置",
+    visualFx: "背景特效",
+    filterSongs: "搜索...",
     renameFailed: "重命名失败",
     nowPlaying: "正在播放",
     noMusic: "未选择曲目",
@@ -71,6 +73,8 @@ const t = {
     lyricsNoLyrics: "暂无歌词",
     lyricsInstrumental: "纯音乐，请欣赏",
     saveTagsConfirm: "确定要保存标签到所选文件吗？",
+    clearTagsConfirm: "确认清除标签吗？",
+    clearTagsConfirmDesc: "清除之后手动保存才能清除。",
     applyAllConfirm: "确定要将当前标签应用到所有文件吗？此操作不可撤销。",
     applyCoverConfirm: "确定要应用封面到所选文件吗？",
     removeCoverConfirm: "确定要删除所选文件的封面吗？",
@@ -118,6 +122,8 @@ en: {
     coverRemoved: "Cover removed",
     renameSuccess: "Renamed successfully",
     settings: "Settings",
+    visualFx: "Visual FX",
+    filterSongs: "Filter songs...",
     renameFailed: "Rename failed",
     nowPlaying: "Now Playing",
     noMusic: "No track selected",
@@ -127,6 +133,8 @@ en: {
     lyricsNoLyrics: "No lyrics",
     lyricsInstrumental: "Instrumental",
     saveTagsConfirm: "Save tags to the selected file?",
+    clearTagsConfirm: "Clear tag fields?",
+    clearTagsConfirmDesc: "You need to save manually to clear tags from the file.",
     applyAllConfirm: "Apply current tags to all files? This cannot be undone.",
     applyCoverConfirm: "Apply cover artwork to the selected file?",
     removeCoverConfirm: "Remove cover artwork from the selected file?",
@@ -196,9 +204,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   const [coverB64, setCoverB64] = useState<string | null>(playingDiffersFromCache ? playingCover : (restoredSelection ? sessionState.coverB64 : null));
   const [newCoverPath, setNewCoverPath] = useState("");
   const [coverPreviewB64, setCoverPreviewB64] = useState<string | null>(null);
-  const [coverMenuOpen, setCoverMenuOpen] = useState(false);
-  const [listBlur, setListBlur] = useState(0);
-  const [coverMenuHover, setCoverMenuHover] = useState(false);
   const [coverSearchOpen, setCoverSearchOpen] = useState(false);
   const coverRef = useRef<HTMLDivElement | null>(null);
   const [coverRect, setCoverRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
@@ -214,6 +219,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   playingFileRef.current = playingFile; // sync every render, not async via useEffect
   const selectedFileRef = useRef(selectedFile);
   selectedFileRef.current = selectedFile;
+  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ensureFileWritable = (filepath: string) => {
     if (filepath && playingFile && filepath === playingFile) {
       releaseHandle();
@@ -282,17 +288,7 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     saveFluidSettings(fluidSettings);
   }, [fluidSettings]);
 
-  // Blur the file list during cover menu open/close transition only
-  const prevCoverMenuOpen = useRef(coverMenuOpen);
-  useEffect(() => {
-    // Only trigger blur when coverMenuOpen actually toggles (skip initial mount)
-    if (prevCoverMenuOpen.current === coverMenuOpen) return;
-    prevCoverMenuOpen.current = coverMenuOpen;
-    setListBlur(8);
-    const timer = setTimeout(() => setListBlur(0), 400);
-    return () => clearTimeout(timer);
-  }, [coverMenuOpen]);
-
+  
   // Extract cover color and notify app
   useEffect(() => {
     let cancelled = false;
@@ -428,10 +424,8 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
     scrollAnimRef.current = requestAnimationFrame(animate);
   };
-  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ?? File ??
+  // ── File & UI Settings ──
   const { settings } = useTheme();
   const animationDuration = getAnimDuration(settings.animationSpeed);
 
@@ -513,10 +507,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
 
 
-  const selectFile = async (fp: string) => {
+  const selectFile = async (fp: string, shouldScroll = false) => {
     const seq = ++loadSeqRef.current;
     setSelectedFile(fp);
-    scrollToFile(fp);
+    if (shouldScroll) scrollToFile(fp);
     const m = await window.electronAPI?.bridge.call("music.get_metadata", { filepath: fp });
     if (seq !== loadSeqRef.current) return;
     if (m && !m.error) {
@@ -531,21 +525,37 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     setRenameName(fname.replace(/\.[^.]+$/, ""));
   };
 
-  // File list click handler (with auto-revert timer)
+  // File list click handler:
+  // 正在播放音乐时单击：只把选择框移动过去，不读取音乐所有信息，3s后自动返回之前播放的音乐
+  // 未播放音乐时单击：正常选中并加载信息
   const handleFileClick = (fp: string) => {
-    setSelectedFile(fp);
-    if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
-    if (fp !== playingFile && playingFile) {
-      revertTimerRef.current = setTimeout(() => {
-        const current = playingFileRef.current;
-        if (current) {
-          setSelectedFile(current);
-          if (!userScrolledRef.current) scrollToFile(current);
-        }
-        revertTimerRef.current = null;
-      }, 1500);
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+
+    if (playingFile) {
+      setSelectedFile(fp);
+      if (fp !== playingFile) {
+        revertTimerRef.current = setTimeout(() => {
+          const current = playingFileRef.current;
+          if (current) {
+            setSelectedFile(current);
+          }
+          revertTimerRef.current = null;
+        }, 3000);
+      }
+    } else {
+      selectFile(fp, false);
     }
   };
+
+  // Cleanup revert timer on unmount
+  useEffect(() => {
+    return () => {
+      if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -571,50 +581,18 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     };
   }, [isDraggingVolume]);
 
-  // Detect user manual scroll (wheel) on file list ? used to suppress auto-scroll
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const onWheel = () => { userScrolledRef.current = true; };
-    el.addEventListener("wheel", onWheel, { passive: true });
-    return () => el.removeEventListener("wheel", onWheel);
-  });
-
-  // Window blur: after 5s, scroll list to selected file
-  useEffect(() => {
-    const onBlur = () => {
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-      blurTimerRef.current = setTimeout(() => {
-        const current = selectedFileRef.current;
-        if (current) scrollToFile(current);
-        blurTimerRef.current = null;
-      }, 5000);
-    };
-    const onFocus = () => {
-      if (blurTimerRef.current) {
-        clearTimeout(blurTimerRef.current);
-        blurTimerRef.current = null;
-      }
-    };
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-    };
-  }, []);
-
-  // Sync selectedFile and metadata when playingFile changes (skip initial mount:
-  // restored session state already reflects the last selection)
+  // 上下切换音乐或自动切歌时：立即同步元数据和封面信息
   const prevPlayingFileRef = useRef(playingFile);
   useEffect(() => {
     const prev = prevPlayingFileRef.current;
     prevPlayingFileRef.current = playingFile;
     if (prev === playingFile) return;
-    if (playingFile && playingFile !== selectedFile) {
-      if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
-      selectFile(playingFile);
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    if (playingFile) {
+      selectFile(playingFile, false);
     }
   }, [playingFile]);
 
@@ -631,19 +609,15 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Cleanup revert timer on unmount
-  useEffect(() => {
-    return () => {
-      if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
-    };
-  }, []);
-
+  // 双击选择/播放：立即同步信息并播放
   const playFile = (fp: string) => {
     if (!fp) return;
-    selectFile(fp);
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    selectFile(fp, false);
     contextPlayFile(fp);
-    if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
-    scrollToFile(fp);
   };
 
   const toggle = () => {
@@ -660,8 +634,21 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
   toggleRef.current = toggle;
 
-  const playPrev = () => { contextPlayPrev(); };
-  const playNext = () => { contextPlayNext(); };
+  // 上下切换音乐：清除定时器并切换
+  const playPrev = () => {
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    contextPlayPrev();
+  };
+  const playNext = () => {
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    contextPlayNext();
+  };
 
   const doSeek = (clientX: number) => { contextSeek(clientX, progressRef); };
 
@@ -740,14 +727,26 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   };
 
   // Capture cover screen position when preview opens
-  useEffect(() => {
-    if (coverPreviewB64 && coverRef.current) {
+  const updateCoverRect = useCallback(() => {
+    if (coverRef.current) {
       const rect = coverRef.current.getBoundingClientRect();
       setCoverRect({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
     }
-  }, [coverPreviewB64]);
+  }, []);
 
-  // ?? Cover ??
+  useEffect(() => {
+    if (coverPreviewB64) {
+      updateCoverRect();
+      const timer = setTimeout(updateCoverRect, 80);
+      window.addEventListener("resize", updateCoverRect);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("resize", updateCoverRect);
+      };
+    }
+  }, [coverPreviewB64, updateCoverRect]);
+
+  // ── Cover ──
   const pickCover = async () => {
     const p = await window.electronAPI?.dialog.openFile([{ name: "Images", extensions: ["jpg","jpeg","png","bmp","webp"] }]);
     if (p) {
@@ -755,6 +754,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       const r = await window.electronAPI?.bridge.call("music.read_cover_file", { filepath: p });
       setCoverPreviewB64(r?.cover ?? null);
     }
+  };
+  const cancelCover = () => {
+    setNewCoverPath("");
+    setCoverPreviewB64(null);
   };
   const applyCover = async () => {
     if (!selectedFile || !newCoverPath) return;
@@ -910,7 +913,14 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
   };
 
   // ?? Toolbar actions ??
-  const clearTagFields = () => {
+  const clearTagFields = async () => {
+    if (!tagTitle && !tagArtist && !tagAlbum && !tagYear && !tagGenre) return;
+    const ok = await confirm({
+      title: tx.clearTagsConfirm,
+      description: tx.clearTagsConfirmDesc,
+      danger: true,
+    });
+    if (!ok) return;
     setTagTitle(""); setTagArtist(""); setTagAlbum(""); setTagYear(""); setTagGenre("");
   };
 
@@ -927,14 +937,21 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
         height: "100%",
       }}
     >
-      {/* Toolbar — NCM-style, transparent background */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: space[2],
-        padding: "10px 0", flexShrink: 0,
-      }}>
-        <h1 className="page-title" style={{ fontSize: fontSizes["2xl"], fontWeight: 600, color: "var(--text-primary)", margin: 0, marginRight: space[1] }}>
+      {/* Toolbar — NCM-style GlassSurface bar */}
+      <GlassSurface
+        tier="regular"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: space[2],
+          padding: "10px 14px",
+          borderRadius: radii.md,
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: fontSizes.lg, fontWeight: 600, color: "var(--text-primary)", margin: 0, marginRight: space[1], whiteSpace: "nowrap" }}>
           {tx.title}
-        </h1>
+        </span>
         <GlassButton variant="ghost" size="sm" onClick={browse}>
           <FolderOpen size={14} />
           <span style={{ marginLeft: 4 }}>{tx.browse}</span>
@@ -949,44 +966,87 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
           <Search size={14} />
           <span style={{ marginLeft: 4 }}>{tx.scan}</span>
         </GlassButton>
-        {files.length > 0 && (
-          <GlassBadge variant="accent">{files.length} {lang === "zh" ? "个文件" : "files"}</GlassBadge>
-        )}
-        <GlassButton variant="ghost" size="sm" onClick={() => setFluidSettingsOpen(true)}>
-          <Settings size={14} />
-          <span style={{ marginLeft: 4 }}>{tx.settings}</span>
-        </GlassButton>
-      </div>
-      {/* Main Content */}
-      <>
-          <div style={{
-            flex: 1, minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: "220px 1fr",
-            gridTemplateRows: "auto auto 1fr",
-            gap: space[4],
-          }}>
-            {/* Cover: always rendered, spans all rows */}
-            <div style={{ gridRow: "1 / 4", gridColumn: 1 }}>
-              <CoverManager
-                coverB64={coverB64}
-                coverRef={coverRef}
-                coverMenuOpen={coverMenuOpen}
-                coverMenuHover={coverMenuHover}
-                setCoverMenuOpen={setCoverMenuOpen}
-                setCoverMenuHover={setCoverMenuHover}
-                setCoverSearchOpen={setCoverSearchOpen}
-                pickCover={pickCover}
-                applyCover={applyCover}
-                saveCover={saveCover}
-                removeCover={removeCover}
-                tx={tx}
-              />
-            </div>
+        <GlassTooltip text={lang === "zh" ? "流体与动态背景设置" : "Fluid & dynamic background settings"}>
+          <span>
+            <GlassButton variant="ghost" size="sm" onClick={() => setFluidSettingsOpen(true)}>
+              <Palette size={14} />
+              <span style={{ marginLeft: 4 }}>{tx.visualFx || tx.settings}</span>
+            </GlassButton>
+          </span>
+        </GlassTooltip>
+      </GlassSurface>
 
-            {/* Tag Editor + RenamePanel: top-right */}
-            <div style={{ gridRow: 1, gridColumn: 2, minWidth: 0, alignSelf: "start" }}>
-              <GlassCard style={{ flexShrink: 0 }}>
+      {/* Main Content: Left Workbench (List) + Right Inspector (Cover, Tags, Rename) */}
+      <div style={{
+        flex: 1, minHeight: 0,
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1.4fr) minmax(340px, 390px)",
+        gap: space[4],
+        alignItems: "stretch",
+      }}>
+        {/* Left Column: File List */}
+        <div style={{ minWidth: 0, height: "100%", minHeight: 0 }}>
+          <FileList
+            files={files}
+            selectedFile={selectedFile}
+            playingFile={playingFile}
+            onSelect={handleFileClick}
+            onPlay={playFile}
+            audioFilesLabel={tx.audioFiles}
+            noFilesLabel={tx.noAudioFiles}
+            filesCountLabel={tx.filesCount}
+            listRef={listRef}
+            searchPlaceholder={tx.filterSongs}
+            locateTrackLabel={lang === "zh" ? "定位到当前曲目" : "Locate current track"}
+          />
+        </div>
+
+        {/* Right Column: Inspector Panel */}
+        <div style={{
+          minWidth: 0,
+          height: "100%",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}>
+          <GlassCard style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            padding: 0,
+            minHeight: 0,
+          }}>
+            <GlassScrollArea
+              scrollbarGutter={6}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                padding: `${space[3]}px ${space[4]}px`,
+                display: "flex",
+                flexDirection: "column",
+                gap: space[3],
+              }}
+            >
+              <motion.div layout transition={{ duration: 0.25, ease: "easeOut" }} style={{ width: "100%" }}>
+                <CoverManager
+                  coverB64={coverB64}
+                  coverPreviewB64={coverPreviewB64}
+                  coverRef={coverRef}
+                  setCoverSearchOpen={setCoverSearchOpen}
+                  pickCover={pickCover}
+                  applyCover={applyCover}
+                  cancelCover={cancelCover}
+                  saveCover={saveCover}
+                  removeCover={removeCover}
+                  newCoverPath={newCoverPath}
+                  hasSelectedFile={!!selectedFile}
+                  tx={tx}
+                  lang={lang}
+                />
+              </motion.div>
+
+              <motion.div layout transition={{ duration: 0.25, ease: "easeOut" }} style={{ width: "100%" }}>
                 <TagEditor
                   tagTitle={tagTitle}
                   tagArtist={tagArtist}
@@ -1005,6 +1065,9 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                   applyAll={applyAll}
                   tx={tx}
                 />
+              </motion.div>
+
+              <motion.div layout transition={{ duration: 0.25, ease: "easeOut" }} style={{ width: "100%" }}>
                 <RenamePanel
                   renameName={renameName}
                   setRenameName={setRenameName}
@@ -1013,42 +1076,13 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
                   tx={tx}
                   lang={lang}
                 />
-              </GlassCard>
-            </div>
+              </motion.div>
+            </GlassScrollArea>
+          </GlassCard>
+        </div>
+      </div>
 
-            {/* FileList: spans rows 2-3, full width when collapsed */}
-            <motion.div
-              layout
-              initial={false}
-              transition={{ duration: 0.35, ease: "easeInOut" }}
-              style={{
-                gridRow: "2 / 4",
-                gridColumn: coverMenuOpen ? 2 : "1 / 3",
-                minWidth: 0,
-                minHeight: 0,
-                backdropFilter: "blur(24px) saturate(1.4)",
-                WebkitBackdropFilter: "blur(24px) saturate(1.4)",
-                borderRadius: radii.lg,
-                filter: `blur(${listBlur}px)`,
-                willChange: listBlur > 0 ? "filter" : "auto",
-                transition: "grid-column 0.35s ease, filter 0.35s ease",
-              }}
-            >
-              <FileList
-                files={files}
-                selectedFile={selectedFile}
-                playingFile={playingFile}
-                onSelect={handleFileClick}
-                onPlay={playFile}
-                audioFilesLabel={tx.audioFiles}
-                noFilesLabel={tx.noAudioFiles}
-                filesCountLabel={tx.filesCount}
-                listRef={listRef}
-              />
-            </motion.div>
-          </div>
-
-          {/* Player Bar */}
+      {/* Player Bar */}
           <PlayerBar
             playback={playback}
             pct={pct}
@@ -1105,8 +1139,11 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
 
           <CoverPreviewWindow
             open={coverPreviewB64 !== null}
-            onClose={() => setCoverPreviewB64(null)}
-            coverB64={coverPreviewB64 ?? ''}
+            onClose={() => {
+              setCoverPreviewB64(null);
+              setNewCoverPath("");
+            }}
+            coverB64={coverPreviewB64 ?? ""}
             coverRect={coverRect}
           />
 
@@ -1133,7 +1170,6 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
             values={lyricsSettings}
             onChange={(v) => { setLyricsSettings(v); saveLyricsSettings(v); }}
           />
-      </>
     </motion.div>
   );
 }

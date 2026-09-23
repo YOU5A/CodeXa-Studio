@@ -57,3 +57,7 @@ export type { GlassSliderProps } from "./GlassSlider";
 
 export { GlassScrollArea } from "./GlassScrollArea";
 export type { GlassScrollAreaProps } from "./GlassScrollArea";
+
+export { LiquidGlassLens } from "./LiquidGlassLens";
+export type { LiquidGlassLensProps } from "./LiquidGlassLens";
+

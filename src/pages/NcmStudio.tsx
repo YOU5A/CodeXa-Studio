@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   FolderOpen, Search, CheckCircle, XCircle, Zap, ExternalLink,
 } from "lucide-react";
@@ -123,6 +123,9 @@ export default function NcmStudio() {
   const [isScanning, setIsScanning] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
   const [decodeProgress, setDecodeProgress] = useState(0);
+  const [isInfoLoading, setIsInfoLoading] = useState(false);
+  const infoCacheRef = useRef<Map<string, Record<string, any>>>(new Map());
+  const loadSeqRef = useRef(0);
   // Sync state back to session store on every change
   useEffect(() => { sessionState.folder = folder; }, [folder]);
   useEffect(() => { sessionState.files = files; }, [files]);
@@ -187,11 +190,23 @@ export default function NcmStudio() {
       setFiles(prev => [...prev, ...newItems]);
       if (!selectedFile && newItems.length > 0) {
         setSelectedFile(newItems[0]);
+        setIsInfoLoading(true);
+        const seq = ++loadSeqRef.current;
         try {
           const info = await call("ncm.get_info", { filepath: newItems[0].filepath });
-          setNcmInfo(info as Record<string, any>);
+          if (seq === loadSeqRef.current) {
+            const data = (info as Record<string, any>) || {};
+            infoCacheRef.current.set(newItems[0].filepath, data);
+            setNcmInfo(data);
+          }
         } catch {
-          setNcmInfo({ error: tx.decodeFail });
+          if (seq === loadSeqRef.current) {
+            setNcmInfo({ error: tx.decodeFail });
+          }
+        } finally {
+          if (seq === loadSeqRef.current) {
+            setIsInfoLoading(false);
+          }
         }
       }
       showToast(tx.found.replace("{n}", String(newPaths.length)), "info");
@@ -226,10 +241,12 @@ export default function NcmStudio() {
         const parts = fp.split("\\");
         return { filepath: fp, filename: parts[parts.length - 1], size: 0 };
       });
+      infoCacheRef.current.clear();
       setFiles(items);
       setSelectedFile(null);
       setSelectedIndices(new Set());
       setNcmInfo(null);
+      setIsInfoLoading(false);
       setResults([]);
       showToast(tx.found.replace("{n}", String(items.length)), "info");
     } catch (e: any) {
@@ -239,13 +256,31 @@ export default function NcmStudio() {
     }
   }, [folder, call, showToast, tx]);
 
-  const handleSelect = useCallback(async (file: NcmFileInfo, index: number) => {
+  const handleSelect = useCallback(async (file: NcmFileInfo, _index: number) => {
     setSelectedFile(file);
+    const cached = infoCacheRef.current.get(file.filepath);
+    if (cached) {
+      setNcmInfo(cached);
+      setIsInfoLoading(false);
+      return;
+    }
+    const seq = ++loadSeqRef.current;
+    setIsInfoLoading(true);
     try {
       const info = await call("ncm.get_info", { filepath: file.filepath });
-      setNcmInfo(info as Record<string, any>);
+      if (seq !== loadSeqRef.current) return;
+      const data = (info as Record<string, any>) || {};
+      infoCacheRef.current.set(file.filepath, data);
+      setNcmInfo(data);
     } catch {
-      setNcmInfo({ error: tx.decodeFail });
+      if (seq !== loadSeqRef.current) return;
+      const errData = { error: tx.decodeFail };
+      infoCacheRef.current.set(file.filepath, errData);
+      setNcmInfo(errData);
+    } finally {
+      if (seq === loadSeqRef.current) {
+        setIsInfoLoading(false);
+      }
     }
   }, [call, tx]);
 
@@ -429,8 +464,9 @@ export default function NcmStudio() {
         {/* Right: Metadata + Results overlay */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
           <MetadataPanel
-            key={selectedFile?.filepath || "none"}
             info={ncmInfo}
+            selectedPath={selectedFile?.filepath}
+            loading={isInfoLoading}
             writeTags={writeTags}
             onWriteTagsChange={setWriteTags}
             metadataLabel={tx.metadata}

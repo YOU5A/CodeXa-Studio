@@ -12,7 +12,7 @@ import { radii } from "../tokens";
 interface GlassTooltipProps {
   text: string;
   children: ReactNode;
-  placement?: "right" | "left";
+  placement?: "right" | "left" | "top-left";
   /** 附加到外层包裹 span 的样式（如需要撑满 flex 行） */
   style?: React.CSSProperties;
 }
@@ -64,13 +64,15 @@ export function GlassTooltip({ text, children, placement = "right", style }: Gla
       style={{ display: "inline-flex", ...style }}
     >
       {children}
-      {visible && pos && text && createPortal(
-        <div
-          style={{
-            position: "fixed",
-            left: placement === "left" ? pos.x - 14 : pos.x + 14,
-            top: pos.y - 32,
-            transform: placement === "left" ? "translateX(-100%)" : "none",
+      {visible && pos && text && (() => {
+        const isLeft = placement === "left" || placement === "top-left" || (typeof window !== "undefined" && pos.x + 220 > window.innerWidth);
+        return createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: isLeft ? pos.x - 14 : pos.x + 14,
+              top: pos.y - 32,
+              transform: isLeft ? "translateX(-100%)" : "none",
             zIndex: 99999,
             pointerEvents: "none",
             backdropFilter: "blur(32px) saturate(2.2)",
@@ -89,7 +91,8 @@ export function GlassTooltip({ text, children, placement = "right", style }: Gla
           {text}
         </div>,
         document.body
-      )}
+      );
+    })()}
     </span>
   );
 }

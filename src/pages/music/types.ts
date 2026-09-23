@@ -7,17 +7,18 @@ import type { LyricsSettingsValues } from "@/lyrics";
 
 export interface CoverManagerProps {
   coverB64: string | null;
+  coverPreviewB64?: string | null;
   coverRef?: RefObject<HTMLDivElement | null>;
-  coverMenuOpen: boolean;
-  coverMenuHover: boolean;
-  setCoverMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
-  setCoverMenuHover: (v: boolean) => void;
   setCoverSearchOpen: (v: boolean) => void;
   pickCover: () => void;
   applyCover: () => void;
+  cancelCover?: () => void;
   saveCover: () => void;
   removeCover: () => void;
+  newCoverPath?: string;
+  hasSelectedFile?: boolean;
   tx: Record<string, string>;
+  lang?: "zh" | "en";
 }
 
 export interface TagEditorProps {
@@ -58,6 +59,8 @@ export interface FileListProps {
   noFilesLabel: string;
   filesCountLabel: string;
   listRef: React.RefObject<HTMLDivElement | null>;
+  searchPlaceholder?: string;
+  locateTrackLabel?: string;
 }
 
 export interface PlaybackInfo {

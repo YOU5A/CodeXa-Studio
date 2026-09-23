@@ -55,9 +55,9 @@ export function GlassPillButton({
         borderRadius: "calc(var(--radius) * 1.0)",
         border: "none",
         background: active
-          ? "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.15) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 50%, rgba(var(--glass-glow-rgb,255,255,255),0.01) 100%), var(--accent-bg-fade)"
+          ? "var(--glass-vision-active)"
           : "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.01) 45%, rgba(var(--glass-glow-rgb,255,255,255),0.00) 70%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 100%), transparent",
-        color: active ? "var(--accent)" : "var(--text-secondary)",
+        color: active ? "var(--text-primary)" : "var(--text-secondary)",
         fontSize: 12,
         fontWeight: active ? 600 : 400,
         backdropFilter: "blur(32px) saturate(2.2)",
@@ -68,15 +68,17 @@ export function GlassPillButton({
         "--glass-highlight-opacity": "0.08",
         "--glass-noise-opacity": "0.01",
         transition: "all var(--transition-fast)",
-        boxShadow: active ? "0 0 0 1px var(--accent), 0 0 12px rgba(255,255,255,0.25), 0 0 4px rgba(255,255,255,0.15)" : "0 0 0 1px var(--border-color)",
+        boxShadow: active
+          ? "var(--glass-vision-shadow)"
+          : "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.18)), 0 2px 6px rgba(0,0,0,0.06)",
         whiteSpace: "nowrap",
         fontFamily: "inherit",
         outline: "none",
         ...style,
-      }}
+      } as React.CSSProperties}
     >
       <span className="theme-pill-glow" />
-      {children}
+      <span style={{ position: "relative", zIndex: 2, display: "inline-flex", alignItems: "center", gap: "inherit" }}>{children}</span>
     </button>
   );
 }

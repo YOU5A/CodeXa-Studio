@@ -314,14 +314,14 @@ export default function Win32Priority(_props: Props) {
                 animate={
                   isActive
                     ? {
-                        borderColor: "var(--accent)",
-                        background: "var(--accent-bg-fade)",
-                        boxShadow: "0 0 20px rgba(var(--accent-rgb), 0.14)",
+                        borderColor: "var(--glass-vision-border)",
+                        background: "var(--glass-vision-active)",
+                        boxShadow: "var(--glass-vision-shadow)",
                       }
                     : {
                         borderColor: "var(--border-color)",
                         background: "var(--bg-tertiary)",
-                        boxShadow: "none",
+                        boxShadow: "var(--glass-lens-inner-shadow), 0 1px 3px rgba(0,0,0,0.04)",
                       }
                 }
                 transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
@@ -344,7 +344,7 @@ export default function Win32Priority(_props: Props) {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: fontSizes.lg, fontWeight: 600, color: "var(--accent)", fontFamily: "monospace" }}>
+                  <span style={{ fontSize: fontSizes.lg, fontWeight: 600, color: isActive ? "var(--text-primary)" : "var(--accent)", fontFamily: "monospace", textShadow: isActive ? "0 1px 6px rgba(255,255,255,0.25)" : "none" }}>
                     0x{p.hex}
                   </span>
                   {p.effect && (

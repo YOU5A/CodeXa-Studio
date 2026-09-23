@@ -145,13 +145,20 @@ function ConnectionLines({
         <path
           d={d}
           fill='none'
-          stroke='rgba(255,255,255,0.13)'
-          strokeWidth={1.2}
-          strokeDasharray='4,5'
+          stroke='rgba(var(--accent-rgb, 59, 130, 246), 0.25)'
+          strokeWidth={3}
           strokeLinecap='round'
         />
-        <circle cx={p.x1} cy={p.y1} r={2.5} fill='rgba(255,255,255,0.33)' />
-        <circle cx={p.x2} cy={p.y2} r={2.5} fill='rgba(255,255,255,0.33)' />
+        <path
+          d={d}
+          fill='none'
+          stroke='rgba(var(--accent-rgb, 59, 130, 246), 0.75)'
+          strokeWidth={1.4}
+          strokeDasharray='5,5'
+          strokeLinecap='round'
+        />
+        <circle cx={p.x1} cy={p.y1} r={3} fill='var(--accent, #3b82f6)' />
+        <circle cx={p.x2} cy={p.y2} r={3} fill='var(--accent, #3b82f6)' />
       </g>
     );
   });
@@ -162,7 +169,7 @@ function ConnectionLines({
         position: 'fixed',
         inset: 0,
         pointerEvents: 'none',
-        zIndex: 9,
+        zIndex: 9998,
       }}
       width='100%'
       height='100%'
@@ -179,43 +186,34 @@ export default function CoverPreviewWindow({
   coverB64,
   coverRect,
 }: CoverPreviewWindowProps) {
-  const randomSeed = useRef({
-    direction: Math.floor(Math.random() * 4),
-    offsetX: (Math.random() - 0.5) * 2 * RAND_RANGE,
-    offsetY: (Math.random() - 0.5) * 2 * RAND_RANGE,
-  });
-
   const calcInitialPos = useCallback(() => {
-    const { direction, offsetX, offsetY } = randomSeed.current;
     const cw = coverRect.width || 220;
     const ch = coverRect.height || 220;
-    let x: number, y: number;
+    const cl = coverRect.left || (window.innerWidth - 360);
+    const ct = coverRect.top || 120;
 
-    switch (direction) {
-      case 0:
-        x = coverRect.left - SIZE - GAP + offsetX;
-        y = coverRect.top + (ch - SIZE) / 2 + offsetY;
-        break;
-      case 1:
-        x = coverRect.left + cw + GAP + offsetX;
-        y = coverRect.top + (ch - SIZE) / 2 + offsetY;
-        break;
-      case 2:
-        x = coverRect.left + (cw - SIZE) / 2 + offsetX;
-        y = coverRect.top - SIZE - GAP + offsetY;
-        break;
-      default:
-        x = coverRect.left + (cw - SIZE) / 2 + offsetX;
-        y = coverRect.top + ch + GAP + offsetY;
-        break;
+    // 默认停靠在封面卡片左侧，并垂直稍微偏上
+    let x = cl - SIZE - 24;
+    let y = ct + 12;
+
+    // 如果左侧超出安全边距，停靠在封面卡片下方或右侧
+    if (x < 16) {
+      x = Math.max(16, cl);
+      y = ct + ch + 16;
     }
 
-    x = clamp(x, 0, window.innerWidth - SIZE);
-    y = clamp(y, 0, window.innerHeight - SIZE);
+    x = clamp(x, 16, window.innerWidth - SIZE - 16);
+    y = clamp(y, 16, window.innerHeight - SIZE - 16);
     return { x, y };
   }, [coverRect.left, coverRect.top, coverRect.width, coverRect.height]);
 
   const [pos, setPos] = useState(calcInitialPos);
+
+  useEffect(() => {
+    if (open) {
+      setPos(calcInitialPos());
+    }
+  }, [open, calcInitialPos]);
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const rafRef = useRef(0);
@@ -313,18 +311,20 @@ export default function CoverPreviewWindow({
                 width: SIZE,
                 height: SIZE,
                 cursor: isDragging ? 'grabbing' : 'grab',
-                zIndex: 10,
+                zIndex: 9999,
                 willChange: isDragging ? 'left, top' : 'auto',
               }}
             >
-            <div
+              <div
                 ref={swayRef}
                 style={{
                   width: '100%',
                   height: '100%',
-                  borderRadius: 14,
+                  borderRadius: 16,
                   overflow: 'hidden',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.25), 0 0 0 0.5px rgba(255,255,255,0.06)',
+                  position: 'relative',
+                  border: '1px solid rgba(255, 255, 255, 0.24)',
+                  boxShadow: '0 16px 40px rgba(0,0,0,0.38), 0 0 16px rgba(var(--accent-rgb, 59, 130, 246), 0.25), inset 0 1px 0 rgba(255,255,255,0.4)',
                 }}
               >
                 <CloseDot onClick={onClose} />
@@ -339,6 +339,27 @@ export default function CoverPreviewWindow({
                   }}
                   draggable={false}
                 />
+                {/* 底部微型毛玻璃指示标签 */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: 6,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  padding: '2px 8px',
+                  borderRadius: 10,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  background: 'rgba(0, 0, 0, 0.55)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#fff',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}>
+                  新封面预览
+                </div>
               </div>
             </motion.div>
           )}

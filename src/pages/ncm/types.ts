@@ -27,6 +27,8 @@ export interface NcmMetadataPanelProps {
   formatLabel: string;
   durationLabel: string;
   writeTagsLabel: string;
+  selectedPath?: string;
+  loading?: boolean;
 }
 
 export interface NcmDecodeBarProps {

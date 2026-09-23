@@ -29,6 +29,21 @@
   --glass-highlight-opacity: 0.08;
   --glass-noise-opacity: 0.015;
   --glass-glow-rgb: 255,255,255;
+
+  /* ─── Apple Liquid Glass Optics ─── */
+  --glass-fresnel-rim: rgba(255, 255, 255, 0.45);
+  --glass-fresnel-soft: rgba(255, 255, 255, 0.18);
+  --glass-fresnel-dark: rgba(0, 0, 0, 0.10);
+  --glass-dispersion-rim: linear-gradient(
+    135deg,
+    rgba(255, 95, 109, 0.30) 0%,
+    rgba(255, 255, 255, 0.75) 20%,
+    rgba(64, 180, 255, 0.38) 55%,
+    rgba(168, 85, 247, 0.28) 85%,
+    rgba(255, 255, 255, 0.55) 100%
+  );
+  --glass-lens-inner-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.12);
 }
 
 :root, [data-theme="light"], [data-theme-name="light"] {
@@ -45,7 +60,10 @@
   --accent: #0071e3;
   --accent-hover: #0077ed;
   --accent-bg: rgba(0,113,227,0.10);
-  --accent-bg-fade: linear-gradient(to right, rgba(0,113,227,0.12) 0%, rgba(0,113,227,0.10) 55%, transparent 100%);
+  --accent-bg-fade: linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0%, rgba(0, 0, 0, 0.03) 50%, rgba(0, 0, 0, 0.05) 100%);
+  --glass-vision-active: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.55) 100%);
+  --glass-vision-border: rgba(0, 0, 0, 0.12);
+  --glass-vision-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.05);
   --accent-rgb: 0,113,227;
   --bg-base: #fef0db;
   --success: #34c759;
@@ -74,7 +92,10 @@
   --accent: #0a84ff;
   --accent-hover: #409cff;
   --accent-bg: rgba(10,132,255,0.12);
-  --accent-bg-fade: linear-gradient(to right, rgba(10,132,255,0.14) 0%, rgba(10,132,255,0.11) 55%, transparent 100%);
+  --accent-bg-fade: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.13) 100%);
+  --glass-vision-active: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.14) 100%);
+  --glass-vision-border: rgba(255, 255, 255, 0.32);
+  --glass-vision-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.50), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.20), 0 0 0 1px rgba(255, 255, 255, 0.25), 0 4px 16px rgba(0, 0, 0, 0.18);
   --accent-rgb: 10,132,255;
   --success: #30d158;
   --warning: #ff9f0a;
@@ -85,6 +106,19 @@
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.40);
   --shadow-xl: 0 16px 48px rgba(0,0,0,0.50);
   --slider-track: rgba(255,255,255,0.15);
+  --glass-fresnel-rim: rgba(255, 255, 255, 0.32);
+  --glass-fresnel-soft: rgba(255, 255, 255, 0.10);
+  --glass-fresnel-dark: rgba(0, 0, 0, 0.40);
+  --glass-dispersion-rim: linear-gradient(
+    135deg,
+    rgba(255, 110, 120, 0.24) 0%,
+    rgba(255, 255, 255, 0.60) 20%,
+    rgba(56, 189, 248, 0.30) 55%,
+    rgba(192, 132, 252, 0.24) 85%,
+    rgba(255, 255, 255, 0.42) 100%
+  );
+  --glass-lens-inner-shadow: inset 0 1px 1.2px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 1.5px 0 rgba(0, 0, 0, 0.35);
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body,#root{height:100%;width:100%;overflow:hidden;border-radius:var(--radius);opacity:var(--window-opacity);font-family:-apple-system,BlinkMacSystemFont,
@@ -367,18 +401,77 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15);background
 
 .theme-pill {
   position: relative;
+  overflow: hidden;
+
+  /* 确保文字/图标等子内容居于光晕与高光层之上，保证文字锐利不蒙雾 */
+  & > * {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* 排除光晕层自身，使其贴合在内容底层 */
+  & > .theme-pill-glow {
+    position: absolute;
+    z-index: 1;
+  }
+  /* 顶部菲涅尔高光弧 (Specular Apex) */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.08) 35%, rgba(255, 255, 255, 0.01) 70%, transparent 100%);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.42);
+    pointer-events: none;
+    z-index: 1;
+    opacity: calc(0.25 + var(--pill-go, 0) * 0.45);
+    transition: opacity var(--transition-fast) ease;
+  }
+
+  /* 边缘微色散与菲涅尔描边 */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    z-index: 1;
+    background: var(--glass-dispersion-rim);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: calc(0.25 + var(--pill-go, 0) * 0.60);
+    transition: opacity var(--transition-fast) ease;
+  }
+  position: relative;
   transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease, color var(--transition-fast) ease, box-shadow var(--transition-fast) ease, opacity var(--transition-fast) ease;
 }
 .theme-pill-glow {
   position: absolute;
-  inset: -1.5px;
-  z-index: -1;
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
-  background: radial-gradient(240px circle at var(--pill-gx, 50%) var(--pill-gy, 50%), rgba(255,255,255,0.12), transparent 50%);
+  background: radial-gradient(130px circle at var(--pill-gx, 50%) var(--pill-gy, 50%), rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.12) 38%, transparent 70%), radial-gradient(260px circle at var(--pill-gx, 50%) var(--pill-gy, 50%), var(--glass-fresnel-soft, rgba(255,255,255,0.22)), transparent 60%);
   opacity: var(--pill-go, 0);
   transition: opacity 0.4s ease-out;
   border-radius: inherit;
 }
+/* 音乐文件列表行 Liquid Glass 悬停态 */
+.music-file-item {
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.music-file-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255, 255, 255, 0.16));
+}
+.music-file-item.selected {
+  background: var(--glass-vision-active);
+  color: var(--text-primary);
+  box-shadow: var(--glass-vision-shadow);
+}
+
 /* Player control buttons */
 .ctrl-btn:hover {
   color: var(--text-primary);

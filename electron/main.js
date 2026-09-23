@@ -51,7 +51,11 @@ let electronSettings = loadElectronSettings();
 
 // Apply auto-start on launch
 if (electronSettings.autoStart) {
-  app.setLoginItemSettings({ openAtLogin: true, path: process.execPath });
+  try {
+    app.setLoginItemSettings({ openAtLogin: true, path: process.execPath });
+  } catch (e) {
+    console.warn("[Settings] Apply auto-start on launch failed:", e.message);
+  }
 }
 
 // ---- Auto-Elevation (Admin Privileges) ----
