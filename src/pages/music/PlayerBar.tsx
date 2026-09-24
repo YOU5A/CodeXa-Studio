@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, StopCircle,
   Volume2, Music, Settings,
@@ -7,7 +6,6 @@ import {
 } from "lucide-react";
 import { GlassSurface, GlassButton, GlassSeekBar, GlassTooltip } from "@/design-system/components";
 import { radii, space, fontSizes } from "@/design-system/tokens";
-import { EASE_OUT } from "@/utils/animations";
 import type { PlayMode } from "@/contexts/MusicPlayerContext";
 import type { PlayerBarProps } from "./types";
 
@@ -146,6 +144,7 @@ export default function PlayerBar(props: PlayerBarProps) {
               <GlassTooltip text={lang === "zh" ? "\u6b4c\u8bcd\u8bbe\u7f6e" : "Lyrics Settings"}>
               <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <GlassButton
+                noBase
                 variant="ghost"
                 size="sm"
                 noAnimation
@@ -167,6 +166,7 @@ export default function PlayerBar(props: PlayerBarProps) {
             <GlassTooltip text={tx.lyrics}>
             <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <GlassButton
+                noBase
                 variant="ghost"
                 size="sm"
                 noAnimation
@@ -208,39 +208,26 @@ export default function PlayerBar(props: PlayerBarProps) {
           {/* Play/Pause */}
           <GlassTooltip text={playback.is_playing ? tx.pauseText : tx.playText}>
           <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              whileHover={{ scale: 1.1 }}
-              transition={{ duration: 0.15, ease: EASE_OUT }}
+            <GlassButton
+              noBase
+              variant="ghost"
+              size="sm"
+              noAnimation
+              className="ctrl-btn"
               onClick={toggle}
-              onMouseMove={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setPlayBtnGlow({
-                  x: (e.clientX - r.left) / r.width,
-                  y: (e.clientY - r.top) / r.height,
-                  visible: true,
-                });
-              }}
-              onMouseLeave={() => setPlayBtnGlow({ x: 0.5, y: 0.5, visible: false })}
+              aria-label={playback.is_playing ? tx.pauseText : tx.playText}
               style={{
-                background: "rgba(255,255,255,0.08)",
-                borderRadius: "50%",
-                width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: "var(--text-primary)",
-                position: "relative", overflow: "hidden",
+                width: 34, height: 34, minWidth: 34, padding: 0,
+                borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--text-primary)",
+                transition: "color 0.2s ease",
               }}
             >
-              <span style={{
-                  position: "absolute", inset: 0, borderRadius: "50%", pointerEvents: "none", zIndex: 0,
-                  background: `radial-gradient(circle at ${playBtnGlow.x * 100}% ${playBtnGlow.y * 100}%, rgba(255,255,255,0.18) 0%, transparent 60%)`,
-                  opacity: playBtnGlow.visible ? 1 : 0,
-                  transition: "opacity 0.25s ease",
-                }} />
               {playback.is_playing
-                ? <Pause size={14} fill="currentColor" style={{ position: "relative", zIndex: 1 }} />
-                : <Play size={14} fill="currentColor" style={{ position: "relative", zIndex: 1, marginLeft: 2 }} />
+                ? <Pause size={14} fill="currentColor" />
+                : <Play size={14} fill="currentColor" style={{ marginLeft: 2 }} />
               }
-            </motion.button>
+            </GlassButton>
           </span>
           </GlassTooltip>
 
@@ -268,6 +255,7 @@ export default function PlayerBar(props: PlayerBarProps) {
           <GlassTooltip text={modeTooltip}>
           <span style={{ width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <GlassButton
+              noBase
               variant="ghost"
               size="sm"
               noAnimation

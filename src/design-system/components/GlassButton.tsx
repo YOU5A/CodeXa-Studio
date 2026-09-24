@@ -11,6 +11,7 @@ import { forwardRef, type ReactNode, useCallback, useEffect, useRef } from "reac
 import { motion, type HTMLMotionProps, type TargetAndTransition } from "framer-motion";
 import { springSnappy, glassPress, glassGhostHover } from "../animations";
 import { space, radii, fontSizes } from "../tokens";
+import { isMouseOverElement, getGlobalMousePos } from "@/utils/mouseTracker";
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "input";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -22,6 +23,8 @@ export interface GlassButtonProps extends Omit<HTMLMotionProps<"button">, "child
   inline?: boolean;
   noAnimation?: boolean;
   noGlow?: boolean;
+  /** When true, omits the static glass background, borders, and lens reflections; only retaining the mouse-following glow */
+  noBase?: boolean;
 }
 
 /* Border-radius synced with window --radius (default 20px -> 10px) */
@@ -34,13 +37,37 @@ const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
 function variantBase(variant: ButtonVariant): React.CSSProperties {
   switch (variant) {
     case "primary":
-      return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.16) 100%), rgba(255,255,255,0.08)", color: "var(--text-primary, #ffffff)", border: "none", fontWeight: 600, backdropFilter: "blur(32px) saturate(2.2)", WebkitBackdropFilter: "blur(32px) saturate(2.2)", boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-vision-border), 0 4px 14px rgba(0,0,0,0.12)" };
+      return {
+        background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.10) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.06) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.09) 100%), transparent",
+        color: "var(--text-primary, #ffffff)",
+        border: "none",
+        fontWeight: 600,
+        backdropFilter: "blur(32px) saturate(2.2)",
+        WebkitBackdropFilter: "blur(32px) saturate(2.2)",
+        boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.20)), 0 2px 6px rgba(0,0,0,0.06)",
+      };
     case "secondary":
-      return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.06) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.02) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.08) 100%), transparent", color: "var(--text-primary)", border: "none", fontWeight: 500, backdropFilter: "blur(32px) saturate(2.2)", WebkitBackdropFilter: "blur(32px) saturate(2.2)", boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.18)), 0 2px 6px rgba(0,0,0,0.06)" };
+      return {
+        background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.06) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.02) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.08) 100%), transparent",
+        color: "var(--text-primary)",
+        border: "none",
+        fontWeight: 500,
+        backdropFilter: "blur(32px) saturate(2.2)",
+        WebkitBackdropFilter: "blur(32px) saturate(2.2)",
+        boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.18)), 0 2px 6px rgba(0,0,0,0.06)",
+      };
     case "danger":
       return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.00) 70%, rgba(255,255,255,0.06) 100%), rgba(var(--danger-rgb), 0.12)", color: "var(--danger)", border: "none", fontWeight: 500, backdropFilter: "blur(32px) saturate(2.2)", WebkitBackdropFilter: "blur(32px) saturate(2.2)", boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px rgba(var(--danger-rgb), 0.35), 0 2px 6px rgba(0,0,0,0.08)" };
     case "ghost":
-      return { background: "transparent", color: "var(--text-secondary)", border: "none", backdropFilter: "none", WebkitBackdropFilter: "none" };
+      return {
+        background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.06) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.02) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.08) 100%), transparent",
+        color: "var(--text-primary)",
+        border: "none",
+        fontWeight: 500,
+        backdropFilter: "blur(32px) saturate(2.2)",
+        WebkitBackdropFilter: "blur(32px) saturate(2.2)",
+        boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.18)), 0 2px 6px rgba(0,0,0,0.06)",
+      };
     case "input":
       return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.08) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.02) 50%, rgba(var(--glass-glow-rgb,255,255,255),0.04) 100%), transparent", color: "var(--text-primary)", border: "none", fontSize: fontSizes.sm, borderRadius: radii.md, padding: String(space[2]) + "px " + String(space[4]) + "px", backdropFilter: "blur(32px) saturate(2.2)", WebkitBackdropFilter: "blur(32px) saturate(2.2)", boxShadow: "0 0 0 1px var(--border-color)" };
     default: return {};
@@ -49,10 +76,18 @@ function variantBase(variant: ButtonVariant): React.CSSProperties {
 
 function hoverTarget(variant: ButtonVariant): TargetAndTransition | undefined {
   switch (variant) {
-    case "primary": return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.22) 100%), rgba(255,255,255,0.14)", boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px rgba(255,255,255,0.45), 0 0 18px rgba(255,255,255,0.20), 0 4px 16px rgba(0,0,0,0.16)" };
-    case "secondary": return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.07) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.05) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.02) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.07) 100%), rgba(var(--glass-glow-rgb,255,255,255),0.07)", boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.22)), 0 0 16px rgba(255,255,255,0.12)" };
+    case "primary":
+      return {
+        background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.16) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.08) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.04) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.14) 100%), transparent",
+        boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.30)), 0 0 16px rgba(255,255,255,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+      };
+    case "secondary":
+    case "ghost":
+      return {
+        background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.10) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.07) 40%, rgba(var(--glass-glow-rgb,255,255,255),0.03) 65%, rgba(var(--glass-glow-rgb,255,255,255),0.10) 100%), transparent",
+        boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.24)), 0 0 16px rgba(255,255,255,0.12)",
+      };
     case "danger": return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0.005) 70%, rgba(255,255,255,0.04) 100%), rgba(var(--danger-rgb), 0.22)", boxShadow: "0 0 0 1px rgba(var(--danger-rgb), 0.50), 0 0 14px rgba(var(--danger-rgb), 0.20)" };
-    case "ghost": return { background: "linear-gradient(var(--glass-angle, 135deg), rgba(var(--glass-glow-rgb,255,255,255),0.07) 0%, rgba(var(--glass-glow-rgb,255,255,255),0.04) 50%, rgba(var(--glass-glow-rgb,255,255,255),0.08) 100%), var(--bg-tertiary)", color: "var(--text-primary)", boxShadow: "var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255,255,255,0.18)), 0 2px 8px rgba(0,0,0,0.06)" };
     case "input": return { boxShadow: "0 0 0 1px var(--border-color), 0 0 12px rgba(var(--accent-rgb), 0.08), 0 0 0 3px var(--accent-bg)" };
     default: return undefined;
   }
@@ -66,6 +101,10 @@ function disabledStyle(): React.CSSProperties {
 
 const GLOW_COLOR = "rgba(255,255,255,0.25)";
 const GLOW_RADIUS = 360;
+
+function isLightTheme(): boolean {
+  return document.documentElement.getAttribute("data-theme") === "light";
+}
 
 function updateBtnGlow(el: HTMLElement, cx: number, cy: number) {
   const r = el.getBoundingClientRect();
@@ -83,7 +122,7 @@ function clearBtnGlow(el: HTMLElement) {
 
 export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
   function GlassButton(
-    { children, variant = "secondary", size = "md", inline = true, noAnimation = false, noGlow = false, disabled, style, ...rest },
+    { children, variant = "secondary", size = "md", inline = true, noAnimation = false, noGlow = false, noBase = false, disabled, style, ...rest },
     ref
   ) {
     // Stable random seed per mount ? avoids angle jump during animations
@@ -114,26 +153,87 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
       "--btn-gy": "50%",
       ...sizeStyles[size],
       ...variantBase(variant),
+      ...(noBase ? {
+        background: "transparent",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
+        boxShadow: "none",
+        border: "none",
+      } : {}),
       ...(disabled ? disabledStyle() : {}),
       ...(style as React.CSSProperties),
     } as React.CSSProperties;
 
+    const btnRef = useRef<HTMLButtonElement | null>(null);
+    const isHoveredRef = useRef(false);
+    const scrollingRef = useRef(false);
+    const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Scroll handler: hide glow on scroll, restore when scroll ends
+    useEffect(() => {
+      if (noGlow || disabled) return;
+
+      const handleScroll = () => {
+        const curBtn = btnRef.current;
+        if (!scrollingRef.current) {
+          scrollingRef.current = true;
+          if (curBtn) {
+            clearBtnGlow(curBtn);
+          }
+        }
+
+        if (!isMouseOverElement(curBtn)) {
+          isHoveredRef.current = false;
+        }
+
+        if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = setTimeout(() => {
+          scrollingRef.current = false;
+          if (noGlow || disabled) return;
+          const b = btnRef.current;
+          if (!b) return;
+
+          if (!isMouseOverElement(b)) {
+            clearBtnGlow(b);
+            isHoveredRef.current = false;
+            return;
+          }
+
+          isHoveredRef.current = true;
+          const { x, y } = getGlobalMousePos();
+          updateBtnGlow(b, x, y);
+        }, 150);
+      };
+
+      window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+      window.addEventListener("wheel", handleScroll, { passive: true });
+
+      return () => {
+        window.removeEventListener("scroll", handleScroll, { capture: true });
+        window.removeEventListener("wheel", handleScroll);
+        if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      };
+    }, [noGlow, disabled]);
+
     const onMove = useCallback((e: React.MouseEvent) => {
       if (noGlow || disabled) return;
+      isHoveredRef.current = true;
+      if (scrollingRef.current) return;
       updateBtnGlow(e.currentTarget as HTMLElement, e.clientX, e.clientY);
     }, [noGlow, disabled]);
 
     const onEnter = useCallback((e: React.MouseEvent) => {
       if (noGlow || disabled) return;
+      isHoveredRef.current = true;
+      if (scrollingRef.current) return;
       updateBtnGlow(e.currentTarget as HTMLElement, e.clientX, e.clientY);
     }, [noGlow, disabled]);
 
     const onLeave = useCallback((e: React.MouseEvent) => {
+      isHoveredRef.current = false;
       if (noGlow) return;
       clearBtnGlow(e.currentTarget as HTMLElement);
     }, [noGlow]);
-
-    const btnRef = useRef<HTMLButtonElement | null>(null);
 
     // Clear glow when button becomes disabled
     useEffect(() => {
@@ -141,6 +241,17 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
         clearBtnGlow(btnRef.current);
       }
     }, [disabled]);
+
+    const light = isLightTheme();
+    const specularGlow = light
+      ? "rgba(0, 0, 0, 0.20)"
+      : "rgba(255, 255, 255, 0.48)";
+    const specularMid = light
+      ? "rgba(0, 0, 0, 0.06)"
+      : "rgba(255, 255, 255, 0.15)";
+    const diffuseGlow = light
+      ? "rgba(0, 0, 0, 0.08)"
+      : "var(--glass-fresnel-soft, rgba(255, 255, 255, 0.25))";
 
     return (
       <motion.button
@@ -150,49 +261,49 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
         onMouseMove={onMove}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
-        whileHover={noAnimation || disabled ? undefined : hoverTarget(variant)}
+        whileHover={noAnimation || disabled || noBase ? undefined : hoverTarget(variant)}
         whileTap={noAnimation || disabled ? undefined : { ...glassPress.whileTap }}
         transition={springSnappy}
         {...rest}
       >
         <span style={{ position: "relative", zIndex: 3, display: "inline-flex", alignItems: "center", gap: "inherit" }}>{children}</span>
         {/* 顶部菲涅尔高光弧 (实体按钮常态显现，幽灵按钮hover显现) */}
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            boxShadow: "inset 0 1px 1px 0 rgba(255, 255, 255, 0.42)",
-            borderRadius: "inherit",
-            background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.08) 35%, rgba(255,255,255,0.01) 70%, transparent 100%)",
-            pointerEvents: "none",
-            zIndex: 1,
-            opacity: variant === "ghost"
-              ? "calc(var(--btn-go, 0) * 0.70)"
-              : "calc(0.38 + var(--btn-go, 0) * 0.45)",
-            transition: "opacity 0.25s ease",
-          }}
-        />
+        {!noBase && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              boxShadow: "inset 0 1px 1px 0 rgba(255, 255, 255, 0.42)",
+              borderRadius: "inherit",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.08) 35%, rgba(255,255,255,0.01) 70%, transparent 100%)",
+              pointerEvents: "none",
+              zIndex: 1,
+              opacity: "calc(0.32 + var(--btn-go, 0) * 0.45)",
+              transition: "opacity 0.25s ease",
+            }}
+          />
+        )}
         {/* 边缘微色散菲涅尔描边 */}
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "inherit",
-            padding: 1,
-            zIndex: 1,
-            background: "var(--glass-dispersion-rim)",
-            WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
-            WebkitMaskComposite: "xor",
-            maskComposite: "exclude",
-            pointerEvents: "none",
-            opacity: variant === "ghost"
-              ? "calc(var(--btn-go, 0) * 0.85)"
-              : "calc(0.30 + var(--btn-go, 0) * 0.55)",
-            transition: "opacity 0.25s ease",
-          }}
-        />
+        {!noBase && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "inherit",
+              padding: 1,
+              zIndex: 1,
+              background: "var(--glass-dispersion-rim)",
+              WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+              WebkitMaskComposite: "xor",
+              maskComposite: "exclude",
+              pointerEvents: "none",
+              opacity: "calc(0.30 + var(--btn-go, 0) * 0.55)",
+              transition: "opacity 0.25s ease",
+            }}
+          />
+        )}
         {/* 鼠标移动跟随光感 (双层镜面聚焦光斑 + 漫射光晕) */}
         {!noGlow && (
           <>
@@ -204,7 +315,7 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
                 inset: 0,
                 pointerEvents: "none",
                 zIndex: 2,
-                background: `radial-gradient(130px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), rgba(255,255,255,0.48) 0%, rgba(255,255,255,0.15) 35%, transparent 70%)`,
+                background: `radial-gradient(130px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), ${specularGlow} 0%, ${specularMid} 35%, transparent 70%)`,
                 opacity: "var(--btn-go, 0)",
                 transition: "opacity 0.25s ease-out",
                 borderRadius: "inherit",
@@ -218,7 +329,7 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
                 inset: 0,
                 pointerEvents: "none",
                 zIndex: 1,
-                background: `radial-gradient(320px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), var(--glass-fresnel-soft, rgba(255,255,255,0.25)) 0%, transparent 60%)`,
+                background: `radial-gradient(320px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), ${diffuseGlow} 0%, transparent 60%)`,
                 opacity: "var(--btn-go, 0)",
                 transition: "opacity 0.35s ease-out",
                 borderRadius: "inherit",

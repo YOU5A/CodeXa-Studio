@@ -1,9 +1,92 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Music, Search, X, Volume2, Disc } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { GlassCard, GlassScrollArea, GlassGlow, GlassInput, GlassTooltip } from "@/design-system/components";
+import { GlassCard, GlassScrollArea, GlassInput, GlassTooltip } from "@/design-system/components";
+import { springSmooth } from "@/design-system/animations";
 import { fontSizes, space, radii } from "@/design-system/tokens";
 import type { FileListProps } from "./types";
+
+function updateItemGlow(el: HTMLElement, cx: number, cy: number) {
+  const r = el.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return;
+  const px = ((cx - r.left) / r.width) * 100;
+  const py = ((cy - r.top) / r.height) * 100;
+  el.style.setProperty("--btn-gx", px + "%");
+  el.style.setProperty("--btn-gy", py + "%");
+  el.style.setProperty("--btn-go", "1");
+}
+
+function clearItemGlow(el: HTMLElement) {
+  el.style.setProperty("--btn-go", "0");
+}
+
+function ItemGlow() {
+  return (
+    <>
+      {/* 顶部菲涅尔高光弧 (跟随鼠标 X 轴顶部透镜反光) */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "inherit",
+          boxShadow: "inset 0 1px 1px 0 rgba(255, 255, 255, 0.42)",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.08) 35%, rgba(255,255,255,0.01) 70%, transparent 100%)",
+          pointerEvents: "none",
+          zIndex: 1,
+          opacity: "calc(var(--btn-go, 0) * 0.70)",
+          transition: "opacity 0.25s ease",
+        }}
+      />
+      {/* 边缘微色散菲涅尔描边 (跟随鼠标光标移动的 1px 反光边框) */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "inherit",
+          padding: 1,
+          zIndex: 1,
+          background: "var(--glass-dispersion-rim)",
+          WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+          WebkitMaskComposite: "xor",
+          maskComposite: "exclude",
+          pointerEvents: "none",
+          opacity: "calc(var(--btn-go, 0) * 0.85)",
+          transition: "opacity 0.25s ease",
+        }}
+      />
+      {/* 鼠标跟随聚焦高光斑 (Spotlight Specular) */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 1,
+          background: `radial-gradient(130px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), rgba(255,255,255,0.48) 0%, rgba(255,255,255,0.15) 35%, transparent 70%)`,
+          opacity: "var(--btn-go, 0)",
+          transition: "opacity 0.25s ease-out",
+          borderRadius: "inherit",
+        }}
+      />
+      {/* 鼠标跟随漫射光晕 (Diffuse Flare) */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 1,
+          background: `radial-gradient(320px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), var(--glass-fresnel-soft, rgba(255,255,255,0.25)) 0%, transparent 60%)`,
+          opacity: "var(--btn-go, 0)",
+          transition: "opacity 0.35s ease-out",
+          borderRadius: "inherit",
+        }}
+      />
+    </>
+  );
+}
 
 export default function FileList({
   files, selectedFile, playingFile,
@@ -270,13 +353,12 @@ export default function FileList({
         scrollbarGutter={8}
         style={{
           flex: 1,
-          padding: "6px 10px 32px 10px",
+          padding: "4px 10px",
           margin: 0,
-          display: "flex",
-          flexDirection: "column",
           minHeight: 0,
         }}
       >
+        <div style={{ paddingBottom: 28 }}>
         {files.length === 0 ? (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -304,91 +386,106 @@ export default function FileList({
           const isLossless = ["FLAC", "WAV", "APE", "ALAC", "DSF", "DFF"].includes(ext);
 
           return (
-            <GlassGlow
+            <div
               key={fp}
-              glowColor="rgba(255,255,255,0.12)"
-              glowRadius={280}
-              borderRadius={radii.md}
-              style={{ marginBottom: 2 }}
+              className={`music-file-item${isSelected ? " selected" : ""}`}
+              data-filepath={fp}
+              onClick={() => onSelect(fp)}
+              onDoubleClick={() => onPlay(fp)}
+              onMouseMove={(e) => updateItemGlow(e.currentTarget, e.clientX, e.clientY)}
+              onMouseEnter={(e) => updateItemGlow(e.currentTarget, e.clientX, e.clientY)}
+              onMouseLeave={(e) => clearItemGlow(e.currentTarget)}
+              style={{
+                position: "relative",
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: space[2],
+                padding: "7px 14px",
+                borderRadius: 9999,
+                cursor: "pointer",
+                fontSize: fontSizes.xs,
+                background: isSelected ? "var(--glass-vision-active)" : "transparent",
+                color: isPlaying ? "var(--accent)" : "var(--text-primary)",
+                boxShadow: isSelected ? "var(--glass-vision-shadow)" : "none",
+                transition: "background 0.15s ease, box-shadow 0.15s ease",
+                marginBottom: 2,
+                "--btn-go": "0",
+                "--btn-gx": "50%",
+                "--btn-gy": "50%",
+              } as React.CSSProperties}
             >
-              <div
-                className={`music-file-item${isSelected ? " selected" : ""}`}
-                data-filepath={fp}
-                onClick={() => onSelect(fp)}
-                onDoubleClick={() => onPlay(fp)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: space[2],
-                  padding: "7px 10px",
-                  borderRadius: radii.md,
-                  cursor: "pointer",
-                  fontSize: fontSizes.xs,
-                  color: isSelected ? "var(--accent)" : "var(--text-primary)",
-                }}
-              >
-                {/* Left: Icon + Title */}
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  minWidth: 0,
-                  flex: 1,
-                }}>
-                  {isPlaying ? (
-                    <Volume2
-                      size={14}
-                      style={{
-                        color: "var(--accent)",
-                        flexShrink: 0,
-                      }}
-                    />
-                  ) : (
-                    <Music
-                      size={13}
-                      style={{
-                        color: isSelected ? "var(--accent)" : "var(--text-tertiary)",
-                        opacity: isSelected ? 0.9 : 0.45,
-                        flexShrink: 0,
-                        transition: "color 0.15s ease, opacity 0.15s ease",
-                      }}
-                    />
-                  )}
-                  <span style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    fontWeight: isSelected ? 500 : 400,
-                  }}>
-                    {name}
-                  </span>
-                </div>
-
-                {/* Right: Audio Format Badge */}
-                {ext && (
-                  <span style={{
-                    flexShrink: 0,
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.5px",
-                    padding: "1.5px 7px",
-                    borderRadius: radii.full,
-                    background: isLossless
-                      ? "rgba(var(--accent-rgb, 59, 130, 246), 0.16)"
-                      : "rgba(255,255,255,0.06)",
-                    color: isLossless
-                      ? "var(--accent)"
-                      : "var(--text-tertiary)",
-                    border: `1px solid ${isLossless ? "rgba(var(--accent-rgb, 59, 130, 246), 0.3)" : "rgba(255,255,255,0.08)"}`,
-                  }}>
-                    {ext}
-                  </span>
+              {/* Left: Icon + Title (zIndex: 2) */}
+              <div style={{
+                position: "relative",
+                zIndex: 2,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                minWidth: 0,
+                flex: 1,
+              }}>
+                {isPlaying ? (
+                  <Volume2
+                    size={14}
+                    style={{
+                      color: "var(--accent)",
+                      flexShrink: 0,
+                    }}
+                  />
+                ) : (
+                  <Music
+                    size={13}
+                    style={{
+                      color: "var(--text-tertiary)",
+                      opacity: isSelected ? 0.75 : 0.45,
+                      flexShrink: 0,
+                      transition: "opacity 0.15s ease",
+                    }}
+                  />
                 )}
+                <span style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontWeight: isPlaying ? 600 : (isSelected ? 500 : 400),
+                  color: isPlaying ? "var(--accent)" : "var(--text-primary)",
+                  transition: "color 0.15s ease",
+                }}>
+                  {name}
+                </span>
               </div>
-            </GlassGlow>
+
+              {/* Right: Audio Format Badge (zIndex: 2) */}
+              {ext && (
+                <span style={{
+                  position: "relative",
+                  zIndex: 2,
+                  flexShrink: 0,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.5px",
+                  padding: "1.5px 7px",
+                  borderRadius: radii.full,
+                  background: isLossless
+                    ? "rgba(var(--accent-rgb, 59, 130, 246), 0.16)"
+                    : "rgba(255,255,255,0.06)",
+                  color: isLossless
+                    ? "var(--accent)"
+                    : "var(--text-tertiary)",
+                  border: `1px solid ${isLossless ? "rgba(var(--accent-rgb, 59, 130, 246), 0.3)" : "rgba(255,255,255,0.08)"}`,
+                }}>
+                  {ext}
+                </span>
+              )}
+
+              {/* GlassButton 同款鼠标跟随光晕与描边 (zIndex: 1) */}
+              <ItemGlow />
+            </div>
           );
         })}
+        </div>
       </GlassScrollArea>
 
       {/* Footer */}
@@ -441,8 +538,16 @@ export default function FileList({
                   }
                   scrollToTarget();
                 }}
-                whileHover={{ scale: 1.12, rotate: 30 }}
-                whileTap={{ scale: 0.92 }}
+                whileHover={{
+                  scale: 1.08,
+                  boxShadow: "0 6px 20px rgba(0, 0, 0, 0.22), 0 0 16px rgba(var(--accent-rgb, 59, 130, 246), 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+                  borderColor: "rgba(255, 255, 255, 0.38)",
+                }}
+                whileTap={{
+                  scale: 0.94,
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.16), 0 0 6px rgba(var(--accent-rgb, 59, 130, 246), 0.2)",
+                }}
+                transition={springSmooth}
                 style={{
                   width: 32,
                   height: 32,
@@ -459,7 +564,6 @@ export default function FileList({
                   cursor: "pointer",
                   outline: "none",
                   padding: 0,
-                  transition: "box-shadow 0.2s ease, border-color 0.2s ease",
                 }}
               >
                 <Disc size={15} style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }} />

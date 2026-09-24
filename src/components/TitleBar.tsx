@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Minus, X, Square, Copy, Droplets } from "lucide-react";
-import { GlassSurface, LiquidGlassLens } from "@/design-system";
+import { useState, useEffect } from "react";
+import { Minus, X, Square, Copy } from "lucide-react";
+import { GlassSurface } from "@/design-system";
 
 interface TitleBarProps {
   isMaximized: boolean;
@@ -128,68 +128,6 @@ export default function TitleBar({ isMaximized, onToggleMaximize }: TitleBarProp
   const dragStyle = { WebkitAppRegion: "drag" } as React.CSSProperties;
   const noDragStyle = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
 
-  const [lensState, setLensState] = useState<{
-    active: boolean;
-    x: number;
-    y: number;
-    isDragging: boolean;
-  }>({
-    active: false,
-    x: 0,
-    y: 0,
-    isDragging: false,
-  });
-
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMouseDownRef = useRef(false);
-
-  // 长按触发水滴折射透镜拖动
-  const handleLensPressStart = useCallback((e: React.MouseEvent) => {
-    isMouseDownRef.current = true;
-    const clientX = e.clientX;
-    const clientY = e.clientY;
-
-    longPressTimerRef.current = setTimeout(() => {
-      if (isMouseDownRef.current) {
-        setLensState({
-          active: true,
-          x: clientX,
-          y: clientY,
-          isDragging: true,
-        });
-      }
-    }, 220);
-  }, []);
-
-  const handleGlobalMouseMove = useCallback((e: MouseEvent) => {
-    if (!isMouseDownRef.current) return;
-    setLensState((prev) => {
-      if (!prev.active) return prev;
-      return { ...prev, x: e.clientX, y: e.clientY, isDragging: true };
-    });
-  }, []);
-
-  const handleGlobalMouseUp = useCallback(() => {
-    isMouseDownRef.current = false;
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    setLensState((prev) => {
-      if (!prev.active) return prev;
-      return { ...prev, active: false, isDragging: false };
-    });
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("mousemove", handleGlobalMouseMove);
-    window.addEventListener("mouseup", handleGlobalMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleGlobalMouseMove);
-      window.removeEventListener("mouseup", handleGlobalMouseUp);
-    };
-  }, [handleGlobalMouseMove, handleGlobalMouseUp]);
-
   return (
     <>
       <GlassSurface
@@ -257,56 +195,9 @@ export default function TitleBar({ isMaximized, onToggleMaximize }: TitleBarProp
           </span>
         </div>
 
-        {/* Center: 液态折射拖动把手 (方案 B 触发器) */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            ...noDragStyle,
-          }}
-        >
-          <button
-            className="theme-pill"
-            onMouseDown={handleLensPressStart}
-            title="按住200ms进入水滴物理折射拖拽模式"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "3px 12px",
-              fontSize: 11,
-              fontWeight: 500,
-              color: lensState.active ? "var(--text-primary)" : "var(--text-tertiary)",
-              background: lensState.active ? "var(--glass-vision-active)" : "rgba(255, 255, 255, 0.04)",
-              border: "none",
-              borderRadius: "calc(var(--radius) * 0.8)",
-              cursor: lensState.active ? "grabbing" : "grab",
-              userSelect: "none",
-              outline: "none",
-              boxShadow: lensState.active
-                ? "var(--glass-vision-shadow)"
-                : "var(--glass-lens-inner-shadow), 0 0 0 1px var(--border-color)",
-              transition: "all var(--transition-fast) ease",
-            }}
-          >
-            <Droplets size={12} style={{ color: lensState.active ? "var(--text-primary)" : "inherit" }} />
-            <span>{lensState.active ? "液态折射拖拽中" : "液态把手"}</span>
-            <span className="theme-pill-glow" />
-          </button>
-        </div>
-
         {/* Right: placeholder for symmetry */}
         <div style={noDragStyle} />
       </GlassSurface>
-
-      {/* 方案 B：物理折射与色散水滴透镜 */}
-      <LiquidGlassLens
-        active={lensState.active}
-        x={lensState.x}
-        y={lensState.y}
-        radius={85}
-        isDragging={lensState.isDragging}
-      />
     </>
   );
 }

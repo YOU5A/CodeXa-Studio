@@ -47,6 +47,7 @@
 }
 
 :root, [data-theme="light"], [data-theme-name="light"] {
+  --glass-glow-rgb: 0,0,0;
   --bg-primary: rgba(255,255,255,0.72);
   --bg-secondary: rgba(249,247,244,0.45);
   --bg-tertiary: rgba(242,241,238,0.14);
@@ -61,9 +62,9 @@
   --accent-hover: #0077ed;
   --accent-bg: rgba(0,113,227,0.10);
   --accent-bg-fade: linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0%, rgba(0, 0, 0, 0.03) 50%, rgba(0, 0, 0, 0.05) 100%);
-  --glass-vision-active: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.55) 100%);
-  --glass-vision-border: rgba(0, 0, 0, 0.12);
-  --glass-vision-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.05);
+  --glass-vision-active: linear-gradient(135deg, rgba(0, 113, 227, 0.10) 0%, rgba(0, 113, 227, 0.05) 100%);
+  --glass-vision-border: rgba(0, 113, 227, 0.30);
+  --glass-vision-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04), 0 0 0 1.5px rgba(0, 113, 227, 0.25), 0 2px 12px rgba(0, 113, 227, 0.10);
   --accent-rgb: 0,113,227;
   --bg-base: #fef0db;
   --success: #34c759;
@@ -78,6 +79,7 @@
 }
 
 [data-theme="dark"] {
+  --glass-glow-rgb: 255,255,255;
   --bg-base: #231e16;
   --bg-primary: rgba(30,30,32,0.70);
   --bg-secondary: rgba(30,30,32,0.42);
@@ -457,14 +459,320 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15);background
   transition: opacity 0.4s ease-out;
   border-radius: inherit;
 }
+[data-theme="light"] .theme-pill-glow {
+  background: radial-gradient(130px circle at var(--pill-gx, 50%) var(--pill-gy, 50%), rgba(0, 0, 0, 0.20) 0%, rgba(0, 0, 0, 0.06) 38%, transparent 70%), radial-gradient(260px circle at var(--pill-gx, 50%) var(--pill-gy, 50%), rgba(0, 0, 0, 0.08), transparent 60%);
+}
+/* ─── 侧边栏胶囊导航条目 (Sidebar Nav Pill) ─── */
+.sidebar-nav-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+}
+
+.sidebar-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 9999px;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  white-space: nowrap;
+  text-align: left;
+  gap: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  box-shadow: none;
+  transition: color 0.16s ease, transform 0.1s ease;
+  z-index: 3;
+}
+
+.sidebar-nav-item:active {
+  transform: scale(0.98);
+}
+
+.sidebar-nav-item.active,
+.sidebar-nav-item.hovered,
+.sidebar-nav-item.drag-target {
+  color: var(--text-primary);
+}
+
+.sidebar-nav-item.active,
+.sidebar-nav-item.drag-target {
+  font-weight: 600;
+}
+
+/* 激活选中胶囊指示器 (Active Pill) */
+.sidebar-nav-active-pill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 9999px;
+  background: var(--glass-vision-active);
+  box-shadow: var(--glass-vision-shadow);
+  pointer-events: none;
+  z-index: 1;
+  transform-origin: center center;
+  isolation: isolate;
+  transition: box-shadow 0.2s ease,
+              background 0.2s ease;
+}
+
+/* 仅拖拽态启用的水滴凸透镜：中心清晰、边缘有厚实曲面高光 */
+.sidebar-nav-active-pill.dragging {
+  z-index: 5 !important;
+  overflow: hidden;
+  background: transparent;
+  box-shadow:
+    0 16px 34px -8px rgba(0, 0, 0, 0.42),
+    0 4px 14px rgba(0, 0, 0, 0.18),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.74),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.30),
+    inset 0 0 18px rgba(255, 255, 255, 0.08);
+}
+
+/* 通过 SVG 位移滤镜采样水滴下方的导航内容；边缘产生凸透折射 */
+.sidebar-nav-active-pill-refract {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(2px) saturate(1.25) contrast(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.25) contrast(1.05);
+  backdrop-filter: url(#sidebar-liquid-refract) saturate(1.18) contrast(1.06);
+  -webkit-backdrop-filter: url(#sidebar-liquid-refract) saturate(1.18) contrast(1.06);
+}
+
+/* 只有边缘进入模糊层，中心保持清晰以突出凸透放大 */
+.sidebar-nav-active-pill-edge-blur {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(12px) saturate(1.45) contrast(1.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.45) contrast(1.08);
+  mask-image: radial-gradient(
+    ellipse 76% 112% at 50% 50%,
+    transparent 0%,
+    transparent 30%,
+    rgba(0, 0, 0, 0.35) 52%,
+    rgba(0, 0, 0, 0.86) 76%,
+    #000 100%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 76% 112% at 50% 50%,
+    transparent 0%,
+    transparent 30%,
+    rgba(0, 0, 0, 0.35) 52%,
+    rgba(0, 0, 0, 0.86) 76%,
+    #000 100%
+  );
+}
+
+.sidebar-nav-active-pill.dragging::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    radial-gradient(ellipse 70% 92% at 27% 5%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.06) 32%, transparent 66%),
+    radial-gradient(ellipse 72% 88% at 75% 112%, rgba(56, 189, 248, 0.14) 0%, rgba(192, 132, 252, 0.07) 30%, transparent 65%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 0%, transparent 34%, transparent 64%, rgba(0, 0, 0, 0.10) 100%);
+}
+
+.sidebar-nav-active-pill.dragging::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  pointer-events: none;
+  z-index: 3;
+  background: conic-gradient(
+    from 205deg at 50% 50%,
+    rgba(255, 255, 255, 0.62) 0deg,
+    rgba(255, 255, 255, 0.18) 54deg,
+    rgba(56, 189, 248, 0.28) 132deg,
+    rgba(192, 132, 252, 0.18) 218deg,
+    rgba(255, 255, 255, 0.56) 310deg,
+    rgba(255, 255, 255, 0.62) 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0.84;
+}
+
+[data-theme="dark"] .sidebar-nav-active-pill.dragging {
+  background: transparent;
+  box-shadow:
+    0 16px 34px -8px rgba(0, 0, 0, 0.56),
+    0 4px 14px rgba(0, 0, 0, 0.25),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.60),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.44),
+    inset 0 0 18px rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="dark"] .sidebar-nav-active-pill.dragging::before {
+  background:
+    radial-gradient(ellipse 70% 92% at 27% 5%, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.05) 32%, transparent 66%),
+    radial-gradient(ellipse 72% 88% at 75% 112%, rgba(56, 189, 248, 0.12) 0%, rgba(192, 132, 252, 0.06) 30%, transparent 65%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 0%, transparent 34%, transparent 64%, rgba(0, 0, 0, 0.16) 100%);
+}
+
+.sidebar-nav-list.is-dragging {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.sidebar-nav-list.is-dragging .sidebar-nav-item {
+  cursor: grabbing !important;
+}
+
+/* 悬停平滑滑动胶囊指示器 (Floating Hover Pill) */
+.sidebar-nav-hover-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(var(--glass-glow-rgb), 0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--glass-glow-rgb), 0.10);
+  pointer-events: none;
+  z-index: 1;
+  opacity: 1;
+  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.18s ease,
+              box-shadow 0.18s ease;
+}
+
+/* 移出侧边栏触发范围时的平滑淡出消失动画 (仅渐隐 opacity，绝不干涉 transform) */
+.sidebar-nav-hover-pill.fading {
+  opacity: 0 !important;
+  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* 当指示器滑到激活项时，去除外圈描边，仅保留柔和提亮层，绝不出现双重边框打架 */
+.sidebar-nav-item.active .sidebar-nav-hover-pill {
+  background: rgba(var(--glass-glow-rgb), 0.08);
+  box-shadow: none;
+}
+
+.sidebar-nav-icon {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.16s ease;
+}
+
+.sidebar-nav-item.hovered .sidebar-nav-icon,
+.sidebar-nav-item:hover .sidebar-nav-icon {
+  transform: scale(1.08);
+}
+
+.sidebar-nav-item:active .sidebar-nav-icon {
+  transform: scale(0.96);
+}
+
+.sidebar-nav-label {
+  position: relative;
+  z-index: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* 侧边栏条目鼠标跟随最新 Liquid Glass 光晕 (Spotlight Specular + Diffuse Flare + Dispersion Rim + Apex) */
+.sidebar-nav-item-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.sidebar-nav-item-glow .glow-apex {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.42);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.08) 35%, rgba(255, 255, 255, 0.01) 70%, transparent 100%);
+  pointer-events: none;
+  opacity: calc(var(--btn-go, 0) * 0.70);
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-nav-item-glow .glow-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--glass-dispersion-rim);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: calc(var(--btn-go, 0) * 0.85);
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-nav-item-glow .glow-specular {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(130px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.15) 35%, transparent 70%);
+  opacity: var(--btn-go, 0);
+  transition: opacity 0.25s ease-out;
+  border-radius: inherit;
+}
+
+.sidebar-nav-item-glow .glow-diffuse {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(320px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), var(--glass-fresnel-soft, rgba(255, 255, 255, 0.25)) 0%, transparent 60%);
+  opacity: var(--btn-go, 0);
+  transition: opacity 0.35s ease-out;
+  border-radius: inherit;
+}
+
+[data-theme="light"] .sidebar-nav-item-glow .glow-specular {
+  background: radial-gradient(130px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.05) 35%, transparent 70%);
+}
+
+[data-theme="light"] .sidebar-nav-item-glow .glow-diffuse {
+  background: radial-gradient(320px circle at var(--btn-gx, 50%) var(--btn-gy, 50%), rgba(0, 0, 0, 0.06) 0%, transparent 60%);
+}
+
+[data-theme="light"] .sidebar-nav-item-glow .glow-apex {
+  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.70);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.12) 35%, transparent 100%);
+}
+
 /* 音乐文件列表行 Liquid Glass 悬停态 */
 .music-file-item {
   position: relative;
+  border-radius: 9999px;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .music-file-item:hover {
   background: rgba(255, 255, 255, 0.06);
-  box-shadow: var(--glass-lens-inner-shadow), 0 0 0 1px var(--glass-fresnel-soft, rgba(255, 255, 255, 0.16));
+  box-shadow: var(--glass-lens-inner-shadow);
 }
 .music-file-item.selected {
   background: var(--glass-vision-active);

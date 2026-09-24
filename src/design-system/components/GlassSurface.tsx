@@ -8,6 +8,7 @@ import { forwardRef, type ReactNode, useRef, useCallback, useEffect } from "reac
 import { motion, type HTMLMotionProps } from "framer-motion";
 import { materialToStyle, generateGlassSeed, type GlassSeed } from "../materials";
 import type { GlassTier } from "../tokens";
+import { isMouseOverElement, getGlobalMousePos } from "@/utils/mouseTracker";
 
 export interface GlassSurfaceProps extends HTMLMotionProps<"div"> {
   children?: ReactNode;
@@ -19,8 +20,15 @@ export interface GlassSurfaceProps extends HTMLMotionProps<"div"> {
   styleOverrides?: Partial<{ radius: number; shadow: string; border: string }>;
 }
 
-const GLOW_COLOR = "rgba(255,255,255,0.05)";
 const GLOW_RADIUS = 500;
+
+function isLightTheme(): boolean {
+  return document.documentElement.getAttribute("data-theme") === "light";
+}
+
+function getGlowColor(): string {
+  return isLightTheme() ? "rgba(0, 0, 0, 0.055)" : "rgba(255, 255, 255, 0.055)";
+}
 
 export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(
   function GlassSurface(
@@ -42,13 +50,18 @@ export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(
 
     const glowRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const lastPos = useRef<{ x: number; y: number } | null>(null);
     const rafRef = useRef(0);
+    const isHoveredRef = useRef(false);
+    const scrollingRef = useRef(false);
+    const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
       if (noGlow) return;
       const g = glowRef.current;
-      if (g) { g.style.transition = "opacity 0.4s ease-out"; g.style.opacity = "0"; }
+      if (g) {
+        g.style.transition = "opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1)";
+        g.style.opacity = "0";
+      }
     }, [noGlow]);
 
     const applyGlow = useCallback((cx: number, cy: number) => {
@@ -60,67 +73,99 @@ export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(
       if (r.width === 0 || r.height === 0) return;
       const px = ((cx - r.left) / r.width) * 100;
       const py = ((cy - r.top) / r.height) * 100;
-      g.style.background = `radial-gradient(${GLOW_RADIUS}px circle at ${px}% ${py}%, ${GLOW_COLOR}, transparent 60%)`;
-      g.style.opacity = "1";
+      const color = getGlowColor();
+      g.style.background = `radial-gradient(${GLOW_RADIUS}px circle at ${px}% ${py}%, ${color}, transparent 60%)`;
+      if (!scrollingRef.current) {
+        g.style.opacity = "1";
+      }
     }, [noGlow]);
 
+    // Scroll handler: immediately hide glow with smooth transition, restore when scrolling stops
     const handleScroll = useCallback(() => {
       if (noGlow) return;
-      const pos = lastPos.current;
-      const c = containerRef.current;
       const g = glowRef.current;
-      if (!pos || !c || !g) return;
-      const elUnder = document.elementFromPoint(pos.x, pos.y);
-      if (!elUnder || !(elUnder === c || c.contains(elUnder) || elUnder === g || g.contains(elUnder))) {
-        g.style.opacity = "0";
-        return;
+      const c = containerRef.current;
+
+      // Smoothly hide glow as soon as scroll begins
+      if (!scrollingRef.current) {
+        scrollingRef.current = true;
+        if (g) {
+          g.style.opacity = "0";
+        }
       }
-      applyGlow(pos.x, pos.y);
+
+      // Check immediately if element is already scrolled out from under the cursor
+      if (!isMouseOverElement(c)) {
+        isHoveredRef.current = false;
+      }
+
+      // Debounce: restore glow 150ms after scroll ends ONLY if mouse is still truly inside
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = setTimeout(() => {
+        scrollingRef.current = false;
+        if (noGlow) return;
+        const curContainer = containerRef.current;
+        const curGlow = glowRef.current;
+        if (!curContainer || !curGlow) return;
+
+        // Accurate real-time hit test using global viewport cursor position
+        if (!isMouseOverElement(curContainer)) {
+          curGlow.style.opacity = "0";
+          isHoveredRef.current = false;
+          return;
+        }
+
+        // Cursor is verified over this element: refresh position to real-time coordinates and fade in
+        isHoveredRef.current = true;
+        const { x, y } = getGlobalMousePos();
+        applyGlow(x, y);
+      }, 150);
     }, [noGlow, applyGlow]);
 
     useEffect(() => {
       if (noGlow) return;
       const c = containerRef.current;
       if (!c) return;
-      const targets: (EventTarget & { addEventListener: Function; removeEventListener: Function })[] = [];
-      c.addEventListener("scroll", handleScroll, { capture: true, passive: true });
-      targets.push(c);
-      window.addEventListener("scroll", handleScroll, { passive: true });
-      targets.push(window);
-      let el: HTMLElement | null = c.parentElement;
-      while (el) {
-        const s = window.getComputedStyle(el);
-        const ov = s.overflow + s.overflowY;
-        if (ov.includes("auto") || ov.includes("scroll")) {
-          el.addEventListener("scroll", handleScroll, { passive: true });
-          targets.push(el);
-        }
-        el = el.parentElement;
-      }
-      return () => { for (const t of targets) t.removeEventListener("scroll", handleScroll); };
+
+      // Window scroll in capture phase catches scrolling anywhere in the app
+      window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+      window.addEventListener("wheel", handleScroll, { passive: true });
+
+      return () => {
+        window.removeEventListener("scroll", handleScroll, { capture: true });
+        window.removeEventListener("wheel", handleScroll);
+        if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      };
     }, [noGlow, handleScroll]);
 
     const onMove = useCallback((e: React.MouseEvent) => {
       if (noGlow) return;
-      lastPos.current = { x: e.clientX, y: e.clientY };
+      isHoveredRef.current = true;
+      if (scrollingRef.current) return;
+
       // rAF throttle: one DOM write per frame
       if (!rafRef.current) {
+        const cx = e.clientX, cy = e.clientY;
         rafRef.current = requestAnimationFrame(() => {
           rafRef.current = 0;
-          const pos = lastPos.current;
-          if (pos) applyGlow(pos.x, pos.y);
+          if (!scrollingRef.current) {
+            applyGlow(cx, cy);
+          }
         });
       }
     }, [noGlow, applyGlow]);
 
     const onEnter = useCallback((e: React.MouseEvent) => {
       if (noGlow) return;
-      lastPos.current = { x: e.clientX, y: e.clientY };
-      applyGlow(e.clientX, e.clientY);
+      isHoveredRef.current = true;
+      if (!scrollingRef.current) {
+        applyGlow(e.clientX, e.clientY);
+      }
     }, [noGlow, applyGlow]);
 
     const onLeave = useCallback(() => {
       if (noGlow) return;
+      isHoveredRef.current = false;
       const g = glowRef.current;
       if (g) g.style.opacity = "0";
       if (rafRef.current) {

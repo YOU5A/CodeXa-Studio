@@ -67,6 +67,17 @@ function shuffleArray<T>(arr: T[]): T[] {
   return result;
 }
 
+function normalizeFilePath(fp: string): string {
+  if (!fp) return "";
+  return fp.replace(/\\/g, "/").toLowerCase();
+}
+
+function findFileIndex(list: string[], target: string): number {
+  if (!target || list.length === 0) return -1;
+  const normTarget = normalizeFilePath(target);
+  return list.findIndex(f => normalizeFilePath(f) === normTarget);
+}
+
 export function MusicPlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioState, setAudioState] = useState<AudioState>({
@@ -160,34 +171,50 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     const onEnd = () => {
       stopRaf();
       setAudioState(prev => ({ ...prev, playing: false, pos: 0 }));
-      // Auto-advance based on play mode
-      const mode = playModeRef.current;
-      const list = playlistRef.current;
-      const shuff = shuffleOrderRef.current;
-      const current = playingFileRef.current;
 
-      if (mode === "stop-after") return;
-      if (list.length === 0) return;
+      // 脱离当前 ended 事件调用栈（延迟 50ms 调度），避免媒体解码管线清理冲突与加载中止
+      setTimeout(() => {
+        const mode = playModeRef.current;
+        const list = playlistRef.current;
+        const current = playingFileRef.current;
 
-      const idx = list.indexOf(current);
-      let nextIdx: number;
+        if (mode === "stop-after") return;
+        if (list.length === 0) return;
 
-      if (mode === "shuffle" && shuff.length > 0) {
-        const shuffIdx = shuff.indexOf(idx);
-        const nextShuffIdx = (shuffIdx + 1) % shuff.length;
-        nextIdx = shuff[nextShuffIdx];
-      } else if (mode === "sequential") {
-        // sequential: stop after the last track, no wrap
-        if (idx < 0 || idx >= list.length - 1) return;
-        nextIdx = idx + 1;
-      } else {
-        // loop-all: play next, wrap to start
-        nextIdx = idx >= 0 && idx < list.length - 1 ? idx + 1 : 0;
-      }
+        const idx = findFileIndex(list, current);
+        let nextIdx: number;
 
-      const nextFile = list[nextIdx];
-      // 与手动播放走同一路径（含 load() 重置），避免 ended 状态直接换源导致播放失败
-      if (nextFile) playFileRef.current(nextFile);
+        if (mode === "shuffle") {
+          let order = shuffleOrderRef.current;
+          if (!order || order.length !== list.length) {
+            order = shuffleArray(list.map((_, i) => i));
+            setShuffleOrder(order);
+            shuffleOrderRef.current = order;
+          }
+          const shuffIdx = idx >= 0 ? order.indexOf(idx) : -1;
+          if (shuffIdx >= 0 && shuffIdx < order.length - 1) {
+            nextIdx = order[shuffIdx + 1];
+          } else {
+            const freshOrder = shuffleArray(list.map((_, i) => i));
+            if (freshOrder.length > 1 && freshOrder[0] === idx) {
+              [freshOrder[0], freshOrder[1]] = [freshOrder[1], freshOrder[0]];
+            }
+            setShuffleOrder(freshOrder);
+            shuffleOrderRef.current = freshOrder;
+            nextIdx = freshOrder[0];
+          }
+        } else if (mode === "sequential") {
+          // sequential: stop after the last track, no wrap
+          if (idx < 0 || idx >= list.length - 1) return;
+          nextIdx = idx + 1;
+        } else {
+          // loop-all: play next, wrap to start
+          nextIdx = idx >= 0 && idx < list.length - 1 ? idx + 1 : 0;
+        }
+
+        const nextFile = list[nextIdx];
+        if (nextFile) playFileRef.current(nextFile);
+      }, 50);
     };
     const onErr = () => {
       // 主动清空 src（stop/releaseHandle）触发的预期错误，忽略
@@ -281,6 +308,11 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     setPlayModeState(mode);
     playModeRef.current = mode;
     localStorage.setItem(STORAGE_PLAYMODE, mode);
+    if (mode === "shuffle" && playlistRef.current.length > 0) {
+      const newOrder = shuffleArray(playlistRef.current.map((_, i) => i));
+      setShuffleOrder(newOrder);
+      shuffleOrderRef.current = newOrder;
+    }
   }, []);
 
   const playFile = useCallback((fp: string) => {
@@ -293,11 +325,35 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     if (!fp || !audio) return;
     setPlayingFile(fp);
     playingFileRef.current = fp;
-    audio.src = window.electronAPI?.bridge.getFileUrl(fp) ?? "";
-    // 强制重置媒体管线：ended 后直接换 src 立即 play 在 Electron 中可能失败
-    audio.load();
-    audio.play().catch(e => console.error("[Audio] Play failed:", e));
+
+    const targetUrl = window.electronAPI?.bridge.getFileUrl(fp) ?? "";
+    const isSameSrc = audio.src === targetUrl || (targetUrl && audio.src.endsWith(targetUrl));
+
+    // 暂停当前播放并归零播放头
+    audio.pause();
+    audio.currentTime = 0;
+
+    if (!isSameSrc) {
+      audio.src = targetUrl;
+    }
+
     setAudioState(prev => ({ ...prev, pos: 0 }));
+
+    // 触发播放并捕获 Promise；遇媒体管线 AbortError 时在 canplay 就绪后重试一次
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err: any) => {
+        if (err?.name === "AbortError") {
+          const onCanPlay = () => {
+            audio.removeEventListener("canplay", onCanPlay);
+            audio.play().catch(e => console.error("[Audio] Retry play failed:", e));
+          };
+          audio.addEventListener("canplay", onCanPlay, { once: true });
+        } else {
+          console.error("[Audio] Play failed:", err);
+        }
+      });
+    }
   }, []);
   // 保持 ref 指向最新 playFile（音频事件闭包使用）
   useEffect(() => { playFileRef.current = playFile; }, [playFile]);
@@ -341,17 +397,31 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const playNext = useCallback(() => {
     const list = playlistRef.current;
     const mode = playModeRef.current;
-    const shuff = shuffleOrderRef.current;
     const current = playingFileRef.current;
 
     if (list.length === 0) return;
-    const idx = list.indexOf(current);
+    const idx = findFileIndex(list, current);
     let nextIdx: number;
 
-    if (mode === "shuffle" && shuff.length > 0) {
-      const shuffIdx = idx >= 0 ? shuff.indexOf(idx) : -1;
-      const nextShuffIdx = shuffIdx >= 0 ? (shuffIdx + 1) % shuff.length : 0;
-      nextIdx = shuff[nextShuffIdx];
+    if (mode === "shuffle") {
+      let order = shuffleOrderRef.current;
+      if (!order || order.length !== list.length) {
+        order = shuffleArray(list.map((_, i) => i));
+        setShuffleOrder(order);
+        shuffleOrderRef.current = order;
+      }
+      const shuffIdx = idx >= 0 ? order.indexOf(idx) : -1;
+      if (shuffIdx >= 0 && shuffIdx < order.length - 1) {
+        nextIdx = order[shuffIdx + 1];
+      } else {
+        const freshOrder = shuffleArray(list.map((_, i) => i));
+        if (freshOrder.length > 1 && freshOrder[0] === idx) {
+          [freshOrder[0], freshOrder[1]] = [freshOrder[1], freshOrder[0]];
+        }
+        setShuffleOrder(freshOrder);
+        shuffleOrderRef.current = freshOrder;
+        nextIdx = freshOrder[0];
+      }
     } else {
       nextIdx = idx >= 0 && idx < list.length - 1 ? idx + 1 : 0;
     }
@@ -363,17 +433,22 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const playPrev = useCallback(() => {
     const list = playlistRef.current;
     const mode = playModeRef.current;
-    const shuff = shuffleOrderRef.current;
     const current = playingFileRef.current;
 
     if (list.length === 0) return;
-    const idx = list.indexOf(current);
+    const idx = findFileIndex(list, current);
     let prevIdx: number;
 
-    if (mode === "shuffle" && shuff.length > 0) {
-      const shuffIdx = idx >= 0 ? shuff.indexOf(idx) : -1;
-      const prevShuffIdx = shuffIdx > 0 ? shuffIdx - 1 : shuff.length - 1;
-      prevIdx = shuff[prevShuffIdx];
+    if (mode === "shuffle") {
+      let order = shuffleOrderRef.current;
+      if (!order || order.length !== list.length) {
+        order = shuffleArray(list.map((_, i) => i));
+        setShuffleOrder(order);
+        shuffleOrderRef.current = order;
+      }
+      const shuffIdx = idx >= 0 ? order.indexOf(idx) : -1;
+      const prevShuffIdx = shuffIdx > 0 ? shuffIdx - 1 : order.length - 1;
+      prevIdx = order[prevShuffIdx];
     } else {
       prevIdx = idx > 0 ? idx - 1 : list.length - 1;
     }

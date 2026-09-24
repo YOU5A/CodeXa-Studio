@@ -324,7 +324,10 @@ export default function MusicManager({ onNavigate, fluidSettings: externalSettin
       try {
         // If already scanned this session, restore from cache without re-scanning
         if (sessionState.scanned && sessionState.files.length > 0) {
-          // Already have cached data, no need to re-scan
+          // Already have cached data, ensure global playlist is synchronized
+          if (playlist.length === 0) {
+            setPlaylist(sessionState.files);
+          }
         } else {
           const saved = localStorage.getItem("music_folder");
           if (saved && !hasScanned.current) { hasScanned.current = true; setFolder(saved); doScan(saved); }

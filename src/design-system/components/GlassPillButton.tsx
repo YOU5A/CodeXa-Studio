@@ -5,7 +5,8 @@
  * 所有 pill 按钮统一使用此组件。
  */
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useRef, useEffect, type ReactNode } from "react";
+import { isMouseOverElement, getGlobalMousePos } from "@/utils/mouseTracker";
 
 export interface GlassPillButtonProps {
   children?: ReactNode;
@@ -28,27 +29,90 @@ export function GlassPillButton({
 }: GlassPillButtonProps) {
   // Stable random seed per mount ? avoids angle jump during re-renders
   const seedRef = useRef<number>(112 + Math.random() * 56);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const isHoveredRef = useRef(false);
+  const scrollingRef = useRef(false);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setGlow = useCallback((el: HTMLElement, cx: number, cy: number) => {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
     el.style.setProperty("--pill-gx", ((cx - r.left) / r.width) * 100 + "%");
     el.style.setProperty("--pill-gy", ((cy - r.top) / r.height) * 100 + "%");
-    el.style.setProperty("--pill-go", "1");
+    if (!scrollingRef.current) {
+      el.style.setProperty("--pill-go", "1");
+    }
   }, []);
 
   const clearGlow = useCallback((el: HTMLElement) => {
     el.style.setProperty("--pill-go", "0");
   }, []);
 
+  useEffect(() => {
+    if (disabled) return;
+
+    const handleScroll = () => {
+      const curBtn = btnRef.current;
+      if (!scrollingRef.current) {
+        scrollingRef.current = true;
+        if (curBtn) {
+          clearGlow(curBtn);
+        }
+      }
+
+      if (!isMouseOverElement(curBtn)) {
+        isHoveredRef.current = false;
+      }
+
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = setTimeout(() => {
+        scrollingRef.current = false;
+        if (disabled) return;
+        const b = btnRef.current;
+        if (!b) return;
+
+        if (!isMouseOverElement(b)) {
+          clearGlow(b);
+          isHoveredRef.current = false;
+          return;
+        }
+
+        isHoveredRef.current = true;
+        const { x, y } = getGlobalMousePos();
+        setGlow(b, x, y);
+      }, 150);
+    };
+
+    window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+    window.addEventListener("wheel", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll, { capture: true });
+      window.removeEventListener("wheel", handleScroll);
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
+  }, [disabled, clearGlow, setGlow]);
+
   return (
     <button
+      ref={btnRef}
       className={`theme-pill${className ? " " + className : ""}`}
       onClick={onClick}
       disabled={disabled}
-      onMouseMove={(e) => setGlow(e.currentTarget, e.clientX, e.clientY)}
-      onMouseEnter={(e) => setGlow(e.currentTarget, e.clientX, e.clientY)}
-      onMouseLeave={(e) => clearGlow(e.currentTarget)}
+      onMouseMove={(e) => {
+        isHoveredRef.current = true;
+        if (scrollingRef.current) return;
+        setGlow(e.currentTarget, e.clientX, e.clientY);
+      }}
+      onMouseEnter={(e) => {
+        isHoveredRef.current = true;
+        if (scrollingRef.current) return;
+        setGlow(e.currentTarget, e.clientX, e.clientY);
+      }}
+      onMouseLeave={(e) => {
+        isHoveredRef.current = false;
+        clearGlow(e.currentTarget);
+      }}
       title={title}
       style={{
         padding: "5px 14px",

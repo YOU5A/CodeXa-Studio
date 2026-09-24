@@ -327,7 +327,7 @@ export default function GpuName() {
                     position: "relative",
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: isActive ? "var(--text-primary)" : "var(--accent)", textShadow: isActive ? "0 1px 6px rgba(255,255,255,0.25)" : "none" }}>{p}</div>
+                  <div style={{ fontWeight: 600, color: isActive ? "var(--accent)" : "var(--text-primary)", textShadow: isActive ? "0 0 8px rgba(var(--accent-rgb), 0.35)" : "none" }}>{p}</div>
                   <div style={{ marginTop: 4, fontSize: fontSizes.xs, color: "var(--text-tertiary)" }}>
                     {i === 0 || i === 4 ? `${tx.minimum} · ${i === 4 ? tx.laptop : tx.desktop}` : p.includes("3060") ? tx.mainstream : tx.highEnd}
                   </div>
@@ -377,7 +377,7 @@ export default function GpuName() {
                     opacity: !adapter || !nativeName || saving ? 0.6 : 1,
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: isRestoreActive ? "var(--text-primary)" : "var(--accent)", textShadow: isRestoreActive ? "0 1px 6px rgba(255,255,255,0.25)" : "none" }}>{nativeName || "—"}</div>
+                  <div style={{ fontWeight: 600, color: isRestoreActive ? "var(--accent)" : "var(--text-primary)", textShadow: isRestoreActive ? "0 0 8px rgba(var(--accent-rgb), 0.35)" : "none" }}>{nativeName || "—"}</div>
                   <div style={{ marginTop: 4, fontSize: fontSizes.xs, color: "var(--text-tertiary)" }}>{tx.restore}</div>
                   <span className="theme-pill-glow" />
                 </motion.button>

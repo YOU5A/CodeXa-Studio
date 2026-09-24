@@ -14,6 +14,9 @@ const isDev = !app.isPackaged;
 // 禁用 Electron 安全警告（webSecurity / allowRunningInsecureContent / CSP）
 process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
 
+// 解除 Chromium 对媒体无手势自动播放的限制，保证音频自然播放完毕（ended）后能无缝切歌
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 // Fix GPU cache permission errors by setting a custom cache path
 app.setPath("userData", path.join(app.getPath("appData"), "CodeXaStudio"));
 

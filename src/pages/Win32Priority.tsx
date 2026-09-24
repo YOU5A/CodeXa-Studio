@@ -344,7 +344,7 @@ export default function Win32Priority(_props: Props) {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: fontSizes.lg, fontWeight: 600, color: isActive ? "var(--text-primary)" : "var(--accent)", fontFamily: "monospace", textShadow: isActive ? "0 1px 6px rgba(255,255,255,0.25)" : "none" }}>
+                  <span style={{ fontSize: fontSizes.lg, fontWeight: 600, color: isActive ? "var(--accent)" : "var(--text-primary)", fontFamily: "monospace", textShadow: isActive ? "0 0 8px rgba(var(--accent-rgb), 0.35)" : "none" }}>
                     0x{p.hex}
                   </span>
                   {p.effect && (

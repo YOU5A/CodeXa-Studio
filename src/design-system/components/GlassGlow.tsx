@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GlassGlow — Mouse-Following Dynamic Glow Effect
  *
  * Wraps children with a real-time cursor-tracking radial-gradient spotlight.
