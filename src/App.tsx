@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTheme, ThemeProvider } from "./hooks/useTheme";
 import { getAnimDuration, EASE_OUT } from "./utils/animations";
@@ -17,6 +17,7 @@ import { GlassLayout, GlassMain, GlassEmptyState, pageTransition } from "./desig
 import ErrorBoundary from "./components/ErrorBoundary";
 import NowPlayingBackground from "./components/NowPlaying/NowPlayingBackground";
 import NowPlayingOverlay from "./components/NowPlaying/NowPlayingOverlay";
+import type { FluidSurfaceHandle } from "./components/FluidBackground";
 import { loadFluidSettings, type FluidSettingsValues } from "./components/FluidSettingsPanel";
 import { isLightColor, type RGB } from "./utils/colorExtractor";
 
@@ -76,6 +77,15 @@ function AppContent() {
   const animDuration = getAnimDuration(settings.animationSpeed);
   const { audioState } = useMusicPlayer();
   const [fluidSettings, setFluidSettings] = useState<FluidSettingsValues>(() => loadFluidSettings());
+  const [fluidSurface, setFluidSurface] = useState<FluidSurfaceHandle | null>(null);
+  const fluidSurfaceRef = useRef<FluidSurfaceHandle | null>(null);
+  const handleFluidSurfaceChange = useCallback((surface: FluidSurfaceHandle | null) => {
+    fluidSurfaceRef.current = surface;
+    setFluidSurface(surface);
+  }, []);
+  useEffect(() => {
+    if (!mainFluidEnabled) handleFluidSurfaceChange(null);
+  }, [mainFluidEnabled, handleFluidSurfaceChange]);
   const [coverColor, setCoverColor] = useState<RGB | null>(null);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const { lang } = useLanguage();
@@ -215,6 +225,7 @@ function AppContent() {
           dynamicFluid={fluidSettings.dynamicFluid}
           blurAmount={fluidSettings.blurAmount}
           targetFps={fluidSettings.fps}
+          onSurfaceChange={handleFluidSurfaceChange}
         />
       )}
       {/* Title Bar — sits above the body grid */}
@@ -241,6 +252,8 @@ function AppContent() {
           onNavigate={handleNavigate}
           onPreload={preloadPage}
           onVersionTrigger={() => openGame()}
+          fluidSurface={fluidSurface}
+          backgroundType={fluidSettings.backgroundType}
         />
 
         <GlassMain

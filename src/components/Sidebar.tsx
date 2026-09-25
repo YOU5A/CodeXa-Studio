@@ -11,12 +11,16 @@ import { useDevUnlock } from "@/developer-unlock";
 import { useConfirm } from "@/contexts/ConfirmContext";
 import type { Page, Language } from "@/types";
 import { APP_VERSION } from "@/version";
+import type { FluidSurfaceHandle } from "@/components/FluidBackground";
+import type { FluidSettingsValues } from "@/components/FluidSettingsPanel";
 
 interface SidebarProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onPreload?: (page: Page) => void;
   onVersionTrigger?: () => void;
+  fluidSurface?: FluidSurfaceHandle | null;
+  backgroundType?: FluidSettingsValues["backgroundType"];
 }
 
 interface ClickTip {
@@ -55,6 +59,8 @@ const navItems: { id: Page; icon: React.ReactNode }[] = [
   { id: "ncmstudio", icon: <FileAudio size={18} /> },
   { id: "settings", icon: <Settings size={18} /> },
 ];
+
+const FLUID_CANVAS_ZOOM = 1.075;
 
 function updateItemGlow(el: HTMLElement, cx: number, cy: number) {
   const r = el.getBoundingClientRect();
@@ -165,7 +171,7 @@ function SidebarLiquidLensFilter() {
           <feDisplacementMap
             in="SourceGraphic"
             in2="sidebarDispMap"
-            scale="0.075"
+            scale="0.12"
             xChannelSelector="R"
             yChannelSelector="G"
             result="sidebarDispR"
@@ -179,7 +185,7 @@ function SidebarLiquidLensFilter() {
           <feDisplacementMap
             in="SourceGraphic"
             in2="sidebarDispMap"
-            scale="0.09"
+            scale="0.145"
             xChannelSelector="R"
             yChannelSelector="G"
             result="sidebarDispG"
@@ -193,7 +199,7 @@ function SidebarLiquidLensFilter() {
           <feDisplacementMap
             in="SourceGraphic"
             in2="sidebarDispMap"
-            scale="0.105"
+            scale="0.17"
             xChannelSelector="R"
             yChannelSelector="G"
             result="sidebarDispB"
@@ -204,21 +210,9 @@ function SidebarLiquidLensFilter() {
             values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"
             result="sidebarBlue"
           />
-          <feComposite
-            in="sidebarRed"
-            in2="sidebarGreen"
-            operator="arithmetic"
-            k2="1"
-            k3="1"
-            result="sidebarRG"
-          />
-          <feComposite
-            in="sidebarRG"
-            in2="sidebarBlue"
-            operator="arithmetic"
-            k2="1"
-            k3="1"
-          />
+          <feBlend in="sidebarRed" in2="sidebarGreen" mode="screen" result="sidebarRG" />
+          <feBlend in="sidebarRG" in2="sidebarBlue" mode="screen" result="sidebarRGB" />
+          <feBlend in="SourceGraphic" in2="sidebarRGB" mode="normal" />
         </filter>
       </defs>
     </svg>
@@ -236,7 +230,7 @@ function SidebarItemGlow() {
   );
 }
 
-export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionTrigger }: SidebarProps) {
+export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionTrigger, fluidSurface, backgroundType = "fluid" }: SidebarProps) {
   const { lang } = useLanguage();
   const { settings } = useTheme();
   const { isDeveloperMode, registerVersionClick, lock } = useDevUnlock();
@@ -274,6 +268,51 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartInfoRef = useRef<{ startX: number; startY: number; pageId: Page } | null>(null);
   const isMountedRef = useRef(false);
+  const fluidCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fluidPaintFrameRef = useRef<number | null>(null);
+
+  const stopFluidPaint = useCallback(() => {
+    if (fluidPaintFrameRef.current !== null) {
+      cancelAnimationFrame(fluidPaintFrameRef.current);
+      fluidPaintFrameRef.current = null;
+    }
+    const canvas = fluidCanvasRef.current;
+    if (canvas) {
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+  }, []);
+
+  const paintFluidFrame = useCallback(() => {
+    if (!isDraggingRef.current || !fluidSurface || !fluidCanvasRef.current) {
+      fluidPaintFrameRef.current = null;
+      return;
+    }
+
+    const canvas = fluidCanvasRef.current;
+    // canvas 本身带有凸透放大，采样区域先还原到放大前的屏幕尺寸，
+    // 避免把 1.075 倍缩放重复计入流体纹理坐标。
+    const transformedRect = canvas.getBoundingClientRect();
+    const unscaledWidth = transformedRect.width / FLUID_CANVAS_ZOOM;
+    const unscaledHeight = transformedRect.height / FLUID_CANVAS_ZOOM;
+    const targetRect = new DOMRect(
+      transformedRect.left + (transformedRect.width - unscaledWidth) / 2,
+      transformedRect.top + (transformedRect.height - unscaledHeight) / 2,
+      unscaledWidth,
+      unscaledHeight,
+    );
+    fluidSurface.paint(canvas, targetRect, { x: 12 });
+    fluidPaintFrameRef.current = requestAnimationFrame(paintFluidFrame);
+  }, [fluidSurface]);
+
+  useEffect(() => {
+    stopFluidPaint();
+    if (!isDragging || !fluidSurface) return;
+    fluidPaintFrameRef.current = requestAnimationFrame(paintFluidFrame);
+    return stopFluidPaint;
+  }, [isDragging, fluidSurface, paintFluidFrame, stopFluidPaint]);
 
   // 清理所有计时器
   useEffect(() => {
@@ -282,8 +321,9 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
       if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
       if (stopJiggleTimerRef.current) clearTimeout(stopJiggleTimerRef.current);
+      stopFluidPaint();
     };
-  }, []);
+  }, [stopFluidPaint]);
 
   // 获取特定页面的 DOM 几何位置
   const getItemMetrics = useCallback((page: Page) => {
@@ -625,6 +665,42 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
       >
         <SidebarLiquidLensFilter />
 
+        {/* 拖拽态透镜先绘制在导航内容下方，避免滤镜覆盖文字和图标 */}
+        <motion.div
+          className={`sidebar-nav-active-pill${isDragging ? " dragging" : ""}${isDragging && fluidSurface ? " fluid" : ""}${isDragging ? ` ${backgroundType}` : ""}`}
+          animate={{
+            left: 0,
+            right: 0,
+            height: isDragging ? pillHeight + 16 : pillHeight,
+          }}
+          style={{
+            top: 0,
+            y: pillY,
+            scaleX: liquidScaleX,
+            scaleY: liquidScaleY,
+          }}
+          transition={{
+            left: { type: "spring", stiffness: 420, damping: 28 },
+            right: { type: "spring", stiffness: 420, damping: 28 },
+            height: { type: "spring", stiffness: 420, damping: 28 },
+          }}
+          aria-hidden="true"
+        >
+          {isDragging && (
+            <>
+              {fluidSurface && (
+                <canvas
+                  ref={fluidCanvasRef}
+                  className="sidebar-nav-active-pill-fluid"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="sidebar-nav-active-pill-refract" />
+              <span className="sidebar-nav-active-pill-edge-blur" />
+            </>
+          )}
+        </motion.div>
+
         {navItems.map((item) => {
           if (item.id === "ncmstudio" && !isDeveloperMode) return null;
           const isItemActive = currentPage === item.id;
@@ -695,34 +771,30 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
           );
         })}
 
-        {/* 拖拽态透镜必须绘制在导航内容之后，才能采样水滴下方的 UI */}
-        <motion.div
-          className={`sidebar-nav-active-pill${isDragging ? " dragging" : ""}`}
-          animate={{
-            left: 0,
-            right: 0,
-            height: isDragging ? pillHeight + 16 : pillHeight,
-          }}
-          style={{
-            top: 0,
-            y: pillY,
-            scaleX: liquidScaleX,
-            scaleY: liquidScaleY,
-          }}
-          transition={{
-            left: { type: "spring", stiffness: 420, damping: 28 },
-            right: { type: "spring", stiffness: 420, damping: 28 },
-            height: { type: "spring", stiffness: 420, damping: 28 },
-          }}
-          aria-hidden="true"
-        >
-          {isDragging && (
-            <>
-              <span className="sidebar-nav-active-pill-refract" />
-              <span className="sidebar-nav-active-pill-edge-blur" />
-            </>
-          )}
-        </motion.div>
+        {/* UI 折射层必须位于导航内容之后，才能采样文字和图标。 */}
+        {isDragging && (
+          <motion.div
+            className={`sidebar-nav-ui-lens ${backgroundType}`}
+            animate={{
+              left: 0,
+              right: 0,
+              height: pillHeight + 16,
+            }}
+            style={{
+              top: 0,
+              y: pillY,
+              scaleX: liquidScaleX,
+              scaleY: liquidScaleY,
+            }}
+            transition={{
+              left: { type: "spring", stiffness: 420, damping: 28 },
+              right: { type: "spring", stiffness: 420, damping: 28 },
+              height: { type: "spring", stiffness: 420, damping: 28 },
+            }}
+            aria-hidden="true"
+          />
+        )}
+
       </div>
 
       <div style={{ flex: 1 }} />

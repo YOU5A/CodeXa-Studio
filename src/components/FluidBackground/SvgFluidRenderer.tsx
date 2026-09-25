@@ -9,6 +9,19 @@
 import { useEffect, useRef, useCallback, type FC } from "react";
 import "./SvgFluidRenderer.css";
 
+export interface FluidSurfaceHandle {
+  /** 当前流体渲染使用的四个源 canvas。 */
+  readonly sourceCanvases: readonly HTMLCanvasElement[];
+  /** 当前流体容器，位置会随窗口布局变化。 */
+  readonly sourceElement: HTMLElement;
+  /** 获取流体容器当前屏幕区域。 */
+  getRect: () => DOMRect;
+  /** 将当前流体画面绘制到目标 canvas。 */
+  paint: (target: HTMLCanvasElement, targetRect: DOMRect, offset?: { x?: number; y?: number }) => void;
+  /** 停止后续绘制并释放句柄。 */
+  dispose: () => void;
+}
+
 export interface SvgFluidRendererProps {
   /** 图片 URL (base64 或 http URL) */
   imageUrl: string;
@@ -24,9 +37,43 @@ export interface SvgFluidRendererProps {
   blurAmount?: number;
   /** 额外 CSS 类名 */
   className?: string;
+  /** 将当前流体表面提供给拖拽透镜等内部消费者。 */
+  onSurfaceChange?: (surface: FluidSurfaceHandle | null) => void;
 }
 
 const CANVAS_SIZE = 100;
+
+interface TransformMetrics {
+  rotation: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+function readTransformMetrics(element: HTMLElement): TransformMetrics {
+  const value = getComputedStyle(element).transform;
+  if (!value || value === "none") return { rotation: 0, scaleX: 1, scaleY: 1 };
+
+  const match = value.match(/matrix(?:3d)?\(([^)]+)\)/);
+  if (!match) return { rotation: 0, scaleX: 1, scaleY: 1 };
+  const values = match[1].split(",").map(Number);
+  if (values.length === 6) {
+    const [a, b, c, d] = values;
+    return {
+      rotation: Math.atan2(b, a),
+      scaleX: Math.hypot(a, b) || 1,
+      scaleY: Math.hypot(c, d) || 1,
+    };
+  }
+  if (values.length === 16) {
+    const [a, b, , , c, d] = values;
+    return {
+      rotation: Math.atan2(b, a),
+      scaleX: Math.hypot(a, b) || 1,
+      scaleY: Math.hypot(c, d) || 1,
+    };
+  }
+  return { rotation: 0, scaleX: 1, scaleY: 1 };
+}
 
 const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
   imageUrl,
@@ -36,6 +83,7 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
   targetFps = 60,
   blurAmount = 0,
   className,
+  onSurfaceChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvas1Ref = useRef<HTMLCanvasElement>(null);
@@ -83,6 +131,79 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
     }
   }, [imageUrl, drawQuadrants]);
 
+  const paintSurface = useCallback((target: HTMLCanvasElement, targetRect: DOMRect, offset: { x?: number; y?: number } = {}) => {
+    const root = containerRef.current;
+    const context = target.getContext("2d");
+    if (!root || !context || targetRect.width <= 0 || targetRect.height <= 0) return;
+
+    const rootRect = root.getBoundingClientRect();
+    if (rootRect.width <= 0 || rootRect.height <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const pixelWidth = Math.max(1, Math.ceil(targetRect.width * dpr));
+    const pixelHeight = Math.max(1, Math.ceil(targetRect.height * dpr));
+    if (target.width !== pixelWidth || target.height !== pixelHeight) {
+      target.width = pixelWidth;
+      target.height = pixelHeight;
+    }
+
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, targetRect.width, targetRect.height);
+
+    const rootTransform = readTransformMetrics(root);
+    const offsetX = offset.x ?? 0;
+    const offsetY = offset.y ?? 0;
+    const canvases = [canvas1Ref.current, canvas2Ref.current, canvas3Ref.current, canvas4Ref.current];
+    for (const canvas of canvases) {
+      if (!canvas) continue;
+      const sourceRect = canvas.getBoundingClientRect();
+      if (sourceRect.width <= 0 || sourceRect.height <= 0) continue;
+
+      const canvasTransform = readTransformMetrics(canvas);
+      const layoutWidth = canvas.offsetWidth || sourceRect.width;
+      const layoutHeight = canvas.offsetHeight || sourceRect.height;
+      const drawWidth = layoutWidth * rootTransform.scaleX * canvasTransform.scaleX;
+      const drawHeight = layoutHeight * rootTransform.scaleY * canvasTransform.scaleY;
+      const centerX = sourceRect.left + sourceRect.width / 2 - targetRect.left + offsetX;
+      const centerY = sourceRect.top + sourceRect.height / 2 - targetRect.top + offsetY;
+
+      context.save();
+      context.translate(centerX, centerY);
+      context.rotate(rootTransform.rotation + canvasTransform.rotation);
+      context.drawImage(canvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      context.restore();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!enabled || !imageUrl || !containerRef.current) {
+      onSurfaceChange?.(null);
+      return;
+    }
+
+    let disposed = false;
+    const sourceCanvases = [canvas1Ref.current, canvas2Ref.current, canvas3Ref.current, canvas4Ref.current]
+      .filter((canvas): canvas is HTMLCanvasElement => Boolean(canvas));
+
+    const surface: FluidSurfaceHandle = {
+      sourceCanvases,
+      sourceElement: containerRef.current,
+      getRect: () => containerRef.current?.getBoundingClientRect() ?? new DOMRect(),
+      paint: (target, targetRect, offset) => {
+        if (!disposed) paintSurface(target, targetRect, offset);
+      },
+      dispose: () => {
+        disposed = true;
+      },
+    };
+
+    onSurfaceChange?.(surface);
+    return () => {
+      surface.dispose();
+      onSurfaceChange?.(null);
+    };
+  }, [enabled, imageUrl, onSurfaceChange, paintSurface]);
+
   if (!enabled || !imageUrl) return null;
 
   return (
@@ -105,9 +226,10 @@ const SvgFluidRenderer: FC<SvgFluidRendererProps> = ({
             baseFrequency="0.005"
             numOctaves="1"
             seed="0"
+            result="fluidNoise"
           />
           {/* 位移固定 400：原项目为音频驱动，未接音频时保持此值 */}
-          <feDisplacementMap in="SourceGraphic" scale="400" />
+          <feDisplacementMap in="SourceGraphic" in2="fluidNoise" scale="400" />
         </filter>
       </svg>
 

@@ -9,9 +9,10 @@
  * 流体参数来自共享 fluidSettings（与音乐页同步）；暗化遮罩由设置面板滑块控制。
  */
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import FluidBackground from "@/components/FluidBackground";
+import type { FluidSurfaceHandle } from "@/components/FluidBackground";
 import type { FluidSettingsValues } from "@/components/FluidSettingsPanel";
 import type { RGB } from "@/utils/colorExtractor";
 
@@ -31,13 +32,21 @@ interface NowPlayingBackgroundProps {
   blurAmount: number;
   /** 流体目标帧率 */
   targetFps: FluidSettingsValues["fps"];
+  /** 当前流体画面句柄，供侧边栏拖拽透镜使用。 */
+  onSurfaceChange?: (surface: FluidSurfaceHandle | null) => void;
 }
 
 /** RGB → css 颜色，可选亮度系数（渐变用） */
 const rgbCss = (c: RGB, factor = 1) =>
   `rgb(${Math.min(255, Math.round(c[0] * factor))},${Math.min(255, Math.round(c[1] * factor))},${Math.min(255, Math.round(c[2] * factor))})`;
 
-function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, dimMultiplier = 1, type, dynamicFluid, blurAmount, targetFps }: NowPlayingBackgroundProps) {
+function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, dimMultiplier = 1, type, dynamicFluid, blurAmount, targetFps, onSurfaceChange }: NowPlayingBackgroundProps) {
+
+  useEffect(() => {
+    if (type !== "fluid" || !coverImageUrl) {
+      onSurfaceChange?.(null);
+    }
+  }, [type, coverImageUrl, onSurfaceChange]);
 
   const dimOpacity = Math.max(0, Math.min(100, dim)) / 100;
   const dimStrength = Math.max(0, dimMultiplier);
@@ -91,6 +100,7 @@ function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, dimMult
         staticFluid={!dynamicFluid}
         coverImageUrl={coverImageUrl}
         playing={playing}
+        onSurfaceChange={onSurfaceChange}
       />
     );
   }

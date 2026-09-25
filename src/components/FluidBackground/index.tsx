@@ -5,6 +5,9 @@
  */
 
 import { lazy, Suspense, type FC } from "react";
+import type { FluidSurfaceHandle } from "./SvgFluidRenderer";
+
+export type { FluidSurfaceHandle } from "./SvgFluidRenderer";
 
 const SvgFluidRenderer = lazy(() => import("./SvgFluidRenderer"));
 
@@ -25,6 +28,8 @@ export interface FluidBackgroundProps {
   staticFluid?: boolean;
   /** 额外 CSS 类名 */
   className?: string;
+  /** 将当前流体表面提供给内部透镜消费者。 */
+  onSurfaceChange?: (surface: FluidSurfaceHandle | null) => void;
 }
 
 const FluidBackground: FC<FluidBackgroundProps> = ({
@@ -36,6 +41,7 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
   playing,
   staticFluid,
   className,
+  onSurfaceChange,
 }) => {
   // 无封面时无流体可渲染（旧版 Canvas 彩色光斑已移除）
   if (!coverImageUrl) return null;
@@ -50,6 +56,7 @@ const FluidBackground: FC<FluidBackgroundProps> = ({
         blurAmount={blurAmount}
         paused={playing === false}
         className={staticFluid ? `svg-fluid-static${className ? " " + className : ""}` : className}
+        onSurfaceChange={onSurfaceChange}
       />
     </Suspense>
   );

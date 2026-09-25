@@ -738,7 +738,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
             onClick={toggleTranslation}
             style={switchBtnStyle(npSettings.lyricStyles.showTranslation, !hasTranslation)}
           >
-            译
+            {T("译", "Tr")}
           </GlassButton>
         </GlassTooltip>
         <GlassTooltip text={T("音译", "Romaji")} placement="left">
@@ -753,22 +753,22 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
             onClick={toggleRomaji}
             style={switchBtnStyle(npSettings.lyricStyles.showRomaji, !hasRomaji)}
           >
-            音
+            {T("音", "Ro")}
           </GlassButton>
         </GlassTooltip>
-        <GlassTooltip text={T("逐字", "Karaoke")} placement="left">
+        <GlassTooltip text={T("逐单字", "Karaoke")} placement="left">
           <GlassButton
             variant="ghost"
             size="sm"
             noAnimation
             className="np-lyrics-switch-btn"
-            aria-label={T("逐字", "Karaoke")}
+            aria-label={T("逐单字", "Karaoke")}
             aria-pressed={npSettings.useKaraokeLyrics}
             disabled={!hasKaraoke}
             onClick={toggleKaraoke}
             style={switchBtnStyle(npSettings.useKaraokeLyrics, !hasKaraoke)}
           >
-            逐字
+            {T("逐", "Kar")}
           </GlassButton>
         </GlassTooltip>
         <AnimatePresence>
@@ -791,7 +791,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
                   onClick={selectAllLyrics}
                   style={switchBtnStyle(false)}
                 >
-                  全选
+                  {T("全选", "All")}
                 </GlassButton>
               </GlassTooltip>
             </motion.span>
