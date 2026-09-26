@@ -1,6 +1,6 @@
 {
   "name": "codexa-studio",
-  "version": "2.5.6",
+  "version": "26.9.1",
   "description": "CodeXa Studio - Windows 系统调优一体化工具箱",
   "main": "electron/main.js",
   "scripts": {
@@ -67,6 +67,9 @@
       ],
       "icon": "icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
+    },
+    "portable": {
+      "requestExecutionLevel": "admin"
     },
     "nsis": {
       "oneClick": false,
