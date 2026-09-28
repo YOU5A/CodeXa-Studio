@@ -35,7 +35,7 @@ CodeXa Studio 是一个基于 Electron + React + .NET 构建的现代化 Windows
 <p align="left">
   <b>🎵 音乐管理器</b><br/>
   <b> </b><br/>
-  <img src="https://raw.githubusercontent.com/YOU5A/CodeXa-Studio/master/Screenshot2.png?v=4" width="85%" alt="Win32 优先级分离" />
+  <img src="https://raw.githubusercontent.com/YOU5A/CodeXa-Studio/master/Screenshot2.png?v=5" width="85%" alt="Win32 优先级分离" />
 </p>
 
 ---
