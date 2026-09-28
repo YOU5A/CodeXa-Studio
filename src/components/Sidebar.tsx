@@ -237,6 +237,7 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
   const { confirm } = useConfirm();
   const [clickTip, setClickTip] = useState<ClickTip | null>(null);
   const [hoveredNavId, setHoveredNavId] = useState<Page | null>(null);
+  const [isArriving, setIsArriving] = useState(false);
   const [isHoverFading, setIsHoverFading] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tipKeyRef = useRef(0);
@@ -354,6 +355,38 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
     return closestPage;
   }, [currentPage, isDeveloperMode]);
 
+  const skipPillAnimationRef = useRef(false);
+
+  // 解锁动画抵达与交接监听：水滴展开后直接就地接管为真实 Active 选中胶囊，绝无从顶部滑落的冲突与闪烁
+  useEffect(() => {
+    const handleArrival = () => {
+      setIsArriving(true);
+    };
+    const handleHandoff = () => {
+      setIsArriving(false);
+      skipPillAnimationRef.current = true;
+      const ncmMetrics = getItemMetrics("ncmstudio");
+      if (ncmMetrics) {
+        setPillHeight(ncmMetrics.height);
+        pillTargetY.set(ncmMetrics.top);
+        pillY.jump(ncmMetrics.top);
+      } else {
+        const ncmEl = document.querySelector<HTMLElement>('[data-nav-id="ncmstudio"]');
+        if (ncmEl) {
+          setPillHeight(ncmEl.offsetHeight);
+          pillTargetY.set(ncmEl.offsetTop);
+          pillY.jump(ncmEl.offsetTop);
+        }
+      }
+    };
+    window.addEventListener("codexa-unlock-arrival", handleArrival);
+    window.addEventListener("codexa-unlock-handoff", handleHandoff);
+    return () => {
+      window.removeEventListener("codexa-unlock-arrival", handleArrival);
+      window.removeEventListener("codexa-unlock-handoff", handleHandoff);
+    };
+  }, [getItemMetrics, pillTargetY, pillY]);
+
   // 当当前页面改变、紧凑模式切换或开发者模式切换时，同步选中胶囊位置
   useEffect(() => {
     if (isDraggingRef.current) return;
@@ -361,8 +394,10 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
       const metrics = getItemMetrics(currentPage);
       if (metrics) {
         setPillHeight(metrics.height);
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || skipPillAnimationRef.current) {
           pillTargetY.set(metrics.top);
+          pillY.jump(metrics.top);
+          skipPillAnimationRef.current = false;
           isMountedRef.current = true;
         } else {
           animate(pillTargetY, metrics.top, {
@@ -376,7 +411,7 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
     };
     const raf = requestAnimationFrame(updatePos);
     return () => cancelAnimationFrame(raf);
-  }, [currentPage, settings.compactMode, isDeveloperMode, getItemMetrics, pillTargetY]);
+  }, [currentPage, settings.compactMode, isDeveloperMode, getItemMetrics, pillTargetY, pillY]);
 
   // 激活长按拖拽模式 (计算胶囊 Y 坐标)
   const activateDrag = useCallback((clientY: number) => {
@@ -705,7 +740,8 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
           if (item.id === "ncmstudio" && !isDeveloperMode) return null;
           const isItemActive = currentPage === item.id;
           const isDragTarget = isDragging && dragTargetId === item.id;
-          const isHovered = hoveredNavId === item.id && !isDragging;
+          const isNcmArriving = isArriving && item.id === "ncmstudio";
+          const isHovered = !isNcmArriving && hoveredNavId === item.id && !isDragging;
           const isNewNcm = item.id === "ncmstudio";
           return (
             <motion.button
@@ -722,8 +758,8 @@ export default function Sidebar({ currentPage, onNavigate, onPreload, onVersionT
               onMouseEnter={(e) => handleItemMouseEnter(e, item.id)}
               onMouseMove={handleItemMouseMove}
               onMouseLeave={handleItemMouseLeave}
-              initial={isNewNcm ? { opacity: 0, y: -10 } : undefined}
-              animate={isNewNcm ? { opacity: 1, y: 0 } : undefined}
+              initial={isNewNcm ? { opacity: 0 } : undefined}
+              animate={isNewNcm ? { opacity: 1 } : undefined}
               transition={isNewNcm ? springSnappy : undefined}
               style={{
                 padding: settings.compactMode ? "7px 14px" : "9px 16px",

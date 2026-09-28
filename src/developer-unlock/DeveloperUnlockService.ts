@@ -17,7 +17,7 @@ class DevUnlockServiceImpl {
   }
 
   private notify() {
-    Promise.resolve().then(() => this.listeners.forEach((fn) => fn()));
+    this.listeners.forEach((fn) => fn());
   }
 
   /** 初始化: 从存储读取解锁状态 */
@@ -78,10 +78,10 @@ class DevUnlockServiceImpl {
   }
 
   /** 仅激活开发者模式（不关闭游戏 overlay），用于动画中途显示 NCM 按钮 */
-  async enableDevModeOnly() {
+  enableDevModeOnly() {
     this.isDeveloperMode = true;
-    await UnlockStorage.setDeveloperMode(true);
     this.notify();
+    void UnlockStorage.setDeveloperMode(true);
   }
 
   /** 重新锁定开发者模式 */

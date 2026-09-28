@@ -6,7 +6,7 @@ import { ToastProvider, useToast } from "./contexts/ToastContext";
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { MusicPlayerProvider, useMusicPlayer } from "./contexts/MusicPlayerContext";
 import { LanguageProvider, useLanguage } from "./contexts/LanguageContext";
-import { DevUnlockProvider, useDevUnlock, UnlockGameOverlay } from "@/developer-unlock";
+import { DevUnlockProvider, useDevUnlock, UnlockGameOverlay, UnlockArrivalAnimation } from "@/developer-unlock";
 import ToastContainer from "./components/Toast";
 import ConfirmDialog from "./components/ConfirmDialog";
 import type { Page } from "./types";
@@ -91,6 +91,15 @@ function AppContent() {
   const { lang } = useLanguage();
   const { isDeveloperMode, isGameOpen, openGame, closeGame, unlock } = useDevUnlock();
   const { showToast } = useToast();
+  const [arrivalAnimState, setArrivalAnimState] = useState<{ active: boolean; startX?: number; startY?: number }>({ active: false });
+
+  const handleStartArrival = useCallback((pos: { x: number; y: number }) => {
+    setArrivalAnimState({ active: true, startX: pos.x, startY: pos.y });
+  }, []);
+
+  const handleArrivalComplete = useCallback(() => {
+    setArrivalAnimState({ active: false });
+  }, []);
 
   // 亮色主题下，深色封面流体会让沿用主题黑色的页面标题失去对比度。
   // 取色失败时仍保守地按深色处理（纯黑封面会被取色器过滤）。
@@ -185,6 +194,17 @@ function AppContent() {
     }
     prevDevMode.current = isDeveloperMode;
   }, [isDeveloperMode]);
+
+  // 解锁动画完成胶囊交接后自动进入 NCM 解码页。
+  useEffect(() => {
+    const handleUnlockHandoff = () => {
+      console.log("[App] Received codexa-unlock-handoff event -> switching page to ncmstudio");
+      setCurrentPage("ncmstudio");
+      localStorage.setItem(STORAGE_PAGE, "ncmstudio");
+    };
+    window.addEventListener("codexa-unlock-handoff", handleUnlockHandoff);
+    return () => window.removeEventListener("codexa-unlock-handoff", handleUnlockHandoff);
+  }, []);
 
   // Save current page with NCM Studio route guard
   const handleNavigate = (page: Page) => {
@@ -291,6 +311,16 @@ function AppContent() {
         <UnlockGameOverlay
           onSuccess={unlock}
           onClose={closeGame}
+          onStartArrival={handleStartArrival}
+        />
+      )}
+
+      {/* 独立的解锁液体飞行与展开动画 */}
+      {arrivalAnimState.active && (
+        <UnlockArrivalAnimation
+          startX={arrivalAnimState.startX}
+          startY={arrivalAnimState.startY}
+          onComplete={handleArrivalComplete}
         />
       )}
 
