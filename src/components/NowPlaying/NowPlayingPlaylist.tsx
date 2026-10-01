@@ -9,7 +9,7 @@
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, ListMusic } from "lucide-react";
-import { GlassButton, GlassTooltip, GlassGlow } from "@/design-system";
+import { GlassButton, GlassPillButton, GlassTooltip, radii } from "@/design-system";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface NowPlayingPlaylistProps {
@@ -31,7 +31,7 @@ const panelS: React.CSSProperties = {
   maxHeight: "calc(100% - 96px)",
   display: "flex",
   flexDirection: "column",
-  borderRadius: 18,
+  borderRadius: radii.lg,
   border: "0.5px solid var(--border-strong)",
   background: "linear-gradient(160deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
   backdropFilter: "blur(24px) saturate(1.5)",
@@ -47,7 +47,7 @@ const panelS: React.CSSProperties = {
 export default function NowPlayingPlaylist({ open, onClose, playlist, playingFile, onPlay }: NowPlayingPlaylistProps) {
   const { lang } = useLanguage();
   const zh = lang === "zh";
-  const currentRef = useRef<HTMLButtonElement | null>(null);
+  const currentRef = useRef<HTMLSpanElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
@@ -65,10 +65,9 @@ export default function NowPlayingPlaylist({ open, onClose, playlist, playingFil
     return () => document.removeEventListener("pointerdown", handler);
   }, [open, onClose]);
 
-  // 打开或切换曲目时，将当前播放行滚入可视区
-  // 直接操作列表 scrollTop，避免 scrollIntoView 滚动祖先容器带动整窗左右跳动
-  // 行外层 GlassGlow 是 position: relative，offsetTop 相对它（≈0）而非滚动列表，
-  // 因此改用 getBoundingClientRect 差值计算行在列表内的实际位置。
+  // 打开或切换曲目时，将当前播放行滚入可视区。
+  // 直接操作列表 scrollTop，避免 scrollIntoView 滚动祖先容器带动整窗左右跳动。
+  // currentRef 指向行外层 span，测量时包含完整的 GlassPillButton 尺寸。
   useEffect(() => {
     if (!open) return;
     const list = listRef.current;
@@ -151,34 +150,39 @@ export default function NowPlayingPlaylist({ open, onClose, playlist, playingFil
                     placement="left"
                     style={{ display: "flex" }}
                   >
-                  <GlassGlow
-                    glowColor="var(--np-row-glow)"
-                    glowRadius={220}
-                    borderRadius={8}
-                    style={{ flex: 1, width: "100%", borderRadius: 8 }}
-                  >
-                  <button
+                  <span
                     ref={isCurrent ? currentRef : undefined}
+                    style={{ display: "flex", width: "100%" }}
+                  >
+                  <GlassPillButton
+                    active={isCurrent}
                     className={`np-playlist-row${isCurrent ? " current" : ""}`}
                     onClick={() => onPlay(file)}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 10,
+                      gap: 6,
                       width: "100%",
                       padding: "8px 10px",
                       marginBottom: 2,
-                      borderRadius: 8,
-                      border: "none",
+                      borderRadius: radii.lg,
                       cursor: "pointer",
                       textAlign: "left",
-                      transition: "background 0.15s ease, color 0.15s ease",
+                      fontSize: 13,
+                      ...(isCurrent ? {} : {
+                        background: "transparent",
+                        boxShadow: "none",
+                        border: "none",
+                        backdropFilter: "none",
+                        WebkitBackdropFilter: "none",
+                      }),
                     }}
                   >
                     <span
                       style={{
-                        width: 22,
+                        width: 18,
                         flexShrink: 0,
+                        marginLeft: 4,
                         fontSize: 12,
                         fontVariantNumeric: "tabular-nums",
                       }}
@@ -192,8 +196,8 @@ export default function NowPlayingPlaylist({ open, onClose, playlist, playingFil
                     {isCurrent && (
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
                     )}
-                  </button>
-                  </GlassGlow>
+                  </GlassPillButton>
+                  </span>
                   </GlassTooltip>
                 );
               })

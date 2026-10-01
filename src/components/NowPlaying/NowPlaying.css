@@ -30,10 +30,7 @@
   --border-strong: rgba(255,255,255,0.12);
   --bg-tertiary: rgba(30,30,32,0.06);
   --slider-track: rgba(255,255,255,0.15);
-  /* 覆盖层专属可切换视觉变量 */
-  --np-row-hover-bg: rgba(255,255,255,0.08);
   --np-disc-bg: rgba(255,255,255,0.08);
-  --np-row-glow: rgba(255,255,255,0.12);
   --np-play-glow: rgba(255,255,255,0.18);
   /* 发光加强：文字已带封面色，阴影需更强才能显出光晕 */
   --np-title-glow: 0 3px 14px rgba(var(--np-glow-rgb), 0.65), 0 1px 4px rgba(var(--np-glow-rgb), 0.45), 0 0 28px rgba(var(--np-glow-rgb), 0.28);
@@ -50,9 +47,7 @@
   --border-strong: rgba(0,0,0,0.16);
   --bg-tertiary: rgba(242,241,238,0.14);
   --slider-track: rgba(0,0,0,0.12);
-  --np-row-hover-bg: rgba(0,0,0,0.06);
   --np-disc-bg: rgba(0,0,0,0.06);
-  --np-row-glow: rgba(0,0,0,0.10);
   --np-play-glow: rgba(0,0,0,0.12);
   /* 亮背景：改用压暗的封面色做柔和光晕，发光不再关闭 */
   --np-title-glow: 0 2px 10px color-mix(in srgb, rgb(var(--np-glow-rgb)) 30%, transparent), 0 1px 3px color-mix(in srgb, rgb(var(--np-glow-rgb)) 20%, transparent);
@@ -105,19 +100,18 @@
 
 /* ── 闲置淡入淡出（由设置面板“闲置自动隐藏”开关控制） ── */
 /* ── 播放列表抽屉行 ── */
-.np-playlist-row {
-  background: transparent;
-  color: var(--text-secondary);
+.np-playlist-row:not(.current) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
-.np-playlist-row:hover {
-  background: var(--np-row-hover-bg);
+.np-playlist-row:not(.current)::before {
+  opacity: calc(var(--pill-go, 0) * 0.70) !important;
 }
-.np-playlist-row.current {
-  background: rgba(var(--accent-rgb), 0.16);
-  color: var(--text-primary);
-}
-.np-playlist-row.current:hover {
-  background: rgba(var(--accent-rgb), 0.22);
+.np-playlist-row:not(.current)::after {
+  opacity: calc(var(--pill-go, 0) * 0.85) !important;
 }
 .np-playlist-index {
   color: var(--text-tertiary);

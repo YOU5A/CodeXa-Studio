@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Music, Search, X, Volume2, Disc } from "lucide-react";
+import { Music, Search, X, Volume2, LocateFixed } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { GlassCard, GlassScrollArea, GlassInput, GlassTooltip } from "@/design-system/components";
-import { springSmooth } from "@/design-system/animations";
+import { GlassButton, GlassCard, GlassScrollArea, GlassInput, GlassTooltip } from "@/design-system/components";
 import { fontSizes, space, radii } from "@/design-system/tokens";
 import type { FileListProps } from "./types";
 
@@ -530,44 +529,31 @@ export default function FileList({
             }}
           >
             <GlassTooltip text={locateTrackLabel || "定位到当前曲目"}>
-              <motion.button
+              <GlassButton
+                variant="secondary"
+                size="sm"
                 type="button"
+                aria-label={locateTrackLabel || "定位到当前曲目"}
                 onClick={() => {
                   if (targetFile && targetFile !== selectedFile) {
                     onSelect(targetFile);
                   }
                   scrollToTarget();
                 }}
-                whileHover={{
-                  scale: 1.08,
-                  boxShadow: "0 6px 20px rgba(0, 0, 0, 0.22), 0 0 16px rgba(var(--accent-rgb, 59, 130, 246), 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-                  borderColor: "rgba(255, 255, 255, 0.38)",
-                }}
-                whileTap={{
-                  scale: 0.94,
-                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.16), 0 0 6px rgba(var(--accent-rgb, 59, 130, 246), 0.2)",
-                }}
-                transition={springSmooth}
                 style={{
                   width: 32,
                   height: 32,
+                  minWidth: 32,
                   borderRadius: radii.full,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.10) 100%), rgba(var(--accent-rgb, 59, 130, 246), 0.12)",
-                  backdropFilter: "blur(24px) saturate(2)",
-                  WebkitBackdropFilter: "blur(24px) saturate(2)",
-                  border: "1px solid rgba(255, 255, 255, 0.24)",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.18), 0 0 10px rgba(var(--accent-rgb, 59, 130, 246), 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4)",
                   color: "var(--accent)",
-                  cursor: "pointer",
-                  outline: "none",
                   padding: 0,
                 }}
               >
-                <Disc size={15} style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }} />
-              </motion.button>
+                <LocateFixed size={15} />
+              </GlassButton>
             </GlassTooltip>
           </motion.div>
         )}
