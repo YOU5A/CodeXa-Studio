@@ -17,8 +17,7 @@ import { useMusicPlayer } from "@/contexts/MusicPlayerContext";
 import { useLyricManager, loadLyricsSettings, saveLyricsSettings } from "@/lyrics";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { LyricsSettingsValues } from "@/lyrics";
-import { extractDominantColorAsync, isLightColor, softenColorForGlow, type RGB } from "@/utils/colorExtractor";
-import { useTheme } from "@/hooks/useTheme";
+import { extractDominantColorAsync, softenColorForGlow, type RGB } from "@/utils/colorExtractor";
 import NowPlayingBackground from "./NowPlayingBackground";
 import NowPlayingDisc from "./NowPlayingDisc";
 import NowPlayingInfo from "./NowPlayingInfo";
@@ -76,30 +75,6 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
   const [fsBusy, setFsBusy] = useState(false); // 全屏窗口补间动画中：禁止连点
   const fullscreenBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  // 无封面时跟随流体动态主色（与 LyricDisplay 的 glow 同源），用于背景亮度判断
-  const [fluidColor, setFluidColor] = useState<RGB | null>(() => {
-    try {
-      const arr = JSON.parse(localStorage.getItem("fluidDynamicColor") || "null") as RGB[] | null;
-      return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
-    } catch {
-      return null;
-    }
-  });
-
-  // 背景亮度：优先封面主色，其次流体动态色，最后按应用主题回退（light → 亮背景）
-  const { resolvedTheme } = useTheme();
-  const bgLight = useMemo(() => {
-    // 仅亮色主题启用亮度自适应；暗色主题始终使用白色系文本
-    if (resolvedTheme !== "light") return false;
-    const source = coverColor ?? fluidColor;
-    // 有封面色/流体色时按实际颜色判断；无数据时仅 fluid 类型视为可能亮底，
-    // blur/solid/gradient 无封面一律是深色底，保持白字
-    if (source) return isLightColor(source);
-    return fluidSettings.backgroundType === "fluid";
-  }, [coverColor, fluidColor, resolvedTheme, fluidSettings.backgroundType]);
-
-  // 亮色主题的流体背景需要更强暗化以维持歌词和控件对比度；设置值本身不变。
-  const fluidDimMultiplier = resolvedTheme === "light" && fluidSettings.backgroundType === "fluid" ? 2 : 1;
 
   const closePlaylist = useCallback(() => setPlaylistOpen(false), []);
   const handleTogglePlaylist = useCallback(() => {
@@ -378,7 +353,7 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
     <AnimatePresence>
       {open && (
         <motion.div
-          className={`np-overlay${idle ? " np-idle" : ""}${bgLight ? " np-bg-light" : ""}`}
+          className={`np-overlay${idle ? " np-idle" : ""}`}
           role="dialog"
           aria-modal="true"
           aria-label={T("正在播放", "Now Playing")}
@@ -397,14 +372,13 @@ export default function NowPlayingOverlay({ open, onClose }: NowPlayingOverlayPr
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ type: "tween", duration: 0.45, ease: "easeOut" }}
-        style={{ position: "absolute", inset: 0, zIndex: 0, background: bgLight ? "#ececf0" : "#12161f" }}
+        style={{ position: "absolute", inset: 0, zIndex: 0, background: "#12161f" }}
       >
         <NowPlayingBackground
           coverColor={coverColor}
           coverImageUrl={trackMeta?.cover ? `data:image/jpeg;base64,${trackMeta.cover}` : null}
           playing={audioState.playing}
           dim={fluidSettings.backgroundDim}
-          dimMultiplier={fluidDimMultiplier}
           type={fluidSettings.backgroundType}
           dynamicFluid={fluidSettings.dynamicFluid}
           blurAmount={fluidSettings.blurAmount}

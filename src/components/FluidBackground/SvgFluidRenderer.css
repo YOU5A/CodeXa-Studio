@@ -76,11 +76,6 @@
   100% { transform: scale(1.2) rotate(-360deg); }
 }
 
-/* 亮色主题调整 */
-:root[data-theme-name="light"] .svg-fluid-rect {
-  filter: saturate(1.5) brightness(1.08) url(#svg-fluid-filter);
-}
-
 /* 静态流体：暂停旋转动画，仅保留单帧画面 */
 .svg-fluid-background.svg-fluid-static .svg-fluid-rect,
 .svg-fluid-background.svg-fluid-static .svg-fluid-canvas {

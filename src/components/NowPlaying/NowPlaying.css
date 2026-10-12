@@ -18,10 +18,7 @@
   initial-value: 0px;
 }
 
-/* 覆盖层文本/控件随背景亮度自适应：
-   默认（暗背景）使用白色系变量；np-bg-light（封面/流体偏亮）切换为深色系。
-   统一走变量后，LyricsSettingsContent / GlassPillButton / GlassSlider / LyricBlock
-   等共享组件在覆盖层内自动跟随，不再受应用主题影响。 */
+/* 覆盖层固定使用暗背景下的白色系配色，不随应用主题或背景亮度切换。 */
 .np-overlay {
   --text-primary: rgba(255,255,255,0.92);
   --text-secondary: rgba(255,255,255,0.72);
@@ -35,25 +32,9 @@
   /* 发光加强：文字已带封面色，阴影需更强才能显出光晕 */
   --np-title-glow: 0 3px 14px rgba(var(--np-glow-rgb), 0.65), 0 1px 4px rgba(var(--np-glow-rgb), 0.45), 0 0 28px rgba(var(--np-glow-rgb), 0.28);
   --lyric-text-shadow: 0 3px 14px rgba(var(--lyric-glow-rgb), 0.65), 0 1px 4px rgba(var(--lyric-glow-rgb), 0.45), 0 0 28px rgba(var(--lyric-glow-rgb), 0.28);
-  /* 歌词/音乐信息文本色：封面主色 + 白色柔和（亮背景由下方覆盖为压暗版） */
+  /* 歌词/音乐信息文本色：封面主色 + 白色柔和 */
   --np-cover-text: color-mix(in srgb, rgb(var(--np-cover-rgb)) 25%, white);
   --np-cover-text-soft: color-mix(in srgb, rgb(var(--np-cover-rgb)) 20%, white);
-}
-.np-overlay.np-bg-light {
-  --text-primary: rgba(0,0,0,0.88);
-  --text-secondary: rgba(0,0,0,0.68);
-  --text-tertiary: rgba(0,0,0,0.52);
-  --border-color: rgba(0,0,0,0.10);
-  --border-strong: rgba(0,0,0,0.16);
-  --bg-tertiary: rgba(242,241,238,0.14);
-  --slider-track: rgba(0,0,0,0.12);
-  --np-disc-bg: rgba(0,0,0,0.06);
-  --np-play-glow: rgba(0,0,0,0.12);
-  /* 亮背景：改用压暗的封面色做柔和光晕，发光不再关闭 */
-  --np-title-glow: 0 2px 10px color-mix(in srgb, rgb(var(--np-glow-rgb)) 30%, transparent), 0 1px 3px color-mix(in srgb, rgb(var(--np-glow-rgb)) 20%, transparent);
-  --lyric-text-shadow: 0 2px 10px color-mix(in srgb, rgb(var(--lyric-glow-rgb)) 30%, transparent), 0 1px 3px color-mix(in srgb, rgb(var(--lyric-glow-rgb)) 20%, transparent);
-  --np-cover-text: color-mix(in srgb, rgb(var(--np-cover-rgb)) 25%, black);
-  --np-cover-text-soft: color-mix(in srgb, rgb(var(--np-cover-rgb)) 20%, black);
 }
 
 .np-auto-marquee {
@@ -91,11 +72,6 @@
 }
 .np-ctrl-cover.np-play-core {
   color: color-mix(in srgb, rgb(var(--np-glow-rgb)) 50%, white);
-}
-/* 亮背景（封面色偏亮）压暗一档，保证按钮可读 */
-.np-overlay.np-bg-light .np-ctrl-cover,
-.np-overlay.np-bg-light .np-ctrl-cover.np-play-core {
-  color: color-mix(in srgb, rgb(var(--np-glow-rgb)) 31%, black);
 }
 
 /* ── 闲置淡入淡出（由设置面板“闲置自动隐藏”开关控制） ── */
@@ -141,18 +117,12 @@
   cursor: none;
 }
 
-/* 覆盖层内滚动条跟随背景亮度（覆盖 GlassScrollArea 全局白色滚动条） */
+/* 覆盖层内滚动条使用白色系配色（覆盖 GlassScrollArea 全局样式） */
 .np-overlay .glass-scroll-area::-webkit-scrollbar-thumb {
   background-color: rgba(255,255,255,0.10);
 }
 .np-overlay .glass-scroll-area::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255,255,255,0.22);
-}
-.np-overlay.np-bg-light .glass-scroll-area::-webkit-scrollbar-thumb {
-  background-color: rgba(0,0,0,0.18);
-}
-.np-overlay.np-bg-light .glass-scroll-area::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0,0,0,0.30);
 }
 
 /* ── 右下角歌词快捷按钮（译/音/逐字/复制） ── */
@@ -193,9 +163,6 @@
 .np-copy-lyrics::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.15);
   border-radius: 100px;
-}
-.np-overlay.np-bg-light .np-copy-lyrics::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.18);
 }
 .np-copy-lyrics::selection {
   background: rgba(var(--accent-rgb), 0.28);

@@ -22,8 +22,6 @@ interface NowPlayingBackgroundProps {
   playing: boolean;
   /** 背景暗化 0-100 */
   dim: number;
-  /** 暗化遮罩强度倍率；亮色流体使用 2 倍，滑块值本身不变 */
-  dimMultiplier?: number;
   /** 背景类型：流体 / 模糊 / 渐变 / 纯色 */
   type: FluidSettingsValues["backgroundType"];
   /** 动态流体：流体类型时是否启用动画（关 = 静态单帧） */
@@ -40,7 +38,7 @@ interface NowPlayingBackgroundProps {
 const rgbCss = (c: RGB, factor = 1) =>
   `rgb(${Math.min(255, Math.round(c[0] * factor))},${Math.min(255, Math.round(c[1] * factor))},${Math.min(255, Math.round(c[2] * factor))})`;
 
-function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, dimMultiplier = 1, type, dynamicFluid, blurAmount, targetFps, onSurfaceChange }: NowPlayingBackgroundProps) {
+function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, type, dynamicFluid, blurAmount, targetFps, onSurfaceChange }: NowPlayingBackgroundProps) {
 
   useEffect(() => {
     if (type !== "fluid" || !coverImageUrl) {
@@ -49,8 +47,7 @@ function NowPlayingBackground({ coverColor, coverImageUrl, playing, dim, dimMult
   }, [type, coverImageUrl, onSurfaceChange]);
 
   const dimOpacity = Math.max(0, Math.min(100, dim)) / 100;
-  const dimStrength = Math.max(0, dimMultiplier);
-  const dimGradient = `linear-gradient(to bottom, rgba(0,0,0,${Math.min(1, 0.36 * dimStrength)}) 0%, rgba(0,0,0,${Math.min(1, 0.06 * dimStrength)}) 28%, rgba(0,0,0,${Math.min(1, 0.16 * dimStrength)}) 72%, rgba(0,0,0,${Math.min(1, 0.40 * dimStrength)}) 100%)`;
+  const dimGradient = `linear-gradient(to bottom, rgba(0,0,0,0.36) 0%, rgba(0,0,0,0.06) 28%, rgba(0,0,0,0.16) 72%, rgba(0,0,0,0.40) 100%)`;
 
 
   let content: React.ReactNode;

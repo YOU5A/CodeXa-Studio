@@ -107,8 +107,6 @@ function AppContent() {
     && fluidSettings.backgroundType === "fluid"
     && !!coverImageUrl
     && (!coverColor || !isLightColor(coverColor));
-  // 亮色主题的流体视觉更亮，暗化遮罩强度翻倍；滑块仍保持 0-100 且全程有效。
-  const fluidDimMultiplier = resolvedTheme === "light" && fluidSettings.backgroundType === "fluid" ? 2 : 1;
 
   useEffect(() => {
     window.electronAPI?.window.onMaximizeChange(setIsMaximized);
@@ -240,7 +238,6 @@ function AppContent() {
           coverImageUrl={coverImageUrl}
           playing={audioState.playing}
           dim={fluidSettings.backgroundDim}
-          dimMultiplier={fluidDimMultiplier}
           type={fluidSettings.backgroundType}
           dynamicFluid={fluidSettings.dynamicFluid}
           blurAmount={fluidSettings.blurAmount}
